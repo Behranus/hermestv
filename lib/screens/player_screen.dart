@@ -20,7 +20,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 /// - Geri tuşu   : oynatıcıdan çıkar
 ///
 /// Oynatma motoru [StreamPlayer] soyutlaması üzerinden çalışır:
-/// fvp (libmdk — donanım hızlandırmalı MediaCodec, TiviMate tarzı).
+/// **ExoPlayer** (resmi video_player — donanım hızlandırmalı MediaCodec,
+/// TiviMate ve tüm büyük IPTV oynatıcılarının kullandığı motor).
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -60,6 +61,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   List<SubtitleInfo> _subtitleTracks = [];
   String? _activeSubtitleId;
+  String? _subtitleText;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   Channel get _channel => widget.channels[_index];
@@ -153,6 +155,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // oynatıcı motorunun open() adımında yapılır.
     _player.subtitleTracks.listen((tracks) {
       if (mounted) setState(() => _subtitleTracks = tracks);
+    });
+    // Ekran üstü altyazı metni (SRT/VTT — ExoPlayer'da harici altyazı
+    // olmadığı için metin Flutter tarafında çizilir).
+    _player.subtitleText.listen((text) {
+      if (mounted) setState(() => _subtitleText = text);
     });
   }
 
@@ -388,6 +395,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
             fit: StackFit.expand,
             children: [
               _player.buildVideo(fit: BoxFit.contain),
+              // Ekran üstü altyazı (SRT/VTT dosyası yüklendiyse).
+              if (_subtitleText != null && _subtitleText!.isNotEmpty)
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  bottom: 80,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _subtitleText!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            height: 1.3,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 4,
+                                color: Colors.black,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               // Oynatma bir kez başladıysa yükleme çipini gizle (canlıda
               // isBuffering asılı kalabiliyor → sonsuz "yükleniyor" olmasın).
               if (_buffering && !_hasPlayed && _error == null)

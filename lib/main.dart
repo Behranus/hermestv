@@ -1,8 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:fvp/fvp.dart' as fvp;
 import 'package:iptv_player/screens/home_shell.dart';
 import 'package:iptv_player/screens/lock_screen.dart';
 import 'package:iptv_player/services/app_target.dart';
@@ -19,25 +16,6 @@ void main() {
   // önbelleğini sıkı tutarız: en fazla 240 görsel / 48 MB.
   PaintingBinding.instance.imageCache.maximumSize = 240;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
-
-  // Oynatıcı motoru fvp (libmdk) — media_kit/mpv DEĞİL.
-  // - lowLatency: 2 → canlı yayında eski kareler atılır, en güncel içerik
-  //   görüntülenir (TiviMate tarzı hızlı kanal geçişi).
-  // - tunnel: Box'ta açık (MediaCodec doğrudan surface'a çıkar → 4K akıcı),
-  //   Mobil'de kapalı (tüm kodlayıcılar + HDR ton eşleme desteklenir).
-  // - video.decoders: donanım (MediaCodec) her zaman önce denenir — yazılımsal
-  //   decode giriş seviyesi CPU'da kasma demektir; FFmpeg yalnızca yedek.
-  // - subtitleFontFile → altyazı yazı tipi yedeği (fallback font).
-  if (!kIsWeb && Platform.isAndroid) {
-    fvp.registerWith(options: {
-      'platforms': ['android'],
-      'lowLatency': 2,
-      'tunnel': AppTarget.useTunnel,
-      'video.decoders': ['MediaCodec', 'FFmpeg'],
-      'subtitleFontFile':
-          'https://github.com/mpv-android/mpv-android/raw/master/app/src/main/assets/subfont.ttf',
-    });
-  }
 
   // Güvenlik ağı: yakalanmamış hatalar uygulamayı kapatmasın, loglansın.
   // (Ağ hatası/bozuk akış gibi durumlarda uygulama sessizce kapanmaz.)

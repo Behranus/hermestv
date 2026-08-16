@@ -5,11 +5,11 @@
 /// - `--dart-define=TARGET=mobile` → Android Mobil sürümü
 ///
 /// Farklar:
-/// - **Box:** tunnel modu açık — MediaCodec doğrudan surface'a çıkar
-///   (OpenGL kopyası yok) → zayıf Box GPU'sunda Full HD/2K/4K akıcı oynar.
-///   TV launcher'ı için leanback amaçlıdır; kumanda (D-pad) odaklı.
-/// - **Mobil:** tunnel kapalı — tüm kodlayıcılar + HDR ton eşleme + snapshot
-///   desteklenir; dokunmatik ekran odaklı.
+/// - **Box:** kumanda (D-pad) odaklı, TV launcher'ına uygun.
+/// - **Mobil:** dokunmatik ekran odaklı.
+///
+/// Oynatıcı her iki hedefte de **ExoPlayer** (resmi video_player) — donanım
+/// hızlandırmalı MediaCodec, 4K/2K/FHD akıcı; Box/Mobil arasında motor farkı yok.
 abstract final class AppTarget {
   static const String target =
       String.fromEnvironment('TARGET', defaultValue: 'box');
@@ -24,9 +24,5 @@ abstract final class AppTarget {
   static const bool isNoLock = bool.fromEnvironment('NO_LOCK');
 
   /// Kullanıcıya gösterilen uygulama adı.
-  static const String displayName =
-      isBox ? 'IPTV Player (Box)' : 'IPTV Player (Mobil)';
-
-  /// fvp (libmdk) tunnel modu: Box'ta açık, Mobil'de kapalı.
-  static const bool useTunnel = isBox;
+  static const String displayName = isBox ? 'bbtv (Box)' : 'bbtv (Mobil)';
 }

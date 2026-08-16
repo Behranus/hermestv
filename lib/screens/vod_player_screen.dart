@@ -6,7 +6,7 @@ import 'package:iptv_player/services/stream_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Tek bir medya (film/bölüm) için kaydırıcılı, ileri/geri sarmalı oynatıcı.
-/// fvp (libmdk) motorunu kullanır.
+/// **ExoPlayer** (resmi video_player) motorunu kullanır.
 class VodPlayerScreen extends StatefulWidget {
   const VodPlayerScreen({super.key, required this.url, required this.title});
 
@@ -30,6 +30,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   bool _dragging = false;
   double _dragValue = 0;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _subtitleText;
 
   @override
   void initState() {
@@ -75,6 +76,10 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     });
     _player.duration.listen((d) {
       if (mounted) setState(() => _duration = d);
+    });
+    // Ekran üstü altyazı (SRT/VTT).
+    _player.subtitleText.listen((text) {
+      if (mounted) setState(() => _subtitleText = text);
     });
     _player.completed.listen((_) {
       if (mounted) setState(() => _playing = false);
@@ -159,6 +164,41 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
             fit: StackFit.expand,
             children: [
               _player.buildVideo(fit: BoxFit.contain),
+              // Ekran üstü altyazı (SRT/VTT dosyası yüklendiyse).
+              if (_subtitleText != null && _subtitleText!.isNotEmpty)
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  bottom: 70,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _subtitleText!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            height: 1.3,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 4,
+                                color: Colors.black,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if (_buffering && _error == null)
                 const ColoredBox(
                   color: Colors.black54,

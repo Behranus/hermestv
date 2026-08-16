@@ -200,14 +200,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  fvp:
-    dependency: "direct main"
-    description:
-      name: fvp
-      sha256: bc2cc7309cc5b177826af7a83cdd27ba0c542c821ad74287bbdff2b7434aff67
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.38.0"
   hooks:
     dependency: transitive
     description:
