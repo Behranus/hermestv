@@ -19,11 +19,8 @@ android {
         applicationId = "com.iptv.iptv_player"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Flutter şablonu minSdk 24 (Android 7.0) ister; eski Android Box'lar (6.0)
-        // için 23'e çektik. Flutter 23'ün altını reddettiği için 23 minimumdur.
-        // Not: literal sayı yazarsak Flutter migrasyonu geri 24'e çevirir.
-        val minSdkLevel = 23
-        minSdk = minSdkLevel
+        // Hedef: Android 7.0 ve üstü (minSdk 24) — Flutter varsayılanı.
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)

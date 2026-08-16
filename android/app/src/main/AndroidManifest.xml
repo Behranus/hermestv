@@ -1,10 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Bazı eklentiler (wakelock_plus, shared_preferences) minSdk 24 ister;
-         kullandığımız API'ler Android 21'den beri var olduğu için Android 6.0
-         (API 23) Box'larda da çalışması adına override ediyoruz. -->
-    <uses-sdk tools:overrideLibrary="dev.fluttercommunity.plus.wakelock,io.flutter.plugins.sharedpreferences"/>
     <!-- Android TV / Box uyumluluğu: dokunmatik ekran ve leanback GEREKLİ değil.
          Bu olmadan bazı TV launcher'ları uygulamayı görmez/göstermez. -->
     <uses-feature
