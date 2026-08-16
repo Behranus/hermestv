@@ -51,3 +51,6 @@ app.*.map.json
 /*.apk
 /*.deb
 /*.tar.gz
+
+# Release signing key (keep local, don't push)
+android/app/iptv-release.jks
