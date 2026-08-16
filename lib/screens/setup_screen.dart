@@ -16,6 +16,9 @@ class SetupScreen extends StatefulWidget {
 }
 
 class _SetupScreenState extends State<SetupScreen> {
+  /// `--dart-define=NO_LOCK=true` ile derlenen sürümde şifre kartı gizlenir.
+  static const _noLock = bool.fromEnvironment('NO_LOCK');
+
   final _urlController = TextEditingController();
   final _epgController = TextEditingController();
   final _xtreamServer = TextEditingController();
@@ -336,7 +339,8 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
           ),
 
-          // Şifre kilidi
+          // Şifre kilidi (şifresiz sürümde bu kart gösterilmez)
+          if (!_noLock)
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),

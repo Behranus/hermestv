@@ -72,10 +72,17 @@ class _LockGateState extends State<_LockGate> {
   /// null = henüz kontrol ediliyor, false = kilitli, true = açık.
   bool? _unlocked;
 
+  /// `--dart-define=NO_LOCK=true` ile derlenen sürümde kilit tamamen kapalıdır.
+  static const _noLock = bool.fromEnvironment('NO_LOCK');
+
   @override
   void initState() {
     super.initState();
-    _check();
+    if (_noLock) {
+      _unlocked = true;
+    } else {
+      _check();
+    }
   }
 
   Future<void> _check() async {
