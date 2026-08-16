@@ -7,6 +7,7 @@ class VodMovie {
     this.rating,
     this.categoryId,
     this.directUrl,
+    this.containerExtension,
   });
 
   final int id;
@@ -23,6 +24,12 @@ class VodMovie {
   /// Varsa Xtream `movie/{u}/{p}/{id}` adresi yerine bu kullanılır.
   final String? directUrl;
 
+  /// Sunucunun bildirdiği dosya uzantısı (ör. "mp4", "mkv", "avi").
+  /// Oynatma adresi `{id}.{uzantı}` şeklinde kurulur — ExoPlayer uzantıya
+  /// göre HLS/MP4 kararı verir; yanlış uzantı (her zaman m3u8) MP4 filmlerin
+  /// açılmamasına yol açar.
+  final String? containerExtension;
+
   factory VodMovie.fromJson(Map<String, dynamic> json) {
     final rating = json['rating']?.toString();
     return VodMovie(
@@ -31,6 +38,8 @@ class VodMovie {
       poster: _nonEmpty(json['stream_icon']),
       rating: (rating == null || rating.isEmpty || rating == '0') ? null : rating,
       categoryId: json['category_id']?.toString(),
+      directUrl: _nonEmpty(json['direct_source']),
+      containerExtension: _nonEmpty(json['container_extension']),
     );
   }
 }
@@ -156,6 +165,7 @@ class SeriesInfo {
               cover: _nonEmpty(e['cover']),
               duration: infoMap?['duration']?.toString(),
               airDate: infoMap?['release_date']?.toString(),
+              containerExtension: _nonEmpty(e['container_extension']),
             ));
           }
         }
@@ -208,6 +218,7 @@ class VodEpisode {
     this.cover,
     this.duration,
     this.airDate,
+    this.containerExtension,
   });
 
   final int id;
@@ -218,6 +229,10 @@ class VodEpisode {
   final String? cover;
   final String? duration;
   final String? airDate;
+
+  /// Bölümün dosya uzantısı (ör. "mp4", "mkv") — oynatma adresi buna göre
+  /// kurulur. Boşsa m3u8 varsayılır.
+  final String? containerExtension;
 
   String get displayNumber {
     final n = episodeNum;

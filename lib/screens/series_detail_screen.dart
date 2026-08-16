@@ -174,7 +174,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
               separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
               itemBuilder: (context, i) {
                 final ep = _episodes(info)[i];
-                final url = state.episodePlayUrl(ep.id);
+                final url = state.episodePlayUrl(
+                  ep.id,
+                  containerExtension: ep.containerExtension,
+                );
                 return ListTile(
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(8),

@@ -452,7 +452,17 @@ class AppState extends ChangeNotifier {
     final demo = TestVodCatalog.byId(movieId);
     if (demo != null) return demo.url;
     final creds = _creds;
-    return creds == null ? null : XtreamService.movieUrl(creds, movieId);
+    if (creds == null) return null;
+    // Sunucunun bildirdiği dosya uzantısını (mp4/mkv…) bul — ExoPlayer
+    // uzantıya göre çözer; yanlış uzantı filmi açmaz.
+    String? ext;
+    for (final m in vodMovies) {
+      if (m.id == movieId) {
+        ext = m.containerExtension;
+        break;
+      }
+    }
+    return XtreamService.movieUrl(creds, movieId, containerExtension: ext);
   }
 
   /// Dizi detaylarını (sezonlar + bölümler) önbellekle getirir.
@@ -474,9 +484,15 @@ class AppState extends ChangeNotifier {
   SeriesInfo? seriesInfoCached(int seriesId) => _seriesInfoCache[seriesId];
 
   /// Bölümün oynatma adresi (Xtream hesabı yoksa null).
-  String? episodePlayUrl(int episodeId) {
+  String? episodePlayUrl(int episodeId, {String? containerExtension}) {
     final creds = _creds;
-    return creds == null ? null : XtreamService.episodeUrl(creds, episodeId);
+    return creds == null
+        ? null
+        : XtreamService.episodeUrl(
+            creds,
+            episodeId,
+            containerExtension: containerExtension,
+          );
   }
 
   String? get vodCategoryName => vodCategories

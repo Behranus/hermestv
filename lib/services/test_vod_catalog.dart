@@ -74,7 +74,8 @@ class TestVodCatalog {
     DemoVod(
       id: 900004,
       name: "Elephant's Dream",
-      url: 'https://download.blender.org/ED/ED_1024.avi',
+      // AVI ExoPlayer'da açılmıyor; Blender'ın H.264/AAC MOV sürümü kullanılır.
+      url: 'https://download.blender.org/ED/elephantsdream-480-h264-st-aac.mov',
       poster:
           'https://commons.wikimedia.org/wiki/Special:FilePath/Elephants%20Dream%20-%20Final%20Poster%20Source.png',
       plot: 'Devasa, kendi kendini üreten bir makinenin içinde yaşayan iki karakter: '

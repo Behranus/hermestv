@@ -32,6 +32,27 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _subtitleText;
 
+  /// Denenecek adaylar: ilk aday ana URL; Xtream filmleri açılmazsa
+  /// aynı kimlikle diğer uzantılar (m3u8 ↔ mp4/mkv) otomatik denenir.
+  late final List<String> _candidates;
+  int _candidateIndex = 0;
+
+  /// URL'nin son uzantısını değiştirerek yedek adaylar üretir.
+  /// Örn. `{base}/movie/u/p/123.m3u8` → ayrıca .mp4 ve .mkv denenir.
+  static List<String> _alternates(String url) {
+    final dot = url.lastIndexOf('.');
+    final slash = url.lastIndexOf('/');
+    if (dot <= slash || dot == url.length - 1) return const [];
+    final base = url.substring(0, dot + 1);
+    final cur = url.substring(dot + 1).toLowerCase();
+    const known = ['m3u8', 'mp4', 'mkv', 'avi', 'mov', 'webm'];
+    final alts = <String>[];
+    for (final e in known) {
+      if (e != cur) alts.add('$base$e');
+    }
+    return alts;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -39,12 +60,37 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     _player = createStreamPlayer(bufferSecs: 2.0);
     _subscribe();
     WakelockPlus.enable();
-    try {
-      unawaited(_player.open(widget.url));
-    } catch (e) {
-      _error = 'Akış açılamadı: $e';
-    }
+    _candidates = [widget.url, ..._alternates(widget.url)];
+    _openCandidate();
     _scheduleOverlayHide();
+  }
+
+  /// Sıradaki adayı açar; hepsi başarısız olursa hata gösterilir.
+  void _openCandidate() {
+    if (_candidateIndex >= _candidates.length) return;
+    final url = _candidates[_candidateIndex];
+    setState(() {
+      _buffering = true;
+      _error = null;
+      _position = Duration.zero;
+      _duration = Duration.zero;
+    });
+    try {
+      unawaited(_player.open(url));
+    } catch (e) {
+      _nextCandidate('Akış açılamadı: $e');
+    }
+  }
+
+  /// Hata olursa sıradaki yedek uzantıyı dener; biterse hatayı gösterir.
+  void _nextCandidate(String message) {
+    if (!mounted) return;
+    _candidateIndex++;
+    if (_candidateIndex < _candidates.length) {
+      _openCandidate();
+    } else {
+      setState(() => _error = message);
+    }
   }
 
   @override
@@ -60,7 +106,15 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       if (mounted) setState(() => _buffering = b);
     });
     _player.error.listen((e) {
-      if (mounted) setState(() => _error = e);
+      if (!mounted) return;
+      // ExoPlayer hatası: bu aday başarısız → sıradaki yedek uzantıyı dene.
+      // (Oynatma başladıysa hata sonradan geldiyse yeniden deneme; çoğu
+      // durumda uzantı sorunudur, ilk adayda çözülür.)
+      if (!_playing && _candidateIndex < _candidates.length) {
+        _nextCandidate(e);
+      } else {
+        setState(() => _error = e);
+      }
     });
     _player.playing.listen((p) {
       if (mounted) setState(() => _playing = p);

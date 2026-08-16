@@ -175,12 +175,29 @@ class XtreamService {
   }
 
   /// VOD filmi için oynatma adresi: `{server}/movie/{u}/{p}/{id}.m3u8`
-  static String movieUrl(XtreamCredentials c, int movieId) =>
-      '${c.base}/movie/${c.username}/${c.password}/$movieId.m3u8';
+  /// Film oynatma adresi: `{server}/movie/{u}/{p}/{id}.{uzantı}`
+  ///
+  /// Uzantı Xtream API'sinin bildirdiği `container_extension` değeridir
+  /// (mp4/mkv/avi…). ExoPlayer URL uzantısına göre HLS/MP4 kararı verir;
+  /// her zaman `.m3u8` eklemek MP4/MKV filmlerin açılmamasına yol açar.
+  /// Uzantı bilinmiyorsa (boşsa) m3u8 denenir.
+  static String movieUrl(XtreamCredentials c, int movieId,
+          {String? containerExtension}) =>
+      '${c.base}/movie/${c.username}/${c.password}/$movieId.'
+      '${_ext(containerExtension)}';
 
-  /// Dizi bölümü için oynatma adresi: `{server}/series/{u}/{p}/{id}.m3u8`
-  static String episodeUrl(XtreamCredentials c, int episodeId) =>
-      '${c.base}/series/${c.username}/${c.password}/$episodeId.m3u8';
+  /// Dizi bölümü için oynatma adresi: `{server}/series/{u}/{p}/{id}.{uzantı}`
+  static String episodeUrl(XtreamCredentials c, int episodeId,
+          {String? containerExtension}) =>
+      '${c.base}/series/${c.username}/${c.password}/$episodeId.'
+      '${_ext(containerExtension)}';
+
+  /// Sunucunun bildirdiği uzantı varsa onu, yoksa m3u8 döner.
+  static String _ext(String? containerExtension) {
+    final e = containerExtension?.trim().toLowerCase();
+    if (e == null || e.isEmpty || e == '.' || e.contains('/')) return 'm3u8';
+    return e;
+  }
 
   /// VOD kategorilerini yükler: kategori_id → kategori adı.
   static Future<Map<String, String>> loadVodCategories(XtreamCredentials c) async {

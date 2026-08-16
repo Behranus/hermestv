@@ -224,11 +224,11 @@ class ExoStreamPlayer extends StreamPlayer {
     try {
       await c.initialize().timeout(const Duration(seconds: 20));
     } catch (e) {
-      if (gen != _generation || _disposed) {
-        unawaited(c.dispose());
-        return;
-      }
-      _error.add('Akış açılamadı: $e');
+      // Kontrolcüyü serbest bırak (kaynak sızıntısı olmasın) ve hatayı bildir.
+      unawaited(c.dispose());
+      if (gen != _generation || _disposed) return;
+      _lastError = 'Akış açılamadı: $e';
+      _error.add(_lastError!);
       return;
     }
     if (gen != _generation || _disposed) {
