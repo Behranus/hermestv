@@ -48,6 +48,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Timer? _overlayTimer;
   Timer? _retryTimer;
   int _errorRetries = 0;
+  bool _hasPlayed = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
@@ -101,18 +102,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     // Geçici ağ hatalarında oynatıcıyı 2 kez otomatik yeniden bağla
     // (TiviMate tarzı kendi kendini kurtarma); 2 deneme de başarısızsa hata göster.
+    // Hata yönetimi (TiviMate tarzı): en fazla 1 otomatik yeniden bağlanma.
+    // Oynatma bir kez başladıysa sayaç sıfırlanır → geçici ağ kesintisinde
+    // oynatıcı durmadan sıfırlanmaz (döngü = sürekli donma hissi).
     _player.error.listen((e) {
       if (!mounted) return;
-      if (_errorRetries < 2) {
+      if (_errorRetries < 1) {
         _errorRetries++;
         _retryTimer?.cancel();
-        _retryTimer = Timer(const Duration(seconds: 2), () {
+        _retryTimer = Timer(const Duration(seconds: 3), () {
           if (mounted) {
             _open(_channel);
           }
         });
       } else {
         setState(() => _error = e);
+      }
+    });
+    // Oynatma başarıyla başlayınca hata sayacını sıfırla.
+    _player.playing.listen((p) {
+      if (!mounted) return;
+      if (p) {
+        _errorRetries = 0;
+        _hasPlayed = true;
       }
     });
     _player.volume.listen((v) {
@@ -149,6 +161,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     setState(() {
       _buffering = true;
       _error = null;
+      _hasPlayed = false;
       _position = Duration.zero;
       _duration = Duration.zero;
     });
@@ -375,7 +388,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             fit: StackFit.expand,
             children: [
               _player.buildVideo(fit: BoxFit.contain),
-              if (_buffering && _error == null)
+              // Oynatma bir kez başladıysa yükleme çipini gizle (canlıda
+              // isBuffering asılı kalabiliyor → sonsuz "yükleniyor" olmasın).
+              if (_buffering && !_hasPlayed && _error == null)
                 const _BufferingIndicator()
               else if (_error != null)
                 _ErrorOverlay(
@@ -391,6 +406,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   position: _position,
                   duration: _duration,
                   isLive: isLive,
+                  streamInfo: _player.streamInfo,
                   nowProgram: nowProgram?.title,
                   nextProgram: nextProgram?.title,
                   nextStart: nextProgram?.start,
@@ -543,6 +559,7 @@ class _ControlsOverlay extends StatelessWidget {
     required this.position,
     required this.duration,
     required this.isLive,
+    required this.streamInfo,
     required this.nowProgram,
     required this.nextProgram,
     required this.nextStart,
@@ -561,6 +578,7 @@ class _ControlsOverlay extends StatelessWidget {
   final Duration position;
   final Duration duration;
   final bool isLive;
+  final String? streamInfo;
   final String? nowProgram;
   final String? nextProgram;
   final DateTime? nextStart;
@@ -618,6 +636,11 @@ class _ControlsOverlay extends StatelessWidget {
                         '${channel.displayGroup} • ${index + 1}/$total',
                         style: const TextStyle(color: Colors.white70, fontSize: 13),
                       ),
+                      if (streamInfo != null && streamInfo!.isNotEmpty)
+                        Text(
+                          streamInfo!,
+                          style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
                       if (nowProgram != null && nowProgram!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Row(

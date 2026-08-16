@@ -35,6 +35,9 @@ abstract class StreamPlayer {
   /// Akış canlı mı? (biliniyorsa; bilinmiyorsa null → ekran süre tahminini kullanır)
   bool? get isLive;
 
+  /// Açılan akışın çözünürlük/kodlayıcı bilgisi (HUD için, örn. "1920×1080 • h264").
+  String? get streamInfo;
+
   /// Oynatıcının seçtiği tampon süresi (saniye). Küçük = hızlı kanal geçişi.
   double get bufferSecs;
   set bufferSecs(double value);
@@ -79,6 +82,8 @@ class FvpStreamPlayer extends StreamPlayer {
   double _pendingVolume = 1.0;
   bool? _live;
   String? _lastError;
+  String? _streamInfo;
+  bool _startedPlaying = false;
 
   final _buffering = StreamController<bool>.broadcast();
   final _error = StreamController<String>.broadcast();
@@ -109,19 +114,34 @@ class FvpStreamPlayer extends StreamPlayer {
   Stream<List<SubtitleInfo>> get subtitleTracks => _subtitleTracks.stream;
   @override
   bool? get isLive => _live;
+  @override
+  String? get streamInfo => _streamInfo;
 
   @override
   double bufferSecs;
 
-  void _onValueChanged() {
+  /// Sadece EKRANDAKİ oynatıcının olaylarını işler. Bekleyen/eski oynatıcıların
+  /// olayları (özellikle hata) görmezden gelinir → hızlı kanal değişiminde
+  /// eski akışın hatası yeni akışı kesmez.
+  void _onValueChanged(vp.VideoPlayerController src) {
     final c = _controller;
     if (c == null || _disposed) return;
+    if (!identical(src, c)) return;
     final v = c.value;
     if (v.hasError && v.errorDescription != null && v.errorDescription != _lastError) {
       _lastError = v.errorDescription;
       _error.add(v.errorDescription!);
     }
-    _buffering.add(v.isBuffering);
+    // Oynatma ilk başladığında tampon göstergesini kapat (mdk isBuffering
+    // canlıda asılı kalabilir → sonsuz "Kanal yükleniyor" olmasın).
+    if (v.isPlaying && !_startedPlaying) {
+      _startedPlaying = true;
+      _buffering.add(false);
+      _captureStreamInfo(c);
+    }
+    if (!v.isPlaying) {
+      _buffering.add(v.isBuffering);
+    }
     _playing.add(v.isPlaying);
     _volume.add(v.volume);
     final now = DateTime.now();
@@ -133,6 +153,22 @@ class FvpStreamPlayer extends StreamPlayer {
     if (v.isCompleted) _completed.add(true);
   }
 
+  void _captureStreamInfo(vp.VideoPlayerController c) {
+    if (_streamInfo != null) return;
+    try {
+      final info = c.getMediaInfo();
+      final vids = info?.video;
+      if (vids != null && vids.isNotEmpty) {
+        final codec = vids.first.codec;
+        final res = '${codec.width}×${codec.height}';
+        final fps = codec.frameRate > 0 ? ' • ${codec.frameRate} fps' : '';
+        _streamInfo = '$res • ${codec.codec}$fps';
+      }
+    } catch (_) {
+      // Yayın bilgisi alınamazsa sessizce geç.
+    }
+  }
+
   @override
   Future<void> open(
     String url, {
@@ -142,36 +178,49 @@ class FvpStreamPlayer extends StreamPlayer {
     final gen = ++_generation;
     _live = null;
     _lastError = null;
+    _streamInfo = null;
+    _startedPlaying = false;
     _buffering.add(true);
     _position.add(Duration.zero);
     _duration.add(Duration.zero);
 
-    // Önceki oynatıcıyı temizle (hızlı kanal değişiminde yarış durumunu gen ile koru).
+    // Eski oynatıcının sesini kes ama SON KARESİNİ ekranda tut: yeni akış
+    // hazır olana dek siyah ekran görünmez (hızlı kanal geçişi hissi).
+    // dispose'u BEKLEMEYİZ — eski oynatıcının kapanması yeni kanalın
+    // yüklenmesini engellememeli (gecikmenin gizli kaynağı buydu).
     final old = _controller;
     if (old != null) {
-      _controller = null;
-      old.removeListener(_onValueChanged);
       try {
-        await old.dispose();
+        unawaited(old.pause());
       } catch (_) {}
     }
-    if (gen != _generation || _disposed) return;
 
     final c = vp.VideoPlayerController.networkUrl(
       Uri.parse(url),
       httpHeaders: headers ?? const <String, String>{},
     );
-    _controller = c;
-    c.addListener(_onValueChanged);
+    c.addListener(() => _onValueChanged(c));
 
     try {
       await c.initialize().timeout(const Duration(seconds: 20));
     } catch (e) {
-      if (gen != _generation || _disposed || _controller != c) return;
+      if (gen != _generation || _disposed) {
+        unawaited(c.dispose());
+        return;
+      }
       _error.add('Akış açılamadı: $e');
       return;
     }
-    if (gen != _generation || _disposed || _controller != c) return;
+    if (gen != _generation || _disposed) {
+      unawaited(c.dispose());
+      return;
+    }
+
+    // Yeni akış hazır → ekrandaki oynatıcıyı değiştir; eskiyi serbest bırak.
+    _controller = c;
+    if (old != null) {
+      unawaited(old.dispose());
+    }
 
     // Canlı mı? (mdk tespiti) — tampon aralığını ona göre seç.
     bool live;
@@ -182,18 +231,19 @@ class FvpStreamPlayer extends StreamPlayer {
     }
     _live = live;
 
-    // Tampon aralığı: küçük = hızlı kanal geçişi, büyük = akıcı VOD.
+    // Tampon aralığı: canlıda min 1 sn (çok küçük değer zayıf ağda sürekli
+    // yeniden tamponlamaya yol açar → donma hissi), max kullanıcı hızına göre.
     // Canlıda eski kareler atılır (drop) → en güncel içerik görüntülenir.
     try {
       if (live) {
         final maxMs = bufferSecs <= 0.5
-            ? 2000
+            ? 2500
             : bufferSecs <= 1.0
-                ? 3000
+                ? 4000
                 : bufferSecs <= 2.0
                     ? 6000
                     : 10000;
-        c.setBufferRange(min: 500, max: maxMs, drop: true);
+        c.setBufferRange(min: 1000, max: maxMs, drop: true);
       } else {
         c.setBufferRange(min: 2000, max: 12000, drop: false);
       }
@@ -280,7 +330,6 @@ class FvpStreamPlayer extends StreamPlayer {
     final c = _controller;
     _controller = null;
     if (c != null) {
-      c.removeListener(_onValueChanged);
       try {
         await c.dispose();
       } catch (_) {}
