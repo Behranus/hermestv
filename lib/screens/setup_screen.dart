@@ -122,7 +122,13 @@ class _SetupScreenState extends State<SetupScreen> {
     super.dispose();
   }
 
+  /// Klavyeyi/kutucuğu kapatır — kumanda tuşları tekrar navigasyona döner.
+  void _closeKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   Future<void> _loadUrl() async {
+    _closeKeyboard();
     final v = _urlController.text.trim();
     if (v.isEmpty) return;
     final state = context.read<AppState>();
@@ -175,6 +181,7 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<void> _loginXtream() async {
+    _closeKeyboard();
     final state = context.read<AppState>();
     final server = _xtreamServer.text.trim();
     final username = _xtreamUser.text.trim();
@@ -457,6 +464,8 @@ class _SetupScreenState extends State<SetupScreen> {
                   TextField(
                     controller: _epgController,
                     keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.done,
+                    onTapOutside: (_) => _closeKeyboard(),
                     decoration: const InputDecoration(
                       labelText: 'EPG URL\'si',
                       hintText: 'https://ornek.com/epg.xml.gz',
@@ -464,6 +473,7 @@ class _SetupScreenState extends State<SetupScreen> {
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (v) {
+                      _closeKeyboard();
                       if (v.trim().isNotEmpty) state.loadEpg(v.trim());
                     },
                   ),
@@ -558,6 +568,8 @@ class _SetupScreenState extends State<SetupScreen> {
             TextField(
               controller: _urlController,
               keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              onTapOutside: (_) => _closeKeyboard(),
               decoration: const InputDecoration(
                 labelText: 'Playlist URL\'si',
                 hintText: 'https://ornek.com/playlist.m3u8',
@@ -598,6 +610,8 @@ class _SetupScreenState extends State<SetupScreen> {
             TextField(
               controller: _xtreamServer,
               keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.next,
+              onTapOutside: (_) => _closeKeyboard(),
               decoration: const InputDecoration(
                 labelText: 'Sunucu adresi',
                 hintText: 'http://sunucu:8080',
@@ -609,6 +623,8 @@ class _SetupScreenState extends State<SetupScreen> {
             const SizedBox(height: 10),
             TextField(
               controller: _xtreamUser,
+              textInputAction: TextInputAction.next,
+              onTapOutside: (_) => _closeKeyboard(),
               decoration: const InputDecoration(
                 labelText: 'Kullanıcı adı',
                 prefixIcon: Icon(Icons.person),
@@ -620,6 +636,9 @@ class _SetupScreenState extends State<SetupScreen> {
             TextField(
               controller: _xtreamPass,
               obscureText: true,
+              textInputAction: TextInputAction.done,
+              onTapOutside: (_) => _closeKeyboard(),
+              onSubmitted: (_) => _loginXtream(),
               decoration: const InputDecoration(
                 labelText: 'Şifre',
                 prefixIcon: Icon(Icons.lock),

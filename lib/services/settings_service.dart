@@ -24,11 +24,11 @@ class SettingsService {
   static const _speedIndexKey = 'player_speed_index';
   static const _volumeKey = 'player_volume';
 
-  /// Kaydedilmiş bağlantı hızını döndürür (varsayılan: Hızlı 0.5 sn).
+  /// Kaydedilmiş bağlantı hızını döndürür (varsayılan: Normal 1 sn).
   static Future<PlayerSpeed> loadSpeed() async {
     final prefs = await SharedPreferences.getInstance();
-    final idx = prefs.getInt(_speedIndexKey) ?? 1;
-    if (idx < 0 || idx >= PlayerSpeed.options.length) return PlayerSpeed.options[1];
+    final idx = prefs.getInt(_speedIndexKey) ?? 2;
+    if (idx < 0 || idx >= PlayerSpeed.options.length) return PlayerSpeed.options[2];
     return PlayerSpeed.options[idx];
   }
 
