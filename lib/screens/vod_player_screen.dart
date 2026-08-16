@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iptv_player/services/stream_player.dart';
@@ -31,6 +32,8 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   double _dragValue = 0;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _subtitleText;
+  List<SubtitleInfo> _subtitleTracks = [];
+  String? _activeSubtitleId;
 
   /// Denenecek adaylar: ilk aday ana URL; Xtream filmleri açılmazsa
   /// aynı kimlikle diğer uzantılar (m3u8 ↔ mp4/mkv) otomatik denenir.
@@ -135,6 +138,10 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     _player.subtitleText.listen((text) {
       if (mounted) setState(() => _subtitleText = text);
     });
+    // HLS akışındaki gömülü altyazı parçaları (menü için).
+    _player.subtitleTracks.listen((tracks) {
+      if (mounted) setState(() => _subtitleTracks = tracks);
+    });
     _player.completed.listen((_) {
       if (mounted) setState(() => _playing = false);
     });
@@ -161,6 +168,36 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       await _player.play();
     }
     _scheduleOverlayHide();
+  }
+
+  Future<void> _showSubtitlesMenu() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _VodSubtitlesSheet(
+        tracks: _subtitleTracks,
+        activeId: _activeSubtitleId,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    if (selected == 'off') {
+      await _player.disableSubtitles();
+      setState(() => _activeSubtitleId = 'off');
+    } else if (selected == 'file') {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['srt', 'vtt', 'ass', 'ssa', 'sub'],
+      );
+      if (result.isEmpty || !mounted) return;
+      final path = result.first.path;
+      if (path == null) return;
+      await _player.setExternalSubtitle('file://$path');
+      setState(() => _activeSubtitleId = 'file://$path');
+    } else {
+      // HLS gömülü parça seçimi.
+      await _player.setSubtitleTrackById(selected);
+      setState(() => _activeSubtitleId = selected);
+    }
   }
 
   Future<void> _seekBy(int seconds) async {
@@ -316,6 +353,20 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
                                 ),
                               ),
                             ),
+                            // Altyazı menüsü (HLS gömülü parçalar + dosyadan yükleme).
+                            IconButton(
+                              onPressed: _showSubtitlesMenu,
+                              tooltip: 'Altyazılar',
+                              icon: Icon(
+                                _activeSubtitleId != null && _activeSubtitleId != 'off'
+                                    ? Icons.subtitles
+                                    : Icons.subtitles_off,
+                                color: _activeSubtitleId != null &&
+                                        _activeSubtitleId != 'off'
+                                    ? Colors.amber
+                                    : Colors.white,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -404,6 +455,77 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// VOD altyazı seçim sayfası (HLS gömülü parçalar + dosyadan yükleme).
+class _VodSubtitlesSheet extends StatelessWidget {
+  const _VodSubtitlesSheet({required this.tracks, required this.activeId});
+
+  final List<SubtitleInfo> tracks;
+  final String? activeId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasStreamTracks = tracks.isNotEmpty;
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('Altyazılar', style: theme.textTheme.titleLarge),
+          ),
+          ListTile(
+            leading: const Icon(Icons.subtitles_off),
+            title: const Text('Kapalı'),
+            trailing: activeId == null || activeId == 'off'
+                ? const Icon(Icons.check, color: Colors.green)
+                : null,
+            onTap: () => Navigator.of(context).pop('off'),
+          ),
+          if (hasStreamTracks) ...[
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text('Akış altyazıları', style: theme.textTheme.labelLarge),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: tracks.length,
+                itemBuilder: (context, i) {
+                  final t = tracks[i];
+                  final label = [t.title, t.language]
+                      .whereType<String>()
+                      .where((s) => s.isNotEmpty)
+                      .join(' • ');
+                  return ListTile(
+                    leading: const Icon(Icons.subtitles),
+                    title: Text(label.isEmpty ? 'Parça ${i + 1}' : label),
+                    trailing: activeId == t.id
+                        ? const Icon(Icons.check, color: Colors.green)
+                        : null,
+                    onTap: () => Navigator.of(context).pop(t.id),
+                  );
+                },
+              ),
+            ),
+          ],
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.upload_file),
+            title: const Text('Dosyadan altyazı yükle'),
+            subtitle: const Text('SRT, VTT, ASS, SSA, SUB'),
+            onTap: () => Navigator.of(context).pop('file'),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

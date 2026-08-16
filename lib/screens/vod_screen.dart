@@ -136,22 +136,30 @@ class _VodScreenState extends State<VodScreen> {
         Expanded(
           child: LayoutBuilder(builder: (context, constraints) {
             final wide = constraints.maxWidth;
-            final columns = wide >= 1200
-                ? 6
-                : wide >= 900
-                    ? 5
-                    : wide >= 600
-                        ? 4
-                        : wide >= 400
-                            ? 3
-                            : 2;
+            // İstenen düzen: bir ekranda 5 sütun × 4 satır = 20 film.
+            // Dar ekranlarda (mobil dikey) taşmasın diye sütun azaltılır.
+            final columns = wide >= 1100
+                ? 5
+                : wide >= 800
+                    ? 4
+                    : wide >= 520
+                        ? 3
+                        : 2;
+            // 4 satırın aynı anda görünmesi için hücre yüksekliğini ekrana
+            // göre hesapla (sabit 0.62 yerine) → 20 film bir bakışta.
+            final cellW =
+                (wide - 24 - 12 * (columns - 1)) / columns;
+            final cellH = (constraints.maxHeight - 24 - 12 * 3) / 4;
+            final ratio = columns >= 4
+                ? cellW / cellH
+                : 0.62;
             final grid = GridView.builder(
               padding: const EdgeInsets.all(12),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columns,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: 0.62,
+                childAspectRatio: ratio,
               ),
               itemCount: _mode == _VodMode.movies
                   ? state.filteredVodMovies.length

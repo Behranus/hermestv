@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
+import 'package:iptv_player/services/hls_subtitle_service.dart';
 import 'package:video_player/video_player.dart';
 
 /// Altyazı parçası bilgisi (oynatıcıdan bağımsız).
@@ -97,8 +98,13 @@ class ExoStreamPlayer extends StreamPlayer {
   bool _startedPlaying = false;
 
   // ---- Altyazı durumu ----
-  List<_SubCue> _cues = const [];
+  List<SubtitleCue> _cues = const [];
   String? _activeSubtitle;
+  List<HlsSubtitleTrack> _hlsTracks = const [];
+  HlsSubtitleTrack? _selectedHlsTrack;
+  Timer? _hlsSubtitleRefresh;
+  Map<String, String>? _headers;
+  String? _lastUrl;
 
   final _buffering = StreamController<bool>.broadcast();
   final _error = StreamController<String>.broadcast();
@@ -197,6 +203,10 @@ class ExoStreamPlayer extends StreamPlayer {
     _buffering.add(true);
     _position.add(Duration.zero);
     _duration.add(Duration.zero);
+    _headers = headers;
+    _lastUrl = url;
+    _hlsSubtitleRefresh?.cancel();
+    _hlsSubtitleRefresh = null;
 
     // Eski oynatıcının sesini kes ama SON KARESİNİ ekranda tut: yeni akış
     // hazır olana dek siyah ekran görünmez (hızlı kanal geçişi hissi).
@@ -248,6 +258,9 @@ class ExoStreamPlayer extends StreamPlayer {
     // Harici altyazı (kanaldan tanımlıysa).
     if (subtitleUrl != null && subtitleUrl.isNotEmpty) {
       await setExternalSubtitle(subtitleUrl);
+    } else {
+      // HLS akışındaki gömülü altyazı parçalarını keşfet (master playlist).
+      unawaited(_discoverHlsSubtitles(url));
     }
 
     // Kayıtlı ses seviyesini uygula.
@@ -258,6 +271,74 @@ class ExoStreamPlayer extends StreamPlayer {
     try {
       await c.play();
     } catch (_) {}
+  }
+
+  /// HLS master playlist'ten altyazı parçalarını bulur ve varsayılan olarak
+  /// Türkçe parçayı (yoksa ilk parçayı) otomatik seçer.
+  Future<void> _discoverHlsSubtitles(String url) async {
+    if (!url.toLowerCase().endsWith('.m3u8')) return;
+    final tracks = await HlsSubtitleService.discoverTracks(url, headers: _headers);
+    if (_disposed || tracks.isEmpty) return;
+    if (_lastUrl != url) return; // Kanal değiştiyse eski sonucu yoksay.
+    _hlsTracks = tracks;
+    _subtitleTracks.add(tracks.map((t) => t.toInfo()).toList());
+
+    // Varsayılan: Türkçe parça varsa onu, yoksa DEFAULT/AUTOSELECT olanı,
+    // o da yoksa ilk parçayı seç (varsayılan AÇIK).
+    HlsSubtitleTrack? pick;
+    for (final t in tracks) {
+      if (t.isTurkish) {
+        pick = t;
+        break;
+      }
+    }
+    pick ??= tracks.where((t) => t.isDefault || t.isAutoselect).firstOrNull;
+    pick ??= tracks.first;
+    await setSubtitleTrackById(pick.id);
+  }
+
+  /// Seçilen HLS altyazı parçasının WebVTT segmentlerini yükler.
+  /// Canlı akışlarda playlist kaydığı için periyodik olarak tazelenir.
+  Future<void> _loadHlsTrack(HlsSubtitleTrack track) async {
+    _selectedHlsTrack = track;
+    final cues = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
+    if (_disposed) return;
+    if (!identical(_selectedHlsTrack, track)) return; // Başka parça seçildi.
+    _cues = cues;
+    final c = _controller;
+    if (c != null) _updateSubtitleAt(c.value.position);
+
+    // Canlıda media playlist kayar → yeni segmentleri topla (her 45 sn).
+    _hlsSubtitleRefresh?.cancel();
+    if (_live == true) {
+      _hlsSubtitleRefresh = Timer.periodic(const Duration(seconds: 45), (_) {
+        if (_disposed || _selectedHlsTrack == null) return;
+        unawaited(_refreshHlsTrack(track));
+      });
+    }
+  }
+
+  Future<void> _refreshHlsTrack(HlsSubtitleTrack track) async {
+    final fresh = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
+    if (_disposed || !identical(_selectedHlsTrack, track)) return;
+    // Yeni bölümlerin cue'ları ekle (çakışmaları yeni olanla değiştir).
+    final byStart = <int, SubtitleCue>{};
+    for (final c in _cues) {
+      byStart[c.start.inMilliseconds] = c;
+    }
+    var changed = false;
+    for (final c in fresh) {
+      final k = c.start.inMilliseconds;
+      if (!byStart.containsKey(k)) {
+        byStart[k] = c;
+        changed = true;
+      }
+    }
+    if (changed) {
+      _cues = byStart.values.toList()..sort((a, b) => a.start.compareTo(b.start));
+      final c = _controller;
+      if (c != null) _updateSubtitleAt(c.value.position);
+    }
   }
 
   @override
@@ -303,7 +384,7 @@ class ExoStreamPlayer extends StreamPlayer {
     try {
       final raw = await _fetchSubtitle(uri);
       if (raw == null) return;
-      _cues = _parseSubtitles(raw);
+      _cues = parseSubtitleCues(raw);
       _activeSubtitle = null;
       final c = _controller;
       if (c != null) {
@@ -323,7 +404,15 @@ class ExoStreamPlayer extends StreamPlayer {
 
   @override
   Future<void> setSubtitleTrackById(String id) async {
-    // video_player yerleşik parça API'si sunmaz; yalnızca harici desteklenir.
+    // HLS gömülü parça mı? (video_player API'si sunmadığı için kendimiz
+    // master playlist'ten bulduğumuz parçalar.)
+    for (final t in _hlsTracks) {
+      if (t.id == id) {
+        await _loadHlsTrack(t);
+        return;
+      }
+    }
+    // Yerleşik (video_player) parça yok; bilinmeyen id'yi yoksay.
   }
 
   Future<String?> _fetchSubtitle(String uri) async {
@@ -372,6 +461,8 @@ class ExoStreamPlayer extends StreamPlayer {
   Future<void> dispose() async {
     _disposed = true;
     _generation++;
+    _hlsSubtitleRefresh?.cancel();
+    _hlsSubtitleRefresh = null;
     final c = _controller;
     _controller = null;
     if (c != null) {

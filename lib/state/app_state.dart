@@ -58,14 +58,29 @@ class AppState extends ChangeNotifier {
 
   List<Channel> get channels => List.unmodifiable(_channels);
 
-  /// Benzersiz, sıralı grup listesi.
+  /// Benzersiz, sıralı grup listesi. Türkçe/Türkiye grupları en başta.
   List<String> get groups {
     final g = <String>{};
     for (final c in _channels) {
       g.add(c.displayGroup);
     }
     final list = g.toList()..sort();
-    return ['all', ...list];
+    // Türkçe kanallar her zaman ilk sırada (kullanıcı isteği).
+    final turkish = list.where(_isTurkishGroup).toList();
+    final rest = list.where((x) => !_isTurkishGroup(x)).toList();
+    return ['all', ...turkish, ...rest];
+  }
+
+  /// Grup adı Türkçe/Türkiye/Turkey vb. içeriyorsa true.
+  static bool _isTurkishGroup(String group) {
+    final g = group.toLowerCase();
+    return g.contains('türk') ||
+        g.contains('turk') ||
+        g.contains('tr |') ||
+        g.startsWith('tr ') ||
+        g.startsWith('tr|') ||
+        g == 'tr' ||
+        g.contains('türkiye');
   }
 
   bool get hasChannels => _channels.isNotEmpty;
