@@ -7,6 +7,8 @@ import 'package:iptv_player/models/vod.dart';
 import 'package:iptv_player/services/epg_service.dart';
 import 'package:iptv_player/services/favorites_service.dart';
 import 'package:iptv_player/services/playlist_service.dart';
+import 'package:iptv_player/services/test_server_service.dart';
+import 'package:iptv_player/services/test_vod_catalog.dart';
 import 'package:iptv_player/services/xtream_service.dart';
 
 /// Uygulamanın merkezi durumu: playlist, gruplar, arama, favoriler, EPG.
@@ -31,6 +33,10 @@ class AppState extends ChangeNotifier {
   /// Örn. M3U kanalları `live/kullanıcı/şifre/…` adresleri içeriyorsa,
   /// aynı bilgilerle VOD kataloğu da açılabilir.
   XtreamCredentials? _derivedCreds;
+
+  /// Kaynak test bölümünden mi yüklendi? (sunucu VOD'suzsa yerleşik
+  /// yasal test VOD kataloğu devreye girer)
+  bool _testSource = false;
 
   // VOD (Xtream)
   List<VodMovie> vodMovies = [];
@@ -57,10 +63,10 @@ class AppState extends ChangeNotifier {
 
   bool get hasChannels => _channels.isNotEmpty;
 
-  /// VOD kataloğu, Xtream bilgileri elde edilebildiğinde kullanılabilir:
-  /// doğrudan Xtream girişi, Xtream tabanlı playlist URL'si (get.php),
-  /// veya M3U kanallarının içine gömülü `live/kullanıcı/şifre` adresleri.
-  bool get hasVod => _creds != null;
+  /// VOD kataloğu, Xtream bilgileri elde edilebildiğinde — veya test kaynağında
+  /// yerleşik yasal test kataloğu yüklendiğinde — kullanılabilir.
+  bool get hasVod =>
+      _creds != null || vodMovies.isNotEmpty || vodSeries.isNotEmpty;
 
   bool isFavorite(Channel c) => _favorites.contains(c.url);
 
@@ -90,10 +96,11 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> loadFromSource(PlaylistSource s) async {
+  Future<void> loadFromSource(PlaylistSource s, {bool isTest = false}) async {
     isLoading = true;
     error = null;
     _derivedCreds = null;
+    _testSource = isTest;
     source = s;
     selectedGroup = 'all';
     query = '';
@@ -148,15 +155,41 @@ class AppState extends ChangeNotifier {
   Future<void> loadFromFile(String path) =>
       loadFromSource(PlaylistSource(PlaylistSourceType.file, path));
 
-  /// İnternetteki halka açık test yayınlarını yükler.
-  Future<void> loadTest() =>
-      loadFromSource(const PlaylistSource(PlaylistSourceType.demo, ''));
+  /// Test yayınlarını yükler.
+  ///
+  /// Önce internetten Xtream test sunucu havuzu tazelenir (her gün + kullanıcı
+  /// her bastığında). Çalışan en iyi sunucu varsa canlı + VOD ile yüklenir;
+  /// yoksa doğrudan HLS test yayınlarına düşülür.
+  Future<void> loadTest() async {
+    List<TestServer> servers;
+    try {
+      servers = await TestServerService.refresh(force: true);
+    } catch (_) {
+      servers = const [];
+    }
+    final best = servers.where((s) => s.working && s.liveCount > 0).firstOrNull;
+    if (best != null) {
+      await loginXtream(
+        server: best.server,
+        username: best.username,
+        password: best.password,
+        isTest: true,
+      );
+      return;
+    }
+    // Xtream sunucusu yoksa doğrudan HLS test yayınlarına düş.
+    await loadFromSource(
+      const PlaylistSource(PlaylistSourceType.demo, ''),
+      isTest: true,
+    );
+  }
 
   /// Xtream hesabına giriş yapar; canlı kanalları ve VOD kataloğunu yükler.
   Future<void> loginXtream({
     required String server,
     required String username,
     required String password,
+    bool isTest = false,
   }) async {
     final creds = XtreamCredentials(
       server: server,
@@ -165,10 +198,13 @@ class AppState extends ChangeNotifier {
     );
     // Önce girişi doğrula.
     await XtreamService.login(creds);
-    await loadFromSource(PlaylistSource(
-      PlaylistSourceType.xtream,
-      jsonEncode(creds.toJson()),
-    ));
+    await loadFromSource(
+      PlaylistSource(
+        PlaylistSourceType.xtream,
+        jsonEncode(creds.toJson()),
+      ),
+      isTest: isTest,
+    );
     // VOD kataloğunu ayrıca yükle (hata olursa kanallar yine de açık kalır).
     await loadVod();
   }
@@ -177,6 +213,7 @@ class AppState extends ChangeNotifier {
     _channels = [];
     source = null;
     _derivedCreds = null;
+    _testSource = false;
     error = null;
     selectedGroup = 'all';
     query = '';
@@ -260,10 +297,34 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Yerleşik yasal test VOD kataloğunu yükler (Xtream gerekmez).
+  void _loadDemoVod() {
+    vodMovies = TestVodCatalog.items
+        .map((d) => VodMovie(
+              id: d.id,
+              name: d.name,
+              poster: d.poster,
+              rating: d.rating,
+              categoryId: 'demo',
+              directUrl: d.url,
+            ))
+        .toList();
+    vodSeries = [];
+    vodCategories = [('all', 'Tümü'), ('demo', 'Test Filmleri')];
+    selectedVodCategory = 'all';
+    vodError = null;
+  }
+
   /// VOD kategorilerini, filmleri ve dizileri yükler.
+  ///
+  /// Test kaynağıysa: sunucunun VOD'u varsa onu kullanır; yoksa (çoğu test
+  /// sunucusu VOD sunmaz) yerleşik yasal test kataloğu devreye girer.
   Future<void> loadVod() async {
     final creds = _creds;
-    if (creds == null) return;
+    if (creds == null) {
+      if (_testSource) _loadDemoVod();
+      return;
+    }
     vodLoading = true;
     vodError = null;
     notifyListeners();
@@ -275,8 +336,13 @@ class AppState extends ChangeNotifier {
       vodMovies = movies;
       vodSeries = series;
       _vodDetailsCache.clear();
+      // Test kaynağı ve sunucu VOD sunmuyor → yerleşik yasal test kataloğu.
+      if (_testSource && vodMovies.isEmpty && vodSeries.isEmpty) {
+        _loadDemoVod();
+      }
     } catch (e) {
       vodError = e.toString();
+      if (_testSource) _loadDemoVod();
     } finally {
       vodLoading = false;
       notifyListeners();
@@ -287,6 +353,21 @@ class AppState extends ChangeNotifier {
   Future<VodMovieDetails?> movieDetails(int movieId) async {
     final cached = _vodDetailsCache[movieId];
     if (cached != null) return cached;
+    // Yerleşik test kataloğu filmi mi?
+    final demo = TestVodCatalog.byId(movieId);
+    if (demo != null) {
+      final details = VodMovieDetails(
+        plot: demo.plot,
+        backdrop: demo.poster,
+        genre: demo.genre,
+        year: demo.year,
+        duration: demo.duration,
+        rating: demo.rating,
+      );
+      _vodDetailsCache[movieId] = details;
+      notifyListeners();
+      return details;
+    }
     final creds = _creds;
     if (creds == null) return null;
     try {
@@ -301,8 +382,11 @@ class AppState extends ChangeNotifier {
 
   VodMovieDetails? movieDetailsCached(int movieId) => _vodDetailsCache[movieId];
 
-  /// Filmin oynatma adresi (Xtream hesabı yoksa null).
+  /// Filmin oynatma adresi. Yerleşik test kataloğu filmi için doğrudan
+  /// adres döner; diğerleri için Xtream adresi (hesap yoksa null).
   String? moviePlayUrl(int movieId) {
+    final demo = TestVodCatalog.byId(movieId);
+    if (demo != null) return demo.url;
     final creds = _creds;
     return creds == null ? null : XtreamService.movieUrl(creds, movieId);
   }

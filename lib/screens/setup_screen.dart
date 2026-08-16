@@ -4,6 +4,7 @@ import 'package:iptv_player/screens/free_tv_screen.dart';
 import 'package:iptv_player/services/lock_service.dart';
 import 'package:iptv_player/services/playlist_service.dart';
 import 'package:iptv_player/services/settings_service.dart';
+import 'package:iptv_player/services/test_server_service.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:provider/provider.dart';
 
@@ -29,6 +30,11 @@ class _SetupScreenState extends State<SetupScreen> {
   String? _xtreamError;
   PlayerSpeed? _speed;
 
+  // Test sunucuları (günlük yenilenen havuz)
+  List<TestServer>? _testServers;
+  bool _testServersLoading = false;
+  String? _testServersNote;
+
   // Şifre kilidi
   final _newPass = TextEditingController();
   final _confirmPass = TextEditingController();
@@ -41,6 +47,30 @@ class _SetupScreenState extends State<SetupScreen> {
     super.initState();
     _loadSpeed();
     _loadLock();
+    _loadTestServers();
+  }
+
+  /// Test sunucu havuzunu yükler. Önbellek 24 saat içindeyse yeniden kontrol
+  /// edilmez (günlük yenileme); listeyi elle tazelemek için [_refreshTestServers].
+  Future<void> _loadTestServers() async {
+    if (mounted) setState(() => _testServersLoading = true);
+    final servers = await TestServerService.refresh(force: false);
+    if (!mounted) return;
+    setState(() {
+      _testServers = servers;
+      _testServersLoading = false;
+    });
+  }
+
+  Future<void> _refreshTestServers() async {
+    setState(() => _testServersLoading = true);
+    final servers = await TestServerService.refresh(force: true);
+    if (!mounted) return;
+    setState(() {
+      _testServers = servers;
+      _testServersLoading = false;
+      _testServersNote = 'Sunucular tazelendi.';
+    });
   }
 
   Future<void> _loadLock() async {
@@ -174,8 +204,11 @@ class _SetupScreenState extends State<SetupScreen> {
     if (state.error != null) {
       messenger.showSnackBar(SnackBar(content: Text('Hata: ${state.error}')));
     } else {
+      final vod = state.vodMovies.isNotEmpty || state.vodSeries.isNotEmpty
+          ? ', ${state.vodMovies.length} film${state.vodSeries.isNotEmpty ? ' + ${state.vodSeries.length} dizi' : ''}'
+          : '';
       messenger.showSnackBar(
-        SnackBar(content: Text('${state.channels.length} test yayını yüklendi.')),
+        SnackBar(content: Text('${state.channels.length} test yayını yüklendi$vod.')),
       );
     }
   }
@@ -274,11 +307,104 @@ class _SetupScreenState extends State<SetupScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.science_outlined),
-                    title: const Text('Test Yayınları'),
-                    subtitle: const Text('Canlı + VOD — her basışta taze kontrol'),
-                    onTap: _loadTest,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.science_outlined),
+                        title: const Text('Test Yayınları'),
+                        subtitle: const Text('İnternetteki test sunucuları — günde bir kez otomatik yenilenir'),
+                        onTap: _loadTest,
+                      ),
+                      // Günlük yenilenen test sunucu havuzu
+                      if (_testServersLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      else if (_testServers != null && _testServers!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final s in _testServers!) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle,
+                                          color: Colors.green, size: 16),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          '${s.name} — ${s.liveCount} kategori'
+                                          '${s.vodCount > 0 ? ', ${s.vodCount} film' : ''}',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              Row(
+                                children: [
+                                  Text(
+                                    'En iyi sunucu otomatik yüklenir • VOD dahil',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  IconButton(
+                                    tooltip: 'Sunucuları tazele',
+                                    visualDensity: VisualDensity.compact,
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                    onPressed: _refreshTestServers,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Şu an çalışan test sunucusu yok — doğrudan test yayınları yüklenir.',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Sunucuları tazele',
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.refresh, size: 18),
+                                onPressed: _refreshTestServers,
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (_testServersNote != null)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                          child: Text(
+                            _testServersNote!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),

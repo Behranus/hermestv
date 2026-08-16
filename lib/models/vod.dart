@@ -6,6 +6,7 @@ class VodMovie {
     this.poster,
     this.rating,
     this.categoryId,
+    this.directUrl,
   });
 
   final int id;
@@ -17,6 +18,10 @@ class VodMovie {
   /// IMDb tarzı puan (0-10).
   final String? rating;
   final String? categoryId;
+
+  /// Xtream dışı doğrudan oynatma adresi (test kataloğu gibi).
+  /// Varsa Xtream `movie/{u}/{p}/{id}` adresi yerine bu kullanılır.
+  final String? directUrl;
 
   factory VodMovie.fromJson(Map<String, dynamic> json) {
     final rating = json['rating']?.toString();
