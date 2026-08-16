@@ -671,6 +671,31 @@ class _SetupScreenState extends State<SetupScreen> {
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             ),
+          // Ücretsiz/test kanalları doğrulanıyor (günlük yenileme).
+          if (state.testProbeActive)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Kanallar doğrulanıyor… '
+                    '${state.testProbeDone}/${state.testProbeTotal}'
+                    ' (yalnızca açılanlar listelenir)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: state.testProbeTotal > 0
+                        ? state.testProbeDone / state.testProbeTotal
+                        : null,
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 24),
         ],
       ),

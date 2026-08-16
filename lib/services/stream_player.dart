@@ -195,9 +195,15 @@ class FvpStreamPlayer extends StreamPlayer {
       } catch (_) {}
     }
 
+    // Doğrulama (ChannelProbeService) ile aynı User-Agent → doğrulanan
+    // kanallar oynatıcıda da aynı şekilde açılır (bazı CDN'ler UA ister).
     final c = vp.VideoPlayerController.networkUrl(
       Uri.parse(url),
-      httpHeaders: headers ?? const <String, String>{},
+      httpHeaders: headers ??
+          const {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 '
+                'Chrome/120.0 Mobile Safari/537.36',
+          },
     );
     c.addListener(() => _onValueChanged(c));
 

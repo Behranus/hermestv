@@ -12,18 +12,22 @@ enum PlaylistSourceType { url, file, demo, xtream }
 
 /// Kaydedilebilir playlist kaynağı.
 class PlaylistSource {
-  const PlaylistSource(this.type, this.value);
+  const PlaylistSource(this.type, this.value, {this.isTest = false});
 
   final PlaylistSourceType type;
   final String value;
 
-  Map<String, dynamic> toJson() => {'type': type.name, 'value': value};
+  /// Kaynak test bölümünden mi geldi? (kanal doğrulama + VOD kataloğu için)
+  final bool isTest;
+
+  Map<String, dynamic> toJson() =>
+      {'type': type.name, 'value': value, 'test': isTest};
 
   static PlaylistSource? fromJson(Map<String, dynamic> json) {
     final t = PlaylistSourceType.values.asNameMap()[json['type']];
     final v = json['value'] as String?;
     if (t == null || v == null || v.isEmpty) return null;
-    return PlaylistSource(t, v);
+    return PlaylistSource(t, v, isTest: json['test'] == true);
   }
 }
 

@@ -61,7 +61,7 @@ class IptvApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => AppState()..init(),
       child: MaterialApp(
-        title: 'IPTV Player',
+        title: 'bbtv',
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.dark,
         theme: _buildTheme(Brightness.light),

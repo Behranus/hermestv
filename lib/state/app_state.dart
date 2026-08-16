@@ -4,12 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:iptv_player/models/channel.dart';
 import 'package:iptv_player/models/epg_program.dart';
 import 'package:iptv_player/models/vod.dart';
+import 'package:iptv_player/services/channel_probe_service.dart';
 import 'package:iptv_player/services/epg_service.dart';
 import 'package:iptv_player/services/favorites_service.dart';
 import 'package:iptv_player/services/playlist_service.dart';
 import 'package:iptv_player/services/test_server_service.dart';
 import 'package:iptv_player/services/test_vod_catalog.dart';
 import 'package:iptv_player/services/xtream_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Uygulamanın merkezi durumu: playlist, gruplar, arama, favoriler, EPG.
 class AppState extends ChangeNotifier {
@@ -37,6 +39,11 @@ class AppState extends ChangeNotifier {
   /// Kaynak test bölümünden mi yüklendi? (sunucu VOD'suzsa yerleşik
   /// yasal test VOD kataloğu devreye girer)
   bool _testSource = false;
+
+  // Ücretsiz/test kanallarının canlılık doğrulaması (günlük yenileme)
+  bool testProbeActive = false;
+  int testProbeDone = 0;
+  int testProbeTotal = 0;
 
   // VOD (Xtream)
   List<VodMovie> vodMovies = [];
@@ -96,11 +103,11 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> loadFromSource(PlaylistSource s, {bool isTest = false}) async {
+  Future<void> loadFromSource(PlaylistSource s) async {
     isLoading = true;
     error = null;
     _derivedCreds = null;
-    _testSource = isTest;
+    _testSource = s.isTest;
     source = s;
     selectedGroup = 'all';
     query = '';
@@ -130,6 +137,12 @@ class AppState extends ChangeNotifier {
         await _loadEpg(XtreamService.epgUrl(creds), silent: true);
         // VOD kataloğunu yükle (hata olursa kanallar yine de açık kalır).
         await _tryLoadVod();
+        // Test kaynağı: kanalları doğrula (yalnızca açılanlar listelensin —
+        // günde bir kez; önbellekli). Ölü kanallar hem "açılmıyor" hissi
+        // yaratır hem de 2GB RAM'de gereksiz bellek harcar.
+        if (_testSource) {
+          await _verifyTestChannels(creds);
+        }
       } else {
         _channels = await PlaylistService.load(s);
         await PlaylistService.saveSource(s);
@@ -179,8 +192,7 @@ class AppState extends ChangeNotifier {
     }
     // Xtream sunucusu yoksa doğrudan HLS test yayınlarına düş.
     await loadFromSource(
-      const PlaylistSource(PlaylistSourceType.demo, ''),
-      isTest: true,
+      const PlaylistSource(PlaylistSourceType.demo, '', isTest: true),
     );
   }
 
@@ -202,11 +214,60 @@ class AppState extends ChangeNotifier {
       PlaylistSource(
         PlaylistSourceType.xtream,
         jsonEncode(creds.toJson()),
+        isTest: isTest,
       ),
-      isTest: isTest,
     );
     // VOD kataloğunu ayrıca yükle (hata olursa kanallar yine de açık kalır).
     await loadVod();
+  }
+
+  /// Test kaynağının kanallarını doğrular: yalnızca o an açılabilenleri
+  /// listede tutar. Sonuç **günde bir kez** yeniden doğrulanır (önbellek).
+  Future<void> _verifyTestChannels(XtreamCredentials creds) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'test_channels_'
+        '${creds.server.replaceAll(RegExp(r'[^a-z0-9]+'), '_')}';
+    final tsKey = '${key}_ts';
+
+    // 24 saat içinde doğrulandıysa önbelleği kullan — günlük yenileme.
+    final lastRaw = prefs.getString(tsKey);
+    if (lastRaw != null) {
+      final last = DateTime.tryParse(lastRaw);
+      if (last != null &&
+          DateTime.now().difference(last) < const Duration(hours: 24)) {
+        final cached = prefs.getString(key);
+        if (cached != null) {
+          final cachedChannels = ChannelProbeService.decode(cached);
+          if (cachedChannels.isNotEmpty) {
+            _channels = cachedChannels;
+            notifyListeners();
+            return;
+          }
+        }
+      }
+    }
+
+    // Taze doğrulama (ilerleme çubuğu için alanlar güncellenir).
+    final toProbe = List<Channel>.of(_channels);
+    testProbeActive = true;
+    testProbeDone = 0;
+    testProbeTotal = toProbe.length;
+    notifyListeners();
+    final alive = await ChannelProbeService.probeAlive(
+      toProbe,
+      onProgress: (d, t) {
+        testProbeDone = d;
+        testProbeTotal = t;
+        notifyListeners();
+      },
+    );
+    testProbeActive = false;
+    if (alive.isNotEmpty) {
+      _channels = alive;
+      await prefs.setString(key, ChannelProbeService.encode(alive));
+      await prefs.setString(tsKey, DateTime.now().toIso8601String());
+    }
+    notifyListeners();
   }
 
   Future<void> clearPlaylist() async {
@@ -214,6 +275,9 @@ class AppState extends ChangeNotifier {
     source = null;
     _derivedCreds = null;
     _testSource = false;
+    testProbeActive = false;
+    testProbeDone = 0;
+    testProbeTotal = 0;
     error = null;
     selectedGroup = 'all';
     query = '';
