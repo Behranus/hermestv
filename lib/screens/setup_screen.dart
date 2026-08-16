@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:iptv_player/screens/free_tv_screen.dart';
+import 'package:iptv_player/services/lock_service.dart';
 import 'package:iptv_player/services/playlist_service.dart';
 import 'package:iptv_player/services/settings_service.dart';
 import 'package:iptv_player/state/app_state.dart';
@@ -25,10 +26,71 @@ class _SetupScreenState extends State<SetupScreen> {
   String? _xtreamError;
   PlayerSpeed? _speed;
 
+  // Şifre kilidi
+  final _newPass = TextEditingController();
+  final _confirmPass = TextEditingController();
+  bool? _lockEnabled;
+  String? _lockError;
+  String? _lockSuccess;
+
   @override
   void initState() {
     super.initState();
     _loadSpeed();
+    _loadLock();
+  }
+
+  Future<void> _loadLock() async {
+    final enabled = await LockService.isEnabled();
+    if (mounted) setState(() => _lockEnabled = enabled);
+  }
+
+  Future<void> _toggleLock(bool enabled) async {
+    await LockService.setEnabled(enabled);
+    if (mounted) {
+      setState(() {
+        _lockEnabled = enabled;
+        _lockError = null;
+        _lockSuccess = enabled ? 'Kilit açıldı.' : 'Kilit kapatıldı.';
+      });
+    }
+  }
+
+  Future<void> _savePassword() async {
+    final p1 = _newPass.text;
+    final p2 = _confirmPass.text;
+    if (p1.isEmpty || p2.isEmpty) {
+      setState(() {
+        _lockError = 'İki alanı da doldur.';
+        _lockSuccess = null;
+      });
+      return;
+    }
+    if (p1 != p2) {
+      setState(() {
+        _lockError = 'Şifreler eşleşmiyor.';
+        _lockSuccess = null;
+      });
+      return;
+    }
+    try {
+      await LockService.changePassword(p1);
+      if (!mounted) return;
+      _newPass.clear();
+      _confirmPass.clear();
+      setState(() {
+        _lockError = null;
+        _lockSuccess = 'Şifre güncellendi.';
+        _lockEnabled = true;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _lockError = e.toString();
+          _lockSuccess = null;
+        });
+      }
+    }
   }
 
   Future<void> _loadSpeed() async {
@@ -52,6 +114,8 @@ class _SetupScreenState extends State<SetupScreen> {
     _xtreamServer.dispose();
     _xtreamUser.dispose();
     _xtreamPass.dispose();
+    _newPass.dispose();
+    _confirmPass.dispose();
     super.dispose();
   }
 
@@ -265,6 +329,103 @@ class _SetupScreenState extends State<SetupScreen> {
                     Text(
                       _speed!.description,
                       style: TextStyle(color: theme.colorScheme.primary, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Şifre kilidi
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.lock_outline),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('Şifre Kilidi', style: theme.textTheme.titleMedium),
+                      ),
+                      Switch(
+                        value: _lockEnabled ?? true,
+                        onChanged: _toggleLock,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Açılışta şifre sorulur. Varsayılan şifre: ${LockService.defaultPassword} '
+                    '(aşağıdan değiştirebilirsin).',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
+                  ),
+                  if (_lockEnabled ?? true) ...[
+                    const SizedBox(height: 16),
+                    Text('Şifre değiştir', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _newPass,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Yeni şifre',
+                        prefixIcon: Icon(Icons.password),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _confirmPass,
+                      obscureText: true,
+                      onSubmitted: (_) => _savePassword(),
+                      decoration: const InputDecoration(
+                        labelText: 'Yeni şifre (tekrar)',
+                        prefixIcon: Icon(Icons.password),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: _savePassword,
+                          icon: const Icon(Icons.save),
+                          label: const Text('Şifreyi Kaydet'),
+                        ),
+                        const SizedBox(width: 12),
+                        TextButton.icon(
+                          onPressed: () async {
+                            await LockService.resetToDefault();
+                            if (!mounted) return;
+                            setState(() {
+                              _lockEnabled = true;
+                              _lockError = null;
+                              _lockSuccess =
+                                  'Şifre varsayılana döndü: ${LockService.defaultPassword}';
+                            });
+                          },
+                          icon: const Icon(Icons.restore),
+                          label: const Text('Varsayılana dön'),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_lockError != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _lockError!,
+                      style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
+                    ),
+                  ],
+                  if (_lockSuccess != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _lockSuccess!,
+                      style: TextStyle(color: theme.colorScheme.primary, fontSize: 13),
                     ),
                   ],
                 ],

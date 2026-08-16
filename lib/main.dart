@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:iptv_player/screens/home_shell.dart';
+import 'package:iptv_player/screens/lock_screen.dart';
+import 'package:iptv_player/services/lock_service.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
@@ -37,7 +39,7 @@ class IptvApp extends StatelessWidget {
         themeMode: ThemeMode.dark,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
-        home: const HomeShell(),
+        home: const _LockGate(),
       ),
     );
   }
@@ -54,5 +56,40 @@ class IptvApp extends StatelessWidget {
           ? const Color(0xFF0E1116)
           : scheme.surface,
     );
+  }
+}
+
+/// Şifre kilit kapısı: kilit açıksa önce [LockScreen] gösterilir;
+/// doğru şifreyle açılınca [HomeShell]'e geçer ve oturum boyunca açık kalır.
+class _LockGate extends StatefulWidget {
+  const _LockGate();
+
+  @override
+  State<_LockGate> createState() => _LockGateState();
+}
+
+class _LockGateState extends State<_LockGate> {
+  /// null = henüz kontrol ediliyor, false = kilitli, true = açık.
+  bool? _unlocked;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final enabled = await LockService.isEnabled();
+    if (!mounted) return;
+    setState(() => _unlocked = !enabled);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_unlocked == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_unlocked!) return const HomeShell();
+    return LockScreen(onUnlocked: () => setState(() => _unlocked = true));
   }
 }
