@@ -2,12 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:iptv_player/services/mpv_tuning.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:iptv_player/services/stream_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Tek bir medya (film/bölüm) için kaydırıcılı, ileri/geri sarmalı oynatıcı.
+/// fvp (libmdk) motorunu kullanır.
 class VodPlayerScreen extends StatefulWidget {
   const VodPlayerScreen({super.key, required this.url, required this.title});
 
@@ -19,8 +18,7 @@ class VodPlayerScreen extends StatefulWidget {
 }
 
 class _VodPlayerScreenState extends State<VodPlayerScreen> {
-  late final Player _player;
-  late final VideoController _controller;
+  late final StreamPlayer _player;
 
   bool _buffering = true;
   String? _error;
@@ -36,14 +34,12 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _player = Player();
-    _controller = VideoController(_player);
-    // Film/dizi için de yüksek görüntü kalitesi + hızlı başlangıç.
-    MpvTuning.apply(_player, bufferSecs: 2.0);
+    // Film/dizi için daha büyük tampon → akıcı oynatma, az yeniden yükleme.
+    _player = createStreamPlayer(bufferSecs: 2.0);
     _subscribe();
     WakelockPlus.enable();
     try {
-      _player.open(Media(widget.url));
+      unawaited(_player.open(widget.url));
     } catch (e) {
       _error = 'Akış açılamadı: $e';
     }
@@ -54,22 +50,22 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   void dispose() {
     _overlayTimer?.cancel();
     WakelockPlus.disable();
-    _player.dispose();
+    unawaited(_player.dispose());
     super.dispose();
   }
 
   void _subscribe() {
-    _player.stream.buffering.listen((b) {
+    _player.buffering.listen((b) {
       if (mounted) setState(() => _buffering = b);
     });
-    _player.stream.error.listen((e) {
+    _player.error.listen((e) {
       if (mounted) setState(() => _error = e);
     });
-    _player.stream.playing.listen((p) {
+    _player.playing.listen((p) {
       if (mounted) setState(() => _playing = p);
     });
     // Saniyede en fazla ~5 kez güncelle (her karede setState → takılma).
-    _player.stream.position.listen((p) {
+    _player.position.listen((p) {
       if (!mounted || _dragging) return;
       if (!_overlayVisible) return;
       final now = DateTime.now();
@@ -77,10 +73,10 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       _lastPositionAt = now;
       setState(() => _position = p);
     });
-    _player.stream.duration.listen((d) {
+    _player.duration.listen((d) {
       if (mounted) setState(() => _duration = d);
     });
-    _player.stream.completed.listen((_) {
+    _player.completed.listen((_) {
       if (mounted) setState(() => _playing = false);
     });
   }
@@ -162,11 +158,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Video(
-                controller: _controller,
-                controls: NoVideoControls,
-                fit: BoxFit.contain,
-              ),
+              _player.buildVideo(fit: BoxFit.contain),
               if (_buffering && _error == null)
                 const ColoredBox(
                   color: Colors.black54,

@@ -1,16 +1,33 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:fvp/fvp.dart' as fvp;
 import 'package:iptv_player/screens/home_shell.dart';
 import 'package:iptv_player/screens/lock_screen.dart';
+import 'package:iptv_player/services/app_target.dart';
 import 'package:iptv_player/services/lock_service.dart';
 import 'package:iptv_player/state/app_state.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // media_kit (libmpv) başlatılmadan önce çağrılmalıdır.
-  MediaKit.ensureInitialized();
+
+  // Oynatıcı motoru fvp (libmdk) — media_kit/mpv DEĞİL.
+  // - lowLatency: 2 → canlı yayında eski kareler atılır, en güncel içerik
+  //   görüntülenir (TiviMate tarzı hızlı kanal geçişi).
+  // - tunnel: Box'ta açık (MediaCodec doğrudan surface'a çıkar → 4K akıcı),
+  //   Mobil'de kapalı (tüm kodlayıcılar + HDR ton eşleme desteklenir).
+  // - subtitleFontFile → altyazı yazı tipi yedeği (fallback font).
+  if (!kIsWeb && Platform.isAndroid) {
+    fvp.registerWith(options: {
+      'platforms': ['android'],
+      'lowLatency': 2,
+      'tunnel': AppTarget.useTunnel,
+      'subtitleFontFile':
+          'https://github.com/mpv-android/mpv-android/raw/master/app/src/main/assets/subfont.ttf',
+    });
+  }
 
   // Güvenlik ağı: yakalanmamış hatalar uygulamayı kapatmasın, loglansın.
   // (Ağ hatası/bozuk akış gibi durumlarda uygulama sessizce kapanmaz.)
@@ -72,13 +89,10 @@ class _LockGateState extends State<_LockGate> {
   /// null = henüz kontrol ediliyor, false = kilitli, true = açık.
   bool? _unlocked;
 
-  /// `--dart-define=NO_LOCK=true` ile derlenen sürümde kilit tamamen kapalıdır.
-  static const _noLock = bool.fromEnvironment('NO_LOCK');
-
   @override
   void initState() {
     super.initState();
-    if (_noLock) {
+    if (AppTarget.isNoLock) {
       _unlocked = true;
     } else {
       _check();

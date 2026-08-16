@@ -4,11 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iptv_player/models/channel.dart';
-import 'package:iptv_player/services/mpv_tuning.dart';
 import 'package:iptv_player/services/settings_service.dart';
+import 'package:iptv_player/services/stream_player.dart';
 import 'package:iptv_player/state/app_state.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -20,6 +18,9 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 /// - OK (Enter)  : sol tarafta kanal listesini açar/kapatır (logo + isim)
 /// - Boşluk / ekrana dokunma: üst/alt kontrol panelini (ses dahil) gösterir/gizler
 /// - Geri tuşu   : oynatıcıdan çıkar
+///
+/// Oynatma motoru [StreamPlayer] soyutlaması üzerinden çalışır:
+/// fvp (libmdk — donanım hızlandırmalı MediaCodec, TiviMate tarzı).
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -36,8 +37,7 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  late final Player _player;
-  late final VideoController _controller;
+  late final StreamPlayer _player;
   late int _index;
   int _listIndex = 0;
   bool _showList = false;
@@ -57,7 +57,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Timer? _volumeHudTimer;
   double _bufferSecs = 0.5;
 
-  List<SubtitleTrack> _subtitleTracks = [];
+  List<SubtitleInfo> _subtitleTracks = [];
   String? _activeSubtitleId;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -68,9 +68,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     _index = widget.initialIndex;
     _listIndex = _index;
-    _player = Player();
-    _controller = VideoController(_player);
-    MpvTuning.apply(_player, bufferSecs: _bufferSecs);
+    _player = createStreamPlayer(bufferSecs: _bufferSecs);
     _subscribe();
     WakelockPlus.enable();
     _loadSettings();
@@ -83,7 +81,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final volume = await SettingsService.loadVolume();
     if (!mounted) return;
     _bufferSecs = speed.bufferSecs;
-    MpvTuning.apply(_player, bufferSecs: _bufferSecs);
+    _player.bufferSecs = _bufferSecs;
     await _player.setVolume(volume);
   }
 
@@ -93,17 +91,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _volumeHudTimer?.cancel();
     _retryTimer?.cancel();
     WakelockPlus.disable();
-    _player.dispose();
+    unawaited(_player.dispose());
     super.dispose();
   }
 
   void _subscribe() {
-    _player.stream.buffering.listen((b) {
+    _player.buffering.listen((b) {
       if (mounted) setState(() => _buffering = b);
     });
     // Geçici ağ hatalarında oynatıcıyı 2 kez otomatik yeniden bağla
     // (TiviMate tarzı kendi kendini kurtarma); 2 deneme de başarısızsa hata göster.
-    _player.stream.error.listen((e) {
+    _player.error.listen((e) {
       if (!mounted) return;
       if (_errorRetries < 2) {
         _errorRetries++;
@@ -117,7 +115,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         setState(() => _error = e);
       }
     });
-    _player.stream.volume.listen((v) {
+    _player.volume.listen((v) {
       if (!mounted) return;
       setState(() {
         _volume = v;
@@ -127,7 +125,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // Konum güncellemeleri: canlı yayında (süre 0) hiç güncelleme yapma;
     // VOD benzeri akışta ise yalnızca arayüz görünürken saniyede en fazla 2 kez.
     // (Her karede setState yapmak tüm oynatıcıyı yeniden çizer → takılma/donma.)
-    _player.stream.position.listen((p) {
+    _player.position.listen((p) {
       if (!mounted) return;
       if (_duration == Duration.zero) return;
       if (!_overlayVisible) return;
@@ -136,23 +134,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _lastPositionAt = now;
       setState(() => _position = p);
     });
-    _player.stream.duration.listen((d) {
+    _player.duration.listen((d) {
       if (mounted) setState(() => _duration = d);
     });
-    // Akış içi video/audio/altyazı parçaları.
-    _player.stream.tracks.listen((tracks) {
-      if (!mounted) return;
-      setState(() => _subtitleTracks = List.of(tracks.subtitle));
-      // Akış parçası yoksa ve kanalda harici altyazı tanımlıysa onu yükle.
-      if (tracks.subtitle.isEmpty && _channel.subtitleUrl != null) {
-        final url = _channel.subtitleUrl!;
-        try {
-          _player.setSubtitleTrack(SubtitleTrack.uri(url, title: 'Harici altyazı'));
-          _activeSubtitleId = url;
-        } catch (_) {
-          // Altyazı yüklenemezse oynatmaya devam et.
-        }
-      }
+    // Altyazı parçaları (menü için). Harici altyazının otomatik yüklenmesi
+    // oynatıcı motorunun open() adımında yapılır.
+    _player.subtitleTracks.listen((tracks) {
+      if (mounted) setState(() => _subtitleTracks = tracks);
     });
   }
 
@@ -165,7 +153,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _duration = Duration.zero;
     });
     try {
-      _player.open(Media(channel.url));
+      unawaited(_player.open(channel.url, subtitleUrl: channel.subtitleUrl));
     } catch (e) {
       if (mounted) setState(() => _error = 'Akış açılamadı: $e');
     }
@@ -347,9 +335,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
     );
     if (selected == null || !mounted) return;
-    setState(() => _activeSubtitleId = selected);
     if (selected == 'off') {
-      await _player.setSubtitleTrack(SubtitleTrack.no());
+      await _player.disableSubtitles();
+      setState(() => _activeSubtitleId = 'off');
     } else if (selected == 'file') {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
@@ -358,16 +346,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (result.isEmpty || !mounted) return;
       final path = result.first.path;
       if (path == null) return;
-      await _player.setSubtitleTrack(SubtitleTrack.uri('file://$path', title: 'Dosya altyazısı'));
+      await _player.setExternalSubtitle('file://$path');
       setState(() => _activeSubtitleId = 'file://$path');
     } else {
       // Akış içi parça seçimi.
-      for (final t in _subtitleTracks) {
-        if (t.id == selected) {
-          await _player.setSubtitleTrack(SubtitleTrack(t.id, t.title, t.language));
-          break;
-        }
-      }
+      await _player.setSubtitleTrackById(selected);
+      setState(() => _activeSubtitleId = selected);
     }
   }
 
@@ -376,6 +360,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final state = context.watch<AppState>();
     final nowProgram = state.nowPlaying(_channel);
     final nextProgram = state.nextProgram(_channel);
+    final isLive = (_player.isLive ?? false) ||
+        (_duration == Duration.zero && _position == Duration.zero);
 
     return Focus(
       autofocus: true,
@@ -388,11 +374,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Video(
-                controller: _controller,
-                controls: NoVideoControls,
-                fit: BoxFit.contain,
-              ),
+              _player.buildVideo(fit: BoxFit.contain),
               if (_buffering && _error == null)
                 const _BufferingIndicator()
               else if (_error != null)
@@ -408,7 +390,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   total: widget.channels.length,
                   position: _position,
                   duration: _duration,
-                  isLive: _duration == Duration.zero && _position == Duration.zero,
+                  isLive: isLive,
                   nowProgram: nowProgram?.title,
                   nextProgram: nextProgram?.title,
                   nextStart: nextProgram?.start,
@@ -1037,7 +1019,7 @@ class _VolumeHud extends StatelessWidget {
 class _SubtitlesSheet extends StatelessWidget {
   const _SubtitlesSheet({required this.tracks, required this.activeId});
 
-  final List<SubtitleTrack> tracks;
+  final List<SubtitleInfo> tracks;
   final String? activeId;
 
   @override
