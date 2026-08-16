@@ -170,6 +170,9 @@ class _VodCardState extends State<VodCard> {
     return Image.network(
       url,
       fit: BoxFit.cover,
+      // Kart boyutu için düşük çözünürlükte çöz → 2GB RAM'li Box'larda
+      // yüzlerce posteri bellekten beslemek kasma yapmasın.
+      cacheWidth: 300,
       errorBuilder: (_, _, _) => _placeholder(context),
       loadingBuilder: (_, child, progress) =>
           progress == null ? child : _placeholder(context),

@@ -953,6 +953,7 @@ class _ListLogo extends StatelessWidget {
           width: 36,
           height: 36,
           fit: BoxFit.cover,
+          cacheWidth: 72,
           errorBuilder: (_, _, _) => _fallback(),
           loadingBuilder: (_, child, progress) =>
               progress == null ? child : _fallback(),

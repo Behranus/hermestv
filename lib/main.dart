@@ -13,17 +13,27 @@ import 'package:provider/provider.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ---- 2GB RAM'li giriş seviyesi Box'lar için bellek yönetimi ----
+  // Test sunucusu gibi binlerce kanallı listelerde logolar belleği şişirip
+  // (OOM/GC baskısı) tüm uygulamayı — video dahil — kasabilir. Görsel
+  // önbelleğini sıkı tutarız: en fazla 240 görsel / 48 MB.
+  PaintingBinding.instance.imageCache.maximumSize = 240;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
+
   // Oynatıcı motoru fvp (libmdk) — media_kit/mpv DEĞİL.
   // - lowLatency: 2 → canlı yayında eski kareler atılır, en güncel içerik
   //   görüntülenir (TiviMate tarzı hızlı kanal geçişi).
   // - tunnel: Box'ta açık (MediaCodec doğrudan surface'a çıkar → 4K akıcı),
   //   Mobil'de kapalı (tüm kodlayıcılar + HDR ton eşleme desteklenir).
+  // - video.decoders: donanım (MediaCodec) her zaman önce denenir — yazılımsal
+  //   decode giriş seviyesi CPU'da kasma demektir; FFmpeg yalnızca yedek.
   // - subtitleFontFile → altyazı yazı tipi yedeği (fallback font).
   if (!kIsWeb && Platform.isAndroid) {
     fvp.registerWith(options: {
       'platforms': ['android'],
       'lowLatency': 2,
       'tunnel': AppTarget.useTunnel,
+      'video.decoders': ['MediaCodec', 'FFmpeg'],
       'subtitleFontFile':
           'https://github.com/mpv-android/mpv-android/raw/master/app/src/main/assets/subfont.ttf',
     });

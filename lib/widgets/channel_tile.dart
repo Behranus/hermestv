@@ -176,6 +176,8 @@ class _Logo extends StatelessWidget {
           width: 44,
           height: 44,
           fit: BoxFit.cover,
+          // Küçük boyutta çöz → 2GB RAM'li Box'larda bellek şişmesin.
+          cacheWidth: 88,
           errorBuilder: (_, _, _) => _fallback(context),
           loadingBuilder: (_, child, progress) =>
               progress == null ? child : _fallback(context),

@@ -231,19 +231,22 @@ class FvpStreamPlayer extends StreamPlayer {
     }
     _live = live;
 
-    // Tampon aralığı: canlıda min 1 sn (çok küçük değer zayıf ağda sürekli
-    // yeniden tamponlamaya yol açar → donma hissi), max kullanıcı hızına göre.
-    // Canlıda eski kareler atılır (drop) → en güncel içerik görüntülenir.
+    // Tampon aralığı — 2GB RAM'li giriş seviyesi Box'lar için ayarlandı:
+    // - drop: false → ağ kısa kesilse bile KARE ATILMAZ (kare atma = görünür
+    //   kasma). Tampon maksimuma ulaşınca demuxer bekler, yayın doğal olarak
+    //   güncel kalır; küçük gecikme pahasına akıcılık kazanılır.
+    // - min 1.2 sn → ağ dalgalanmasına dayanıklı; çok küçük değer sürekli
+    //   yeniden tamponlama döngüsüne (donma hissi) yol açar.
     try {
       if (live) {
         final maxMs = bufferSecs <= 0.5
-            ? 2500
+            ? 4000
             : bufferSecs <= 1.0
-                ? 4000
+                ? 6000
                 : bufferSecs <= 2.0
-                    ? 6000
-                    : 10000;
-        c.setBufferRange(min: 1000, max: maxMs, drop: true);
+                    ? 8000
+                    : 12000;
+        c.setBufferRange(min: 1200, max: maxMs, drop: false);
       } else {
         c.setBufferRange(min: 2000, max: 12000, drop: false);
       }
