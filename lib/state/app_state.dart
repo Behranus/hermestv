@@ -282,7 +282,9 @@ class AppState extends ChangeNotifier {
           DateTime.now().difference(last) < const Duration(hours: 24)) {
         final cached = prefs.getString(key);
         if (cached != null) {
-          final cachedChannels = ChannelProbeService.decode(cached);
+          // JSON çözümleme UI izolatını bloklamasın diye arka planda yapılır.
+          final cachedChannels =
+              await compute(ChannelProbeService.decode, cached);
           if (cachedChannels.isNotEmpty) {
             _channels = cachedChannels;
             notifyListeners();
@@ -317,7 +319,9 @@ class AppState extends ChangeNotifier {
     testProbeActive = false;
     if (alive.isNotEmpty) {
       _channels = alive;
-      await prefs.setString(key, ChannelProbeService.encode(alive));
+      // Büyük listenin JSON kodlaması arka plan izolatında yapılır.
+      final encoded = await compute(ChannelProbeService.encode, alive);
+      await prefs.setString(key, encoded);
       await prefs.setString(tsKey, DateTime.now().toIso8601String());
     }
     notifyListeners();

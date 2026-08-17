@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/models/channel.dart';
@@ -141,19 +142,26 @@ class FreeTvService {
   }
 
   /// M3U'yu indirir ve kanallara ayrıştırır.
+  ///
+  /// İndirme + UTF-8 çözümleme + ayrıştırma **arka plan izolatında** yapılır
+  /// (devasa dünya listelerinde UI izolatı asla bloklanmaz — 2GB RAM'li
+  /// Box'larda donma/çökmenin ana nedeni buydu).
   static Future<List<Channel>> loadM3u(String url) async {
+    final channels = await compute(_fetchAndParse, url);
+    if (channels.isEmpty) {
+      throw const FormatException('Kanal bulunamadı.');
+    }
+    return channels;
+  }
+
+  /// [compute] geri çağrısı: tek izolatta indir + çöz + ayrıştır.
+  static Future<List<Channel>> _fetchAndParse(String url) async {
     final resp = await http
         .get(Uri.parse(url), headers: {'User-Agent': 'IPTVPlayer/1.0'})
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
       throw Exception('HTTP ${resp.statusCode} hatası: $url');
     }
-    // Kademeli ayrıştırma: devasa dünya listelerinde UI izolatı bloklanmaz.
-    final channels =
-        await M3uParser.parseAsync(utf8.decode(resp.bodyBytes));
-    if (channels.isEmpty) {
-      throw const FormatException('Kanal bulunamadı.');
-    }
-    return channels;
+    return M3uParser.parse(utf8.decode(resp.bodyBytes));
   }
 }

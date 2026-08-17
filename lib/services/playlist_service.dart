@@ -41,19 +41,26 @@ class PlaylistService {
 
   /// URL'den veya dosyadan playlist içeriğini çeker ve ayrıştırır.
   ///
-  /// M3U ayrıştırma kademeli yapılır ([M3uParser.parseAsync]) — devasa
-  /// iptv-org listelerinde (10k+ kanal) UI izolatı bloklanmaz, ilerleme
-  /// bildirilir. [onProgress] her parçada kaç kanal ayrıştırıldığını söyler.
+  /// İndirme + çözümleme + ayrıştırma **tamamen arka plan izolatında** çalışır
+  /// ([compute]). 30MB'lık bir iptv-org listesinde `utf8.decode` ve 10k kanal
+  /// ayrıştırması UI izolatında yapılırsa yavaş Box'larda saniyelerce donma
+  /// (ANR) ve çökme olur — [onProgress] bu nedenle artık kullanılmaz, UI
+  /// yalnızca dönen yükleyici gösterir.
   static Future<List<Channel>> load(
     PlaylistSource source, {
     void Function(int done)? onProgress,
   }) async {
-    final content = await _fetch(source);
-    final channels = await M3uParser.parseAsync(content, onProgress: onProgress);
+    final channels = await compute(_loadInIsolate, source);
     if (channels.isEmpty) {
       throw const FormatException('Playlist içinde kanal bulunamadı.');
     }
     return channels;
+  }
+
+  /// [compute] geri çağrısı: indirme + çözümleme + ayrıştırma tek izolatta.
+  static Future<List<Channel>> _loadInIsolate(PlaylistSource source) async {
+    final content = await _fetch(source);
+    return M3uParser.parse(content);
   }
 
   /// İçeriği güvenli şekilde metne çevirir:
@@ -145,7 +152,10 @@ class PlaylistService {
     if (file == null) return;
     try {
       await file.parent.create(recursive: true);
-      await file.writeAsString(ChannelProbeService.encode(channels));
+      // 10k+ kanalın JSON kodlaması UI izolatında yapılırsa kısa ama hissedilir
+      // bir donma yaratır; arka plan izolatında kodlanır.
+      final json = await compute(ChannelProbeService.encode, channels);
+      await file.writeAsString(json);
     } catch (_) {
       // Önbellek yazılamazsa sessizce geç — indirme her zaman çalışır.
     }
