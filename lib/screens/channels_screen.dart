@@ -101,7 +101,25 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       ),
       body: Builder(builder: (context) {
         if (state.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          // Devasa ücretsiz kanal listeleri kademeli ayrıştırılır; ilerleme
+          // gösterilir — uygulama "donuyor" gibi görünmez.
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                if (state.loadProgress > 0) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    '${state.loadProgress} kanal yüklendi…',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
         }
         if (state.error != null && !state.hasChannels) {
           return EmptyState(

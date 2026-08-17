@@ -65,4 +65,41 @@ http://stream.example/2.m3u8
       expect(M3uParser.parse('#EXTM3U\n# bazı yorumlar\n'), isEmpty);
     });
   });
+
+  group('M3uParser.parseAsync', () {
+    test('kademeli ayrıştırma normal parse ile aynı sonucu verir', () async {
+      final content = StringBuffer('#EXTM3U\n');
+      for (var i = 0; i < 2500; i++) {
+        content.writeln('#EXTINF:-1 tvg-id="k$i" group-title="Grup",Kanal $i');
+        content.writeln('http://stream.example/$i.m3u8');
+      }
+
+      final expected = M3uParser.parse(content.toString());
+      final actual = await M3uParser.parseAsync(content.toString());
+      expect(actual.length, expected.length);
+      expect(actual.length, 2500);
+      expect(actual.first.name, 'Kanal 0');
+      expect(actual.last.name, 'Kanal 2499');
+    });
+
+    test('ilerleme bildirir ve toplam sayıyı sonunda verir', () async {
+      final content = StringBuffer('#EXTM3U\n');
+      for (var i = 0; i < 2000; i++) {
+        content.writeln('#EXTINF:-1,K$i');
+        content.writeln('http://s/$i.m3u8');
+      }
+      final calls = <int>[];
+      final channels = await M3uParser.parseAsync(
+        content.toString(),
+        onProgress: calls.add,
+      );
+      expect(channels.length, 2000);
+      expect(calls.isNotEmpty, true);
+      expect(calls.last, 2000);
+    });
+
+    test('boş içerik boş liste döner', () async {
+      expect(await M3uParser.parseAsync(''), isEmpty);
+    });
+  });
 }

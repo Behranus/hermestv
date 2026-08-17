@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/models/channel.dart';
+import 'package:iptv_player/services/channel_probe_service.dart';
 import 'package:iptv_player/services/m3u_parser.dart';
 import 'package:iptv_player/services/test_stream_service.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Playlistin nereden geldiğini belirtir.
@@ -38,11 +41,15 @@ class PlaylistService {
 
   /// URL'den veya dosyadan playlist içeriğini çeker ve ayrıştırır.
   ///
-  /// M3U ayrıştırma (binlerce kanal — iptv-org ülke listeleri 10k+ kanal içerir)
-  /// UI izolatında yapılırsa uygulama saniyelerce donar; arka plan izolatında çalıştır.
-  static Future<List<Channel>> load(PlaylistSource source) async {
+  /// M3U ayrıştırma kademeli yapılır ([M3uParser.parseAsync]) — devasa
+  /// iptv-org listelerinde (10k+ kanal) UI izolatı bloklanmaz, ilerleme
+  /// bildirilir. [onProgress] her parçada kaç kanal ayrıştırıldığını söyler.
+  static Future<List<Channel>> load(
+    PlaylistSource source, {
+    void Function(int done)? onProgress,
+  }) async {
     final content = await _fetch(source);
-    final channels = await compute(M3uParser.parse, content);
+    final channels = await M3uParser.parseAsync(content, onProgress: onProgress);
     if (channels.isEmpty) {
       throw const FormatException('Playlist içinde kanal bulunamadı.');
     }
@@ -93,6 +100,65 @@ class PlaylistService {
       case PlaylistSourceType.xtream:
         // Xtream kaynağı AppState içinde özel olarak yüklenir.
         throw const FormatException('Xtream kaynağı doğrudan yüklenemez.');
+    }
+  }
+
+  /// URL/dosya kaynağı için **disk önbelleği**. Devasa ücretsiz kanal
+  /// listeleri (iptv-org — 10k+ kanal) her açılışta yeniden indirilirse
+  /// hem yavaş hem RAM'li Box'larda çökmeye neden olur. Önbellek günde bir
+  /// kez tazelenir; aradaki açılışlar diski okur (anında).
+  static Future<List<Channel>?> loadCached(PlaylistSource source) async {
+    if (source.type != PlaylistSourceType.url &&
+        source.type != PlaylistSourceType.file) {
+      return null;
+    }
+    final file = await _cacheFile(source);
+    if (file == null) return null;
+    try {
+      if (!await file.exists()) return null;
+      final stat = await file.stat();
+      if (DateTime.now().difference(stat.modified) > const Duration(hours: 24)) {
+        return null; // Günlük yenileme: önbellek bayat.
+      }
+      // 10k+ kanallık JSON'u UI izolatında çözmek yine kısa bir blok yaratır;
+      // arka plan izolatında çözülür.
+      final channels = await compute(
+        ChannelProbeService.decode,
+        await file.readAsString(),
+      );
+      return channels.isEmpty ? null : channels;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Ayrıştırılan kanalları disk önbelleğine yazar.
+  static Future<void> saveCache(
+    PlaylistSource source,
+    List<Channel> channels,
+  ) async {
+    if (source.type != PlaylistSourceType.url &&
+        source.type != PlaylistSourceType.file) {
+      return;
+    }
+    final file = await _cacheFile(source);
+    if (file == null) return;
+    try {
+      await file.parent.create(recursive: true);
+      await file.writeAsString(ChannelProbeService.encode(channels));
+    } catch (_) {
+      // Önbellek yazılamazsa sessizce geç — indirme her zaman çalışır.
+    }
+  }
+
+  static Future<File?> _cacheFile(PlaylistSource source) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final key = '${source.type.name}:${source.value}';
+      final hash = sha256.convert(utf8.encode(key)).toString().substring(0, 20);
+      return File('${dir.path}/playlist_$hash.json');
+    } catch (_) {
+      return null;
     }
   }
 

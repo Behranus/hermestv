@@ -21,6 +21,10 @@ class AppState extends ChangeNotifier {
   bool isLoading = false;
   String? error;
 
+  /// Devasa listelerin (iptv-org) kademeli ayrıştırmasındaki ilerleme.
+  int loadProgress = 0;
+  int loadTotal = 0;
+
   Set<String> _favorites = {};
   String selectedGroup = 'all';
   String query = '';
@@ -163,9 +167,28 @@ class AppState extends ChangeNotifier {
         }
         return;
       } else {
-        _channels = await PlaylistService.load(s);
+        // Disk önbelleği: devasa ücretsiz kanal listeleri (iptv-org) her
+        // açılışta yeniden indirilirse hem yavaşlar hem çöker. Önbellek
+        // günlük yenilenir — aradaki açılışlar anında yüklenir.
+        final cached = await PlaylistService.loadCached(s);
+        _channels = cached ?? const [];
+        if (_channels.isEmpty) {
+          loadProgress = 0;
+          loadTotal = 0;
+          notifyListeners();
+          _channels = await PlaylistService.load(
+            s,
+            onProgress: (done) {
+              loadProgress = done;
+              notifyListeners();
+            },
+          );
+          await PlaylistService.saveCache(s, _channels);
+        }
         await PlaylistService.saveSource(s);
         isLoading = false;
+        loadProgress = 0;
+        loadTotal = 0;
         notifyListeners();
         // M3U kanallarının içine gömülü Xtream adreslerini ara.
         // Bulunursa VOD kataloğu ve EPG de arka planda açılır.
@@ -303,6 +326,8 @@ class AppState extends ChangeNotifier {
   Future<void> clearPlaylist() async {
     _channels = [];
     source = null;
+    loadProgress = 0;
+    loadTotal = 0;
     _derivedCreds = null;
     _testSource = false;
     testProbeActive = false;

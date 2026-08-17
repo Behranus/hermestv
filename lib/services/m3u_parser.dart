@@ -104,6 +104,84 @@ class M3uParser {
     return channels;
   }
 
+  /// Kademeli (chunked) ayrıştırıcı — devasa listelerde (iptv-org'un
+  /// 10k+ kanallık dünya/ülke dosyaları) UI izolatını bloklamaz.
+  ///
+  /// Her [yieldEvery] kanaldan sonra olay döngüsüne nefes aldırır ve
+  /// [onProgress] ile ilerlemeyi bildirir. Böylece ayrıştırma sırasında
+  /// uygulama donmaz, ilerleme çubuğu akıcı ilerler.
+  static Future<List<Channel>> parseAsync(
+    String content, {
+    void Function(int done)? onProgress,
+    int yieldEvery = 800,
+  }) async {
+    final channels = <Channel>[];
+    String? pendingName;
+    String? pendingLogo;
+    String? pendingGroup;
+    String? pendingTvgId;
+    String? pendingTvgName;
+    String? pendingSubtitle;
+
+    // Satırları teker teker tara — LineSplitter'
+    // milyonlarca küçük string üretip belleği şişirmez.
+    var start = 0;
+    var processed = 0;
+    while (start <= content.length) {
+      var nl = content.indexOf('\n', start);
+      final lineEnd = nl < 0 ? content.length : nl;
+      final line =
+          lineEnd > start ? content.substring(start, lineEnd).trim() : '';
+      start = nl < 0 ? content.length + 1 : nl + 1;
+      processed++;
+
+      if (line.isNotEmpty) {
+        if (line.startsWith('#EXTM3U') || line.startsWith('#EXT-X-')) {
+          // başlık — yok say.
+        } else if (line.startsWith('#EXTVLCOPT')) {
+          final sub = _extvlcopt(line, 'sub-file');
+          if (sub != null) pendingSubtitle = sub;
+        } else if (line.startsWith('#EXTGRP')) {
+          // yok say.
+        } else if (line.startsWith('#EXTINF')) {
+          pendingName = _nameFromExtinf(line);
+          pendingLogo = _attrFromExtinf(line, 'tvg-logo');
+          pendingGroup = _attrFromExtinf(line, 'group-title');
+          pendingTvgId = _attrFromExtinf(line, 'tvg-id');
+          pendingTvgName = _attrFromExtinf(line, 'tvg-name');
+        } else if (line.startsWith('#')) {
+          // diğer yorumlar.
+        } else {
+          final url = _cleanUrl(line);
+          if (url.isNotEmpty) {
+            final name = pendingName;
+            channels.add(Channel(
+              name: (name == null || name.isEmpty) ? _guessName(url) : name,
+              url: url,
+              group: pendingGroup,
+              logo: pendingLogo,
+              tvgId: pendingTvgId,
+              tvgName: pendingTvgName,
+              subtitleUrl: pendingSubtitle,
+            ));
+            pendingName = pendingLogo = pendingGroup = pendingTvgId =
+                pendingTvgName = null;
+            pendingSubtitle = null;
+          }
+        }
+      }
+
+      if (processed % yieldEvery == 0) {
+        onProgress?.call(channels.length);
+        // Olay döngüsüne nefes aldır — arayüz akıcı kalır.
+        await Future<void>.delayed(Duration.zero);
+      }
+      if (nl < 0) break;
+    }
+    onProgress?.call(channels.length);
+    return channels;
+  }
+
   /// `#EXTVLCOPT:anahtar=değer` biçiminden değeri çeker.
   static String? _extvlcopt(String line, String key) {
     final idx = line.indexOf(':');
