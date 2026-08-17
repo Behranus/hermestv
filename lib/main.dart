@@ -1,10 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:iptv_player/screens/home_shell.dart';
-import 'package:iptv_player/screens/lock_screen.dart';
-import 'package:iptv_player/services/app_target.dart';
-import 'package:iptv_player/services/lock_service.dart';
 import 'package:iptv_player/state/app_state.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -17,18 +17,43 @@ void main() {
   PaintingBinding.instance.imageCache.maximumSize = 240;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
 
-  // Güvenlik ağı: yakalanmamış hatalar uygulamayı kapatmasın, loglansın.
-  // (Ağ hatası/bozuk akış gibi durumlarda uygulama sessizce kapanmaz.)
+  // Güvenlik ağı: yakalanmamış hatalar uygulamayı kapatmasın.
+  // Hatalar ayrıca bir çökme günlüğüne yazılır (açılış çökmesini teşhis
+  // edebilmek için — cihazdan alınıp incelenebilir).
+  _initCrashLog();
   PlatformDispatcher.instance.onError = (error, stack) {
+    _logCrash('Platform: $error\n$stack');
     debugPrint('Yakalanmamış hata: $error\n$stack');
     return true;
   };
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
+    _logCrash('Flutter: ${details.exception}\n${details.stack}');
     debugPrint('Flutter hatası: ${details.exception}');
   };
 
   runApp(const IptvApp());
+}
+
+File? _crashLogFile;
+
+/// Çökme günlüğü dosyasını açar (uygulama veri klasöründe `crash.log`).
+Future<void> _initCrashLog() async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    _crashLogFile = File('${dir.path}/crash.log');
+  } catch (_) {}
+}
+
+void _logCrash(String message) {
+  final f = _crashLogFile;
+  if (f == null) return;
+  try {
+    f.writeAsStringSync(
+      '${DateTime.now().toIso8601String()} $message\n\n',
+      mode: FileMode.append,
+    );
+  } catch (_) {}
 }
 
 class IptvApp extends StatelessWidget {
@@ -44,7 +69,9 @@ class IptvApp extends StatelessWidget {
         themeMode: ThemeMode.dark,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
-        home: const _LockGate(),
+        // Şifre kilit ekranı kaldırıldı (kullanıcı isteği): uygulama doğrudan
+        // ana ekrana açılır. Açılışta çalışan tek ekran HomeShell'dir.
+        home: const HomeShell(),
       ),
     );
   }
@@ -136,41 +163,3 @@ class IptvApp extends StatelessWidget {
   }
 }
 
-/// Şifre kilit kapısı: kilit açıksa önce [LockScreen] gösterilir;
-/// doğru şifreyle açılınca [HomeShell]'e geçer ve oturum boyunca açık kalır.
-class _LockGate extends StatefulWidget {
-  const _LockGate();
-
-  @override
-  State<_LockGate> createState() => _LockGateState();
-}
-
-class _LockGateState extends State<_LockGate> {
-  /// null = henüz kontrol ediliyor, false = kilitli, true = açık.
-  bool? _unlocked;
-
-  @override
-  void initState() {
-    super.initState();
-    if (AppTarget.isNoLock) {
-      _unlocked = true;
-    } else {
-      _check();
-    }
-  }
-
-  Future<void> _check() async {
-    final enabled = await LockService.isEnabled();
-    if (!mounted) return;
-    setState(() => _unlocked = !enabled);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_unlocked == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (_unlocked!) return const HomeShell();
-    return LockScreen(onUnlocked: () => setState(() => _unlocked = true));
-  }
-}

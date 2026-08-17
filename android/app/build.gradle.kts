@@ -50,6 +50,17 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
     }
+
+    packaging {
+        jniLibs {
+            // Flutter yeni sürümlerde native lib'leri APK içinde sıkıştırılmadan
+            // tutar (extractNativeLibs=false). Eski Android 7 Box'lar bunu
+            // yükleyemeyip "açılıyor ve kapanıyor" hatası veriyordu.
+            // Bu ayar lib'lerin kurulumda diske açılmasını zorlar — eski
+            // cihazlarda çökme sorununu kökten çözer.
+            useLegacyPackaging = true
+        }
+    }
 }
 
 kotlin {
