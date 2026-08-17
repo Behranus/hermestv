@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -816,15 +815,14 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
       bottom: 0,
       width: width,
       // Şeffaf kanal listesi: arkasındaki yayın görünsün (Türkcell TV Plus
-      // tarzı buzlu cam). Hafif blur + yarı saydam koyu zemin.
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Material(
-            color: Colors.black.withValues(alpha: 0.45),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      // tarzı). NOT: BackdropFilter/blur kullanılmıyor — eski GPU'lu Box'larda
+      // blur beyaz ekran çizme hatasına yol açıyordu; yarı saydam zemin
+      // şeffaflığı korur ve her cihazda güvenli çalışır.
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
                 SafeArea(
                   bottom: false,
                   child: Padding(
@@ -917,8 +915,6 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
                 ),
               ],
             ),
-          ),
-        ),
       ),
     );
   }

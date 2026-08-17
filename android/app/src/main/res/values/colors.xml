@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Uygulamanın koyu Zorin temasıyla eşleşen açılış arka planı.
+         Açık (Light) tema kullanılırsa pencere beyaz kalır ve yavaş Box'larda
+         Flutter ilk kareyi çizerken "önüne beyaz ekran geliyor" görünür. -->
+    <color name="launch_bg">#191C1F</color>
+</resources>
