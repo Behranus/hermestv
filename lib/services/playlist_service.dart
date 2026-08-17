@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/models/channel.dart';
 import 'package:iptv_player/services/m3u_parser.dart';
@@ -36,9 +37,12 @@ class PlaylistService {
   static const _sourceKey = 'playlist_source';
 
   /// URL'den veya dosyadan playlist içeriğini çeker ve ayrıştırır.
+  ///
+  /// M3U ayrıştırma (binlerce kanal — iptv-org ülke listeleri 10k+ kanal içerir)
+  /// UI izolatında yapılırsa uygulama saniyelerce donar; arka plan izolatında çalıştır.
   static Future<List<Channel>> load(PlaylistSource source) async {
     final content = await _fetch(source);
-    final channels = M3uParser.parse(content);
+    final channels = await compute(M3uParser.parse, content);
     if (channels.isEmpty) {
       throw const FormatException('Playlist içinde kanal bulunamadı.');
     }

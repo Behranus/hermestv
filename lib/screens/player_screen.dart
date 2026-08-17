@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -54,7 +55,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Duration _duration = Duration.zero;
 
   double _volume = 1.0;
-  double _lastNonZeroVolume = 1.0;
   bool _showVolumeHud = false;
   Timer? _volumeHudTimer;
   double _bufferSecs = 0.5;
@@ -131,10 +131,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     _player.volume.listen((v) {
       if (!mounted) return;
-      setState(() {
-        _volume = v;
-        if (v > 0) _lastNonZeroVolume = v;
-      });
+      setState(() => _volume = v);
     });
     // Konum güncellemeleri: canlı yayında (süre 0) hiç güncelleme yapma;
     // VOD benzeri akışta ise yalnızca arayüz görünürken saniyede en fazla 2 kez.
@@ -207,21 +204,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     await _player.setVolume(next);
     SettingsService.saveVolume(next);
     _flashVolumeHud();
-  }
-
-  Future<void> _setVolume(double v) async {
-    final next = v.clamp(0.0, 1.0);
-    await _player.setVolume(next);
-    SettingsService.saveVolume(next);
-  }
-
-  Future<void> _toggleMute() async {
-    if (_volume == 0) {
-      await _player.setVolume(_lastNonZeroVolume);
-    } else {
-      _lastNonZeroVolume = _volume;
-      await _player.setVolume(0);
-    }
   }
 
   /// Ses değiştiğinde, kontrol paneli kapalıyken bile kısa süreliğine
@@ -452,9 +434,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   nowProgram: nowProgram?.title,
                   nextProgram: nextProgram?.title,
                   nextStart: nextProgram?.start,
-                  volume: _volume,
-                  onVolumeChanged: _setVolume,
-                  onToggleMute: _toggleMute,
                   onBack: () => Navigator.of(context).pop(),
                   onChannelUp: () => _switchChannel(1),
                   onChannelDown: () => _switchChannel(-1),
@@ -473,7 +452,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                 ),
-              // OK tuşuyla açılan sol kanal listesi (ekranın ~%25'i).
+              // OK tuşuyla açılan sağ kanal listesi (Türkcell TV Plus tarzı,
+              // ekranın ~%25'i, şeffaf). Kumandada → ile kapatılır.
               if (_showList && _error == null)
                 _ChannelListPanel(
                   channels: widget.channels,
@@ -605,9 +585,6 @@ class _ControlsOverlay extends StatelessWidget {
     required this.nowProgram,
     required this.nextProgram,
     required this.nextStart,
-    required this.volume,
-    required this.onVolumeChanged,
-    required this.onToggleMute,
     required this.onBack,
     required this.onChannelUp,
     required this.onChannelDown,
@@ -624,9 +601,6 @@ class _ControlsOverlay extends StatelessWidget {
   final String? nowProgram;
   final String? nextProgram;
   final DateTime? nextStart;
-  final double volume;
-  final ValueChanged<double> onVolumeChanged;
-  final VoidCallback onToggleMute;
   final VoidCallback onBack;
   final VoidCallback onChannelUp;
   final VoidCallback onChannelDown;
@@ -645,7 +619,6 @@ class _ControlsOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = volume == 0;
     return SafeArea(
       child: Column(
         children: [
@@ -733,43 +706,9 @@ class _ControlsOverlay extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          // Ses kontrol paneli — ekrana dokununca belirir, tam ekranda gizlenir.
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: onToggleMute,
-                  tooltip: muted ? 'Sesi aç' : 'Sessize al',
-                  icon: Icon(
-                    muted
-                        ? Icons.volume_off
-                        : volume < 0.5
-                            ? Icons.volume_down
-                            : Icons.volume_up,
-                    color: Colors.white,
-                  ),
-                ),
-                Expanded(
-                  child: Slider(
-                    value: volume,
-                    onChanged: onVolumeChanged,
-                    activeColor: Colors.white,
-                    inactiveColor: Colors.white24,
-                  ),
-                ),
-                Text(
-                  '${(volume * 100).round()}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
+          // Ses kontrol paneli bilinçli olarak kaldırıldı — kullanıcı isteği.
+          // Ses, kumandadaki ← → tuşlarıyla değişir (kısa HUD dışında ekranda
+          // ses paneli görünmez).
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
@@ -872,45 +811,50 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
         .toDouble();
 
     return Positioned(
-      left: 0,
+      right: 0,
       top: 0,
       bottom: 0,
       width: width,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.92),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.list, color: Colors.white, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Kanallar (${channels.length})',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
+      // Şeffaf kanal listesi: arkasındaki yayın görünsün (Türkcell TV Plus
+      // tarzı buzlu cam). Hafif blur + yarı saydam koyu zemin.
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.45),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.list, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Kanallar (${channels.length})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
+                        IconButton(
+                          onPressed: widget.onClose,
+                          tooltip: 'Kapat',
+                          icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      onPressed: widget.onClose,
-                      tooltip: 'Kapat',
-                      icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            const Divider(color: Colors.white24, height: 1),
+                const Divider(color: Colors.white24, height: 1),
             Expanded(
               child: ListView.builder(
                 controller: _scroll,
@@ -951,27 +895,29 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
                 },
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                color: Colors.black.withValues(alpha: 0.5),
-                child: const Row(
-                  children: [
-                    Icon(Icons.keyboard_arrow_up, color: Colors.white54, size: 16),
-                    Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 16),
-                    SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Gezin • OK: Aç • ←: Kapat',
-                        style: TextStyle(color: Colors.white54, fontSize: 11),
-                      ),
+                SafeArea(
+                  top: false,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    color: Colors.black.withValues(alpha: 0.4),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.keyboard_arrow_up, color: Colors.white54, size: 16),
+                        Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 16),
+                        SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Gezin • OK: Aç • →: Kapat',
+                            style: TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

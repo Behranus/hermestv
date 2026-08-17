@@ -16,23 +16,40 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
+  /// Ziyaret edilen sekmeler (durum korunur). Açılışta yalnızca Kanallar
+  /// kurulur; VOD/Kurulum gibi ağır sekmeler ilk kez açılınca yüklenir.
+  /// (4 sekmeyi birden IndexedStack'te kurmak 2GB RAM'li Box'larda açılışı
+  /// ağırlaştırıyordu — VOD posteri ve Kurulum ağı aynı anda yükleniyordu.)
+  final Set<int> _visited = {0};
+
   static const _titles = ['Kanallar', 'VOD', 'Favoriler', 'Kurulum'];
   static const _icons = [Icons.live_tv, Icons.movie, Icons.star, Icons.settings];
+
+  void _select(int i) {
+    setState(() {
+      _index = i;
+      _visited.add(i);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 720;
-      final body = IndexedStack(
-        index: _index,
-        children: [
-          ChannelsScreen(onGoToSetup: () => setState(() => _index = 3)),
-          VodScreen(onGoToSetup: () => setState(() => _index = 3)),
-          const FavoritesScreen(),
-          const SetupScreen(),
-        ],
-      );
+      // Yalnızca ziyaret edilen sekmeler kurulur; diğerleri boş tutulur.
+      // IndexedStack çocukların hepsini kurduğu için ziyaret edilmemiş
+      // sekmeleri yer tutucuyla doldurup `index` ile senkron tutarız.
+      final placeholders = List<Widget>.generate(4, (i) {
+        if (!_visited.contains(i)) return const SizedBox.shrink();
+        return switch (i) {
+          0 => ChannelsScreen(onGoToSetup: () => _select(3)),
+          1 => VodScreen(onGoToSetup: () => _select(3)),
+          2 => const FavoritesScreen(),
+          _ => const SetupScreen(),
+        };
+      });
+      final body = IndexedStack(index: _index, children: placeholders);
 
       if (wide) {
         return Scaffold(
@@ -40,7 +57,7 @@ class _HomeShellState extends State<HomeShell> {
             children: [
               NavigationRail(
                 selectedIndex: _index,
-                onDestinationSelected: (i) => setState(() => _index = i),
+                onDestinationSelected: _select,
                 labelType: NavigationRailLabelType.all,
                 minWidth: 88,
                 groupAlignment: -0.7,
@@ -90,7 +107,7 @@ class _HomeShellState extends State<HomeShell> {
         body: body,
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
+          onDestinationSelected: _select,
           destinations: [
             for (var i = 0; i < _titles.length; i++)
               NavigationDestination(

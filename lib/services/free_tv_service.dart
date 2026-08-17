@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/models/channel.dart';
@@ -148,7 +149,10 @@ class FreeTvService {
     if (resp.statusCode != 200) {
       throw Exception('HTTP ${resp.statusCode} hatası: $url');
     }
-    final channels = M3uParser.parse(utf8.decode(resp.bodyBytes));
+    // M3U ayrıştırma arka plan izolatında çalışır — UI izolatı binlerce
+    // kanallık listelerde donmasın (2GB RAM'li Box'larda çökme nedeni).
+    final channels =
+        await compute(M3uParser.parse, utf8.decode(resp.bodyBytes));
     if (channels.isEmpty) {
       throw const FormatException('Kanal bulunamadı.');
     }

@@ -11,7 +11,11 @@ import 'package:iptv_player/models/channel.dart';
 /// açılabilen kanalları döndürür; sonuç günlük önbelleklenir.
 class ChannelProbeService {
   static const _timeout = Duration(seconds: 4);
-  static const _batch = 24;
+  // 2GB RAM'li Box'larda 24 eşzamanlı bağlantı + sürekli bildirim rebuild
+  // fırtınası yaratıp donmaya yol açabiliyordu. Daha küçük parti + parti
+  // arası kısa duraklama: ağ ve UI üzerindeki baskı çok daha düşük.
+  static const _batch = 8;
+  static const _betweenBatches = Duration(milliseconds: 120);
   static const _ua =
       'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36';
 
@@ -37,6 +41,10 @@ class ChannelProbeService {
       }
       done += batch.length;
       onProgress?.call(done, total);
+      if (end < total) {
+        // Ağ/soket baskısını düşür: her partiden sonra kısa nefes.
+        await Future<void>.delayed(_betweenBatches);
+      }
     }
     return alive;
   }

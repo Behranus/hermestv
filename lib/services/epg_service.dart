@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/models/epg_program.dart';
 import 'package:xml/xml.dart';
@@ -53,7 +54,10 @@ class EpgService {
       }
     }
 
-    return parse(utf8.decode(bytes, allowMalformed: true));
+    final xml = utf8.decode(bytes, allowMalformed: true);
+    // XML ayrıştırma UI izolatını bloklayabilir (büyük EPG dosyaları saniyelerce
+    // donmaya neden olur — 2GB RAM'li Box'larda ANR/çökme). Arka plan izolatında çalıştır.
+    return compute(EpgService.parse, xml);
   }
 
   /// XMLTV içeriğini ayrıştırır. Performans için programları

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -148,26 +149,32 @@ class AppState extends ChangeNotifier {
         if (creds == null) throw const FormatException('Xtream bilgileri eksik.');
         _channels = await XtreamService.loadLiveChannels(creds);
         await PlaylistService.saveSource(s);
-        // Xtream portalı EPG'sini otomatik yüklemeyi dene (başarısızlık önemli değil).
-        await _loadEpg(XtreamService.epgUrl(creds), silent: true);
-        // VOD kataloğunu yükle (hata olursa kanallar yine de açık kalır).
-        await _tryLoadVod();
+        // Kanallar hazır → yükleme durumunu HEMEN kapat; kullanıcı kanalları
+        // görsün. EPG/VOD/doğrulama arka planda tamamlanır (açılışta uzun
+        // bekleme → 2GB Box'ta "donuyor/çöküyor" hissinin ana nedeniydi).
+        isLoading = false;
+        notifyListeners();
+        unawaited(_loadEpg(XtreamService.epgUrl(creds), silent: true));
+        unawaited(_tryLoadVod());
         // Test kaynağı: kanalları doğrula (yalnızca açılanlar listelensin —
-        // günde bir kez; önbellekli). Ölü kanallar hem "açılmıyor" hissi
-        // yaratır hem de 2GB RAM'de gereksiz bellek harcar.
+        // günde bir kez; önbellekli).
         if (_testSource) {
-          await _verifyTestChannels(creds);
+          unawaited(_verifyTestChannels(creds));
         }
+        return;
       } else {
         _channels = await PlaylistService.load(s);
         await PlaylistService.saveSource(s);
+        isLoading = false;
+        notifyListeners();
         // M3U kanallarının içine gömülü Xtream adreslerini ara.
-        // Bulunursa VOD kataloğu ve EPG de otomatik açılır.
+        // Bulunursa VOD kataloğu ve EPG de arka planda açılır.
         _derivedCreds = XtreamService.tryFromChannelUrls(_channels);
         if (_derivedCreds != null) {
-          await _tryLoadVod();
-          await _loadEpg(XtreamService.epgUrl(_derivedCreds!), silent: true);
+          unawaited(_tryLoadVod());
+          unawaited(_loadEpg(XtreamService.epgUrl(_derivedCreds!), silent: true));
         }
+        return;
       }
     } catch (e) {
       error = e.toString();
@@ -268,12 +275,20 @@ class AppState extends ChangeNotifier {
     testProbeDone = 0;
     testProbeTotal = toProbe.length;
     notifyListeners();
+    // Her partide notifyListeners → rebuild fırtınası → 2GB Box'ta donma.
+    // Bildirimleri en fazla ~500ms'de bir gönder; çubuk yine de akıcı ilerler.
+    var lastNotify = DateTime.now();
     final alive = await ChannelProbeService.probeAlive(
       toProbe,
       onProgress: (d, t) {
         testProbeDone = d;
         testProbeTotal = t;
-        notifyListeners();
+        final now = DateTime.now();
+        if (now.difference(lastNotify) >= const Duration(milliseconds: 500) ||
+            d == t) {
+          lastNotify = now;
+          notifyListeners();
+        }
       },
     );
     testProbeActive = false;

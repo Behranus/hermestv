@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/models/channel.dart';
 import 'package:iptv_player/models/vod.dart';
@@ -60,6 +61,32 @@ class XtreamService {
     return decoded;
   }
 
+  /// Büyük listeler (canlı kanallar, VOD) için API çağrısı.
+  ///
+  /// JSON çözümleme arka plan izolatında çalışır — 10k+ kanallık bir
+  /// `get_live_streams` yanıtı UI izolatında çözülürse uygulama saniyelerce
+  /// donar ve 2GB RAM'li Box'larda çökebilir.
+  static Future<dynamic> _apiLarge(
+    XtreamCredentials c,
+    String action,
+  ) async {
+    final url = '${c.base}/player_api.php'
+        '?username=${Uri.encodeQueryComponent(c.username)}'
+        '&password=${Uri.encodeQueryComponent(c.password)}'
+        '${action.isEmpty ? '' : '&action=$action'}';
+    final resp = await http
+        .get(Uri.parse(url), headers: {'User-Agent': 'IPTVPlayer/1.0'})
+        .timeout(_timeout);
+    if (resp.statusCode != 200) {
+      throw Exception('Sunucu HTTP ${resp.statusCode} döndürdü.');
+    }
+    return compute(_decodeJson, resp.bodyBytes);
+  }
+
+  /// Ham JSON baytlarını izolatta çözer (compute için top-level benzeri).
+  static dynamic _decodeJson(List<int> bytes) =>
+      jsonDecode(utf8.decode(bytes));
+
   /// Girişi doğrular; `user_info` içeren hesap özetini döndürür.
   static Future<Map<String, dynamic>> login(XtreamCredentials c) async {
     final data = await _api(c, '');
@@ -75,7 +102,7 @@ class XtreamService {
   /// `{server}/live/{kullanıcı}/{şifre}/{stream_id}.m3u8`
   static Future<List<Channel>> loadLiveChannels(XtreamCredentials c) async {
     final categoriesRaw = await _api(c, 'get_live_categories');
-    final streamsRaw = await _api(c, 'get_live_streams');
+    final streamsRaw = await _apiLarge(c, 'get_live_streams');
     if (streamsRaw is! List) {
       throw const FormatException('Kanal listesi alınamadı.');
     }
@@ -217,7 +244,7 @@ class XtreamService {
 
   /// Tüm filmleri yükler (kategori bilgisiyle birlikte).
   static Future<List<VodMovie>> loadVodMovies(XtreamCredentials c) async {
-    final raw = await _api(c, 'get_vod_streams');
+    final raw = await _apiLarge(c, 'get_vod_streams');
     final movies = <VodMovie>[];
     if (raw is List) {
       final seen = <int>{};
@@ -244,7 +271,7 @@ class XtreamService {
 
   /// Dizi listesini yükler.
   static Future<List<VodSeries>> loadSeries(XtreamCredentials c) async {
-    final raw = await _api(c, 'get_series');
+    final raw = await _apiLarge(c, 'get_series');
     final series = <VodSeries>[];
     if (raw is List) {
       final seen = <int>{};
