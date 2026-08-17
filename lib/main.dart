@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:iptv_player/screens/home_shell.dart';
 import 'package:iptv_player/screens/lock_screen.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:iptv_player/services/app_target.dart';
 import 'package:iptv_player/services/lock_service.dart';
 import 'package:iptv_player/state/app_state.dart';
@@ -9,6 +12,11 @@ import 'package:provider/provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Linux masaüstü: media_kit/libmpv oynatıcıyı başlat (Android'de gerekmez).
+  if (!kIsWeb && Platform.isLinux) {
+    MediaKit.ensureInitialized();
+  }
 
   // ---- 2GB RAM'li giriş seviyesi Box'lar için bellek yönetimi ----
   // Test sunucusu gibi binlerce kanallı listelerde logolar belleği şişirip

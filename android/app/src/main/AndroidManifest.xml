@@ -14,6 +14,12 @@
         android:icon="@mipmap/ic_launcher"
         android:banner="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+        <!-- Eski Android Box uyumluluğu: Impeller (yeni render motoru) Android 7/8
+             ve eski GPU'lu Box'larda açılışta çökebiliyor. Skia'ya dön — eski
+             cihazlarda en uyumlu ve kararlı render backend. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

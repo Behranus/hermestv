@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:iptv_player/screens/movie_detail_screen.dart';
 import 'package:iptv_player/screens/series_detail_screen.dart';
 import 'package:iptv_player/state/app_state.dart';
@@ -21,6 +22,15 @@ class VodScreen extends StatefulWidget {
 
 class _VodScreenState extends State<VodScreen> {
   _VodMode _mode = _VodMode.movies;
+
+  /// Arama kutusu odağı — Geri tuşu aramadan çıksın (kanal aramasıyla aynı).
+  final FocusNode _searchFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,19 +75,37 @@ class _VodScreenState extends State<VodScreen> {
           preferredSize: const Size.fromHeight(64),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: TextField(
-              onChanged: state.setVodQuery,
-              decoration: InputDecoration(
-                hintText: 'Film veya dizi ara…',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: state.vodQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => state.setVodQuery(''),
-                      )
-                    : null,
-                isDense: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            child: Focus(
+              focusNode: _searchFocus,
+              onKeyEvent: (node, event) {
+                // Kumanda Geri / klavye Escape → aramadan çık (odak bırak).
+                if (event is KeyDownEvent &&
+                    (event.logicalKey == LogicalKeyboardKey.goBack ||
+                        event.logicalKey == LogicalKeyboardKey.escape)) {
+                  node.unfocus();
+                  SystemChannels.textInput
+                      .invokeMethod<void>('TextInput.hide');
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
+                focusNode: _searchFocus,
+                onChanged: state.setVodQuery,
+                onSubmitted: (_) => _searchFocus.unfocus(),
+                decoration: InputDecoration(
+                  hintText: 'Film veya dizi ara…',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: state.vodQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => state.setVodQuery(''),
+                        )
+                      : null,
+                  isDense: true,
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
           ),

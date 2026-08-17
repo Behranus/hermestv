@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:iptv_player/models/channel.dart';
 import 'package:iptv_player/screens/channel_guide_sheet.dart';
 import 'package:iptv_player/screens/player_screen.dart';
@@ -7,11 +8,26 @@ import 'package:iptv_player/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
 
 /// Kanal listesi ana ekranı: grup seçimi + arama + liste.
-class ChannelsScreen extends StatelessWidget {
+class ChannelsScreen extends StatefulWidget {
   const ChannelsScreen({super.key, this.onGoToSetup});
 
   /// Kanal yokken "Kaynak Ekle" ile Kurulum sekmesine geçmek için.
   final VoidCallback? onGoToSetup;
+
+  @override
+  State<ChannelsScreen> createState() => _ChannelsScreenState();
+}
+
+class _ChannelsScreenState extends State<ChannelsScreen> {
+  /// Arama kutusu odağı. Kumandada OK ile kutuya girildiğinde, Geri tuşu
+  /// aramadan çıksın diye goBack/escape burada yakalanıp odak bırakılır.
+  final FocusNode _searchFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   void _openPlayer(BuildContext context, AppState state, int index) {
     final channels = state.filteredChannels;
@@ -45,20 +61,37 @@ class ChannelsScreen extends StatelessWidget {
                 preferredSize: const Size.fromHeight(64),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                  child: TextField(
-                    onChanged: state.setQuery,
-                    decoration: InputDecoration(
-                      hintText: 'Kanal ara…',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: state.query.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => state.setQuery(''),
-                            )
-                          : null,
-                      isDense: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  child: Focus(
+                    focusNode: _searchFocus,
+                    onKeyEvent: (node, event) {
+                      // Kumanda Geri / klavye Escape → aramadan çık (odak bırak).
+                      if (event is KeyDownEvent &&
+                          (event.logicalKey == LogicalKeyboardKey.goBack ||
+                              event.logicalKey == LogicalKeyboardKey.escape)) {
+                        node.unfocus();
+                        SystemChannels.textInput
+                            .invokeMethod<void>('TextInput.hide');
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: TextField(
+                      focusNode: _searchFocus,
+                      onChanged: state.setQuery,
+                      onSubmitted: (_) => _searchFocus.unfocus(),
+                      decoration: InputDecoration(
+                        hintText: 'Kanal ara…',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: state.query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () => state.setQuery(''),
+                              )
+                            : null,
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -76,7 +109,7 @@ class ChannelsScreen extends StatelessWidget {
             title: 'Playlist yüklenemedi',
             subtitle: state.error,
             actionLabel: 'Kaynak Ekle',
-            onAction: onGoToSetup,
+            onAction: widget.onGoToSetup,
           );
         }
         if (!state.hasChannels) {
@@ -87,7 +120,7 @@ class ChannelsScreen extends StatelessWidget {
                 'internetteki test yayınları veya ücretsiz ve yasal kanallar\n'
                 '— hepsi tek ekranda.',
             actionLabel: 'Kaynak Ekle',
-            onAction: onGoToSetup,
+            onAction: widget.onGoToSetup,
           );
         }
 
