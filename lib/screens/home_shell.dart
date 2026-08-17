@@ -21,6 +21,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 720;
       final body = IndexedStack(
@@ -41,14 +42,39 @@ class _HomeShellState extends State<HomeShell> {
                 selectedIndex: _index,
                 onDestinationSelected: (i) => setState(() => _index = i),
                 labelType: NavigationRailLabelType.all,
-                leading: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Icon(Icons.live_tv, size: 32),
+                minWidth: 88,
+                groupAlignment: -0.7,
+                leading: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: colors.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.live_tv, color: Colors.white, size: 26),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'bbtv',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: colors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 destinations: [
                   for (var i = 0; i < _titles.length; i++)
                     NavigationRailDestination(
                       icon: Icon(_icons[i]),
+                      selectedIcon: Icon(_icons[i]),
                       label: Text(_titles[i]),
                     ),
                 ],
@@ -69,6 +95,7 @@ class _HomeShellState extends State<HomeShell> {
             for (var i = 0; i < _titles.length; i++)
               NavigationDestination(
                 icon: Icon(_icons[i]),
+                selectedIcon: Icon(_icons[i]),
                 label: _titles[i],
               ),
           ],

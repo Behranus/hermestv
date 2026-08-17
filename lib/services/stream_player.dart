@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/services/hls_subtitle_service.dart';
-import 'package:iptv_player/services/media_kit_player.dart';
 import 'package:video_player/video_player.dart';
 
 /// Altyazı parçası bilgisi (oynatıcıdan bağımsız).
@@ -81,13 +80,10 @@ abstract class StreamPlayer {
   Future<void> dispose();
 }
 
-/// Platforma göre doğru motoru seçer:
-/// - **Android** → video_player (ExoPlayer, donanım hızlandırmalı MediaCodec)
-/// - **Linux**  → media_kit (libmpv) — video_player'ın Linux uygulaması yoktur.
+/// Oynatıcı motoru: Android'de resmi video_player (ExoPlayer, donanım
+/// hızlandırmalı MediaCodec). TiviMate ve diğer IPTV oynatıcıların da
+/// kullandığı en kararlı motor — 4K/2K/FHD akıcı oynatır.
 StreamPlayer createStreamPlayer({double bufferSecs = 1.0}) {
-  if (Platform.isLinux) {
-    return MediaKitStreamPlayer(bufferSecs: bufferSecs);
-  }
   return ExoStreamPlayer(bufferSecs: bufferSecs);
 }
 

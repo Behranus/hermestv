@@ -44,12 +44,6 @@ dependencies:
   wakelock_plus: ^1.7.0
   xml: ^6.6.1
 
-  # Linux masaüstü oynatıcı motoru (media_kit/libmpv) — yalnızca Linux'ta
-  # kullanılır; Android'de video_player (ExoPlayer) kalır.
-  media_kit: ^1.2.6
-  media_kit_video: ^2.0.1
-  media_kit_libs_linux: ^1.2.1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

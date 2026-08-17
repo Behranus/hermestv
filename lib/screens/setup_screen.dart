@@ -256,6 +256,41 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
+  /// Bölüm başlığı — ayarları derli toplu gruplar.
+  Widget _sectionHeader(ThemeData theme, IconData icon, String title,
+      [String? subtitle]) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -264,8 +299,16 @@ class _SetupScreenState extends State<SetupScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Kurulum')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
+          // ---- Bölüm 1: Kaynak Ekle ----
+          _sectionHeader(
+            theme,
+            Icons.add_circle_outline,
+            'Kaynak Ekle',
+            'URL, Xtream Codes veya cihazdan M3U dosyası',
+          ),
+
           // URL + Xtream yan yana (geniş ekran) / alt alta (telefon)
           LayoutBuilder(builder: (context, constraints) {
             final urlCard = _urlCard(theme, state);
@@ -293,6 +336,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
           // Dosya + Test yayınları
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Card(
@@ -411,6 +455,14 @@ class _SetupScreenState extends State<SetupScreen> {
             ],
           ),
 
+          // ---- Bölüm 2: Ücretsiz Kanallar ----
+          _sectionHeader(
+            theme,
+            Icons.public,
+            'Ücretsiz Kanallar',
+            'Yasal ve ücretsiz dünya kanalları',
+          ),
+
           // Ücretsiz ve yasal kanallar
           Card(
             child: ListTile(
@@ -424,6 +476,14 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
           ),
 
+          // ---- Bölüm 3: Oynatıcı ----
+          _sectionHeader(
+            theme,
+            Icons.speed,
+            'Oynatıcı',
+            'Kanal geçiş hızı ve tampon ayarı',
+          ),
+
           // Bağlantı hızı (kanal geçişi)
           Card(
             child: Padding(
@@ -431,15 +491,7 @@ class _SetupScreenState extends State<SetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.speed),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text('Bağlantı Hızı', style: theme.textTheme.titleMedium),
-                      ),
-                    ],
-                  ),
+                  Text('Bağlantı Hızı', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
                     'Kanal geçiş hızı ve tampon süresi. Küçük tampon = daha hızlı geçiş, '
@@ -472,102 +524,120 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
           ),
 
-          // Şifre kilidi (şifresiz sürümde bu kart gösterilmez)
-          if (!_noLock)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.lock_outline),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text('Şifre Kilidi', style: theme.textTheme.titleMedium),
-                      ),
-                      Switch(
-                        value: _lockEnabled ?? true,
-                        onChanged: _toggleLock,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Açılışta şifre sorulur. Varsayılan şifre: ${LockService.defaultPassword} '
-                    '(aşağıdan değiştirebilirsin).',
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-                  ),
-                  if (_lockEnabled ?? true) ...[
-                    const SizedBox(height: 16),
-                    Text('Şifre değiştir', style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _newPass,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Yeni şifre',
-                        prefixIcon: Icon(Icons.password),
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _confirmPass,
-                      obscureText: true,
-                      onSubmitted: (_) => _savePassword(),
-                      decoration: const InputDecoration(
-                        labelText: 'Yeni şifre (tekrar)',
-                        prefixIcon: Icon(Icons.password),
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+          // ---- Bölüm 4: Güvenlik ----
+          if (!_noLock) ...[
+            _sectionHeader(
+              theme,
+              Icons.security,
+              'Güvenlik',
+              'Açılış şifresi',
+            ),
+
+            // Şifre kilidi
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       children: [
-                        FilledButton.icon(
-                          onPressed: _savePassword,
-                          icon: const Icon(Icons.save),
-                          label: const Text('Şifreyi Kaydet'),
+                        const Icon(Icons.lock_outline),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('Şifre Kilidi', style: theme.textTheme.titleMedium),
                         ),
-                        const SizedBox(width: 12),
-                        TextButton.icon(
-                          onPressed: () async {
-                            await LockService.resetToDefault();
-                            if (!mounted) return;
-                            setState(() {
-                              _lockEnabled = true;
-                              _lockError = null;
-                              _lockSuccess =
-                                  'Şifre varsayılana döndü: ${LockService.defaultPassword}';
-                            });
-                          },
-                          icon: const Icon(Icons.restore),
-                          label: const Text('Varsayılana dön'),
+                        Switch(
+                          value: _lockEnabled ?? true,
+                          onChanged: _toggleLock,
                         ),
                       ],
                     ),
-                  ],
-                  if (_lockError != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 4),
                     Text(
-                      _lockError!,
-                      style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
+                      'Açılışta şifre sorulur. Varsayılan şifre: ${LockService.defaultPassword} '
+                      '(aşağıdan değiştirebilirsin).',
+                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
                     ),
+                    if (_lockEnabled ?? true) ...[
+                      const SizedBox(height: 16),
+                      Text('Şifre değiştir', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _newPass,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Yeni şifre',
+                          prefixIcon: Icon(Icons.password),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _confirmPass,
+                        obscureText: true,
+                        onSubmitted: (_) => _savePassword(),
+                        decoration: const InputDecoration(
+                          labelText: 'Yeni şifre (tekrar)',
+                          prefixIcon: Icon(Icons.password),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _savePassword,
+                            icon: const Icon(Icons.save),
+                            label: const Text('Şifreyi Kaydet'),
+                          ),
+                          TextButton.icon(
+                            onPressed: () async {
+                              await LockService.resetToDefault();
+                              if (!mounted) return;
+                              setState(() {
+                                _lockEnabled = true;
+                                _lockError = null;
+                                _lockSuccess =
+                                    'Şifre varsayılana döndü: ${LockService.defaultPassword}';
+                              });
+                            },
+                            icon: const Icon(Icons.restore),
+                            label: const Text('Varsayılana dön'),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (_lockError != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _lockError!,
+                        style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
+                      ),
+                    ],
+                    if (_lockSuccess != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _lockSuccess!,
+                        style: TextStyle(color: theme.colorScheme.primary, fontSize: 13),
+                      ),
+                    ],
                   ],
-                  if (_lockSuccess != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _lockSuccess!,
-                      style: TextStyle(color: theme.colorScheme.primary, fontSize: 13),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
+          ],
+
+          // ---- Bölüm 5: Rehber ----
+          _sectionHeader(
+            theme,
+            Icons.calendar_month,
+            'Rehber',
+            'EPG program bilgileri',
           ),
 
           // EPG
@@ -640,8 +710,14 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
           ),
 
-          // Mevcut kaynak
-          if (state.source != null)
+          // ---- Bölüm 6: Durum ----
+          if (state.source != null) ...[
+            _sectionHeader(
+              theme,
+              Icons.info_outline,
+              'Durum',
+              'Aktif kaynak ve bilgiler',
+            ),
             Card(
               child: ListTile(
                 leading: const Icon(Icons.info_outline),
@@ -656,6 +732,7 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
               ),
             ),
+          ],
 
           if (state.error != null)
             Card(
