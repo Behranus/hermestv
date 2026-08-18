@@ -59,6 +59,36 @@ class _FreeTvScreenState extends State<FreeTvScreen> {
             ),
           ),
           const SizedBox(height: 24),
+          // ---- Ek HD/4K kaynaklar (Sungate Titan benzeri cihazların
+          // kullandığı免费 kaynaklar: Pluto TV, Samsung TV Plus, Plex, Free-TV) ----
+          Text('Ek HD/4K Kaynaklar', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text(
+            'Sungate Titan benzeri cihazların sağladığı ücretsiz HD/4K kanallar.',
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          for (final (label, url) in FreeTvService.extraSources)
+            Card(
+              child: ListTile(
+                dense: true,
+                leading: Icon(
+                  label.contains('4K') ? Icons.videocam : Icons.live_tv,
+                  color: theme.colorScheme.primary,
+                ),
+                title: Text(label),
+                subtitle: const Text('HD/4K ücretsiz yayınlar'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  final state = context.read<AppState>();
+                  state.loadFromUrl(url);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$label yükleniyor…')),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 24),
           Text('Ülkeler', style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(

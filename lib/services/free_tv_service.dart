@@ -24,13 +24,26 @@ class FreeTvCountry {
   final String flag;
 }
 
-/// iptv-org kaynaklarından (https://iptv-org.github.io/iptv/)
-/// ücretsiz ve yasal kanal listelerini çeker.
+/// Ücretsiz IPTV kaynaklarından kanal listelerini çeker.
+///
+/// Kaynaklar:
+/// - iptv-org: world'un en büyük ücretsiz IPTV depoası (1000+ kanal)
+/// - free-tv/iptv: HD/4K odaklı, kalite öncelikli ücretsiz kanallar
+/// - Pluto TV, Samsung TV Plus, Plex TV: Yayıncı bedava servisleri
 ///
 /// Bu kaynak yalnızca yayıncıların kendilerinin ücretsiz sunduğu
 /// (public broadcaster / free-to-air) kanalları içerir.
 class FreeTvService {
   static const baseUrl = 'https://iptv-org.github.io/iptv/';
+
+  /// Ek ücretsiz HD/4K kanal kaynakları.
+  /// Her biri bir M3U playlist URL'si.
+  static const extraSources = <(String label, String url)>[
+    ('Free-TV HD/4K', 'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8'),
+    ('Pluto TV (Global)', 'https://i.mjh.nz/pluto/tv.m3u'),
+    ('Samsung TV Plus', 'https://i.mjh.nz/samsung-tv-plus/tv.m3u'),
+    ('Plex TV', 'https://i.mjh.nz/plex/tv.m3u'),
+  ];
 
   static const categories = <FreeTvCategory>[
     FreeTvCategory('news', 'Haber', Icons.newspaper),
@@ -155,9 +168,17 @@ class FreeTvService {
   }
 
   /// [compute] geri çağrısı: tek izolatta indir + çöz + ayrıştır.
+  ///
+  /// User-Agent, çoğu CDN'in reddettiği basit agent yerine tarayıcı
+  /// benzeri bir değer kullanır — bazı 4K/HD kanalları bunu ister.
   static Future<List<Channel>> _fetchAndParse(String url) async {
     final resp = await http
-        .get(Uri.parse(url), headers: {'User-Agent': 'IPTVPlayer/1.0'})
+        .get(Uri.parse(url), headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
+              'Chrome/120.0.0.0 Mobile Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
+        })
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
       throw Exception('HTTP ${resp.statusCode} hatası: $url');

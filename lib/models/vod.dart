@@ -141,34 +141,49 @@ class SeriesInfo {
     final info = json['info'];
     final seasons = <VodSeason>[];
 
+    // Xtream API: bölümler sezonların İÇİNDE değil, ayrı bir
+    // "episodes" sözlüğünde tutulur: {"1": [{...}, ...], "2": [...]}.
+    final allEpisodes = json['episodes'];
+    final Map<String, List<VodEpisode>> episodesBySeason = {};
+    if (allEpisodes is Map) {
+      for (final entry in allEpisodes.entries) {
+        final seasonKey = entry.key;
+        final rawList = entry.value;
+        if (rawList is! List) continue;
+        final episodes = <VodEpisode>[];
+        final seasonNum = int.tryParse(seasonKey) ?? 0;
+        for (final e in rawList) {
+          if (e is! Map<String, dynamic>) continue;
+          final epInfo = e['info'];
+          final infoMap = epInfo is Map<String, dynamic> ? epInfo : null;
+          episodes.add(VodEpisode(
+            id: int.tryParse(e['id']?.toString() ?? '') ?? 0,
+            title: (e['title']?.toString() ?? '').trim(),
+            season: seasonNum,
+            episodeNum: e['episode_num']?.toString(),
+            plot: infoMap?['plot'] != null
+                ? infoMap!['plot'].toString()
+                : (e['plot']?.toString()),
+            cover: _nonEmpty(e['cover']),
+            duration: infoMap?['duration']?.toString(),
+            airDate: infoMap?['release_date']?.toString(),
+            containerExtension: _nonEmpty(e['container_extension']),
+          ));
+        }
+        episodesBySeason[seasonKey] = episodes;
+      }
+    }
+
     final rawSeasons = json['seasons'];
     if (rawSeasons is List) {
       for (final s in rawSeasons) {
         if (s is! Map<String, dynamic>) continue;
         final numRaw = s['season_number']?.toString() ?? s['season']?.toString() ?? '1';
         final number = int.tryParse(numRaw) ?? 1;
-        final episodes = <VodEpisode>[];
-        final rawEpisodes = s['episodes'];
-        if (rawEpisodes is List) {
-          for (final e in rawEpisodes) {
-            if (e is! Map<String, dynamic>) continue;
-            final epInfo = e['info'];
-            final infoMap = epInfo is Map<String, dynamic> ? epInfo : null;
-            episodes.add(VodEpisode(
-              id: int.tryParse(e['id']?.toString() ?? '') ?? 0,
-              title: (e['title']?.toString() ?? '').trim(),
-              season: number,
-              episodeNum: e['episode_num']?.toString(),
-              plot: infoMap?['plot'] != null
-                  ? infoMap!['plot'].toString()
-                  : (e['plot']?.toString()),
-              cover: _nonEmpty(e['cover']),
-              duration: infoMap?['duration']?.toString(),
-              airDate: infoMap?['release_date']?.toString(),
-              containerExtension: _nonEmpty(e['container_extension']),
-            ));
-          }
-        }
+        // Bölüm listesini ayrı sözlükten çek.
+        final episodes = episodesBySeason[numRaw.toString()] ??
+            episodesBySeason[number.toString()] ??
+            const <VodEpisode>[];
         seasons.add(VodSeason(number: number, name: s['name']?.toString(), episodes: episodes));
       }
       seasons.sort((a, b) => a.number.compareTo(b.number));

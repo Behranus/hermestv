@@ -38,6 +38,10 @@ class XtreamCredentials {
 ///
 /// Referans: `player_api.php?username=..&password=..` endpoint'leri.
 class XtreamService {
+  /// Çoğu CDN'in reddettiği basit agent yerine tarayıcı benzeri UA —
+  /// bazı 4K/HD kanal akışları bunu ister.
+  static const _ua = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
+      'Chrome/120.0.0.0 Mobile Safari/537.36';
   static const _timeout = Duration(seconds: 30);
 
   static Future<dynamic> _api(
@@ -49,7 +53,7 @@ class XtreamService {
         '&password=${Uri.encodeQueryComponent(c.password)}'
         '${action.isEmpty ? '' : '&action=$action'}';
     final resp = await http
-        .get(Uri.parse(url), headers: {'User-Agent': 'IPTVPlayer/1.0'})
+        .get(Uri.parse(url), headers: {'User-Agent': _ua})
         .timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception('Sunucu HTTP ${resp.statusCode} döndürdü.');
@@ -75,7 +79,7 @@ class XtreamService {
         '&password=${Uri.encodeQueryComponent(c.password)}'
         '${action.isEmpty ? '' : '&action=$action'}';
     final resp = await http
-        .get(Uri.parse(url), headers: {'User-Agent': 'IPTVPlayer/1.0'})
+        .get(Uri.parse(url), headers: {'User-Agent': _ua})
         .timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception('Sunucu HTTP ${resp.statusCode} döndürdü.');
