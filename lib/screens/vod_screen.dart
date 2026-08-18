@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iptv_player/screens/movie_detail_screen.dart';
 import 'package:iptv_player/screens/series_detail_screen.dart';
 import 'package:iptv_player/screens/vod_player_screen.dart';
 import 'package:iptv_player/services/resume_service.dart';
+import 'package:iptv_player/services/stream_player.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:iptv_player/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
@@ -157,7 +160,8 @@ class _VodTabState extends State<_VodTab>
     final all = <_RowItem>[
       if (isMovies)
         for (final m in state.filteredVodMovies)
-          _RowItem(m.id, m.name, m.poster, m.rating, m.categoryId)
+          _RowItem(m.id, m.name, m.poster, m.rating, m.categoryId,
+              m.directUrl ?? state.moviePlayUrl(m.id))
       else
         for (final s in state.filteredVodSeries)
           _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId),
@@ -402,13 +406,14 @@ class _ResumeCard extends StatelessWidget {
 // ==================== Yardımcı Sınıflar ====================
 
 class _RowItem {
-  const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId);
+  const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId, [this.url]);
 
   final int id;
   final String name;
   final String? poster;
   final String? rating;
   final String? categoryId;
+  final String? url; // VOD oynatma URL'si (preview için)
 }
 
 // ==================== Hero Card ====================
@@ -723,17 +728,50 @@ class _RowCard extends StatefulWidget {
 
 class _RowCardState extends State<_RowCard> {
   final _focus = FocusNode(debugLabel: 'vod-row-card');
+  StreamPlayer? _previewPlayer;
+  Timer? _previewTimer;
+  bool _showPreview = false;
 
   @override
   void initState() {
     super.initState();
-    _focus.addListener(() => setState(() {}));
+    _focus.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
+    _previewTimer?.cancel();
+    _disposePlayer();
     _focus.dispose();
     super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_focus.hasFocus && widget.item.url != null) {
+      _previewTimer?.cancel();
+      _previewTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted && _focus.hasFocus) _startPreview();
+      });
+    } else {
+      _previewTimer?.cancel();
+      _disposePlayer();
+      if (mounted && _showPreview) setState(() => _showPreview = false);
+    }
+  }
+
+  void _startPreview() {
+    if (widget.item.url == null) return;
+    _disposePlayer();
+    _previewPlayer = createStreamPlayer(bufferSecs: 0.5);
+    _previewPlayer!.open(widget.item.url!);
+    if (mounted) setState(() => _showPreview = true);
+  }
+
+  void _disposePlayer() {
+    if (_previewPlayer != null) {
+      unawaited(_previewPlayer!.dispose());
+      _previewPlayer = null;
+    }
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -742,6 +780,8 @@ class _RowCardState extends State<_RowCard> {
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.select ||
         key == LogicalKeyboardKey.space) {
+      _previewTimer?.cancel();
+      _disposePlayer();
       widget.onTap();
       return KeyEventResult.handled;
     }
@@ -763,9 +803,13 @@ class _RowCardState extends State<_RowCard> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: InkWell(
-            onTap: widget.onTap,
+            onTap: () {
+              _previewTimer?.cancel();
+              _disposePlayer();
+              widget.onTap();
+            },
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
+              duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
@@ -794,37 +838,68 @@ class _RowCardState extends State<_RowCard> {
                       ),
                     ),
                   ),
+                  // Video preview (5 saniye odaklanınca)
+                  if (_showPreview && _previewPlayer != null)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.9),
+                              blurRadius: 20,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.cover,
+                              child: SizedBox(
+                                width: 320, height: 180,
+                                child: _previewPlayer!.buildVideo(fit: BoxFit.cover),
+                              ),
+                            ),
+                            const Center(
+                              child: Icon(Icons.play_circle_fill,
+                                  color: Colors.white54, size: 32),
+                            ),
+                            const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Colors.black26, Colors.transparent, Colors.black54],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   Positioned(
-                    left: 6,
-                    right: 6,
-                    bottom: 6,
+                    left: 6, right: 6, bottom: 6,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           item.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            height: 1.2,
+                            color: Colors.white, fontSize: 11,
+                            fontWeight: FontWeight.w600, height: 1.2,
                           ),
                         ),
                         if (item.rating != null && item.rating!.isNotEmpty)
-                          Row(
-                            children: [
-                              const Icon(Icons.star,
-                                  color: Colors.amber, size: 11),
-                              const SizedBox(width: 2),
-                              Text(
-                                item.rating!,
-                                style: const TextStyle(
-                                    color: Colors.white70, fontSize: 10),
-                              ),
-                            ],
-                          ),
+                          Row(children: [
+                            const Icon(Icons.star, color: Colors.amber, size: 11),
+                            const SizedBox(width: 2),
+                            Text(item.rating!,
+                              style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                          ]),
                       ],
                     ),
                   ),
@@ -846,11 +921,9 @@ class _RowCardState extends State<_RowCard> {
       url,
       fit: BoxFit.cover,
       cacheWidth: 220,
-      errorBuilder: (_, _, _) =>
-          ColoredBox(color: colors.surfaceContainerHighest),
+      errorBuilder: (_, _, _) => ColoredBox(color: colors.surfaceContainerHighest),
       loadingBuilder: (_, child, progress) => progress == null
-          ? child
-          : ColoredBox(color: colors.surfaceContainerHighest),
+          ? child : ColoredBox(color: colors.surfaceContainerHighest),
     );
   }
 }

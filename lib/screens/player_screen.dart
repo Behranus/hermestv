@@ -10,16 +10,7 @@ import 'package:iptv_player/state/app_state.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-/// Tam ekran IPTV oynatıcısı — TVMate tarzı kategorili kanal listesi.
-///
-/// Kumanda (D-pad) / klavye:
-/// - ↑↓          : kanal değiştirir (liste kapalıyken)
-/// - ←→          : ses seviyesi
-/// - OK (Enter)  : sağ tarafta kanal listesini açar/kapatır
-/// - → (listede) : kategori gösterir / bir üst kategoriye geçer
-/// - ← (listede) : kategoriden çık
-/// - Boşluk       : kontrol panelini gösterir/gizler
-/// - Geri tuşu    : oynatıcıdan çıkar
+/// Tam ekran IPTV oynatıcısı — TiviMate tarzı anlık EPG + TVMate kategorili liste.
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -60,8 +51,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _subtitleText;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // TiviMate tarzı kanal değiştirme EPG bilgi çubuğu
+  bool _showEpgBanner = false;
+  String? _epgBannerTitle;
+  String? _epgBannerNext;
+  String? _epgBannerCategory;
+  Timer? _epgBannerTimer;
+
   // TVMate tarzı kategori navigasyonu
-  String _panelFilterGroup = 'all'; // 'all' = tümü, yoksa grup adı
+  String _panelFilterGroup = 'all';
   List<String> _panelGroups = [];
   List<Channel> _panelChannels = [];
 
@@ -80,14 +78,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _buildPanelGroups();
   }
 
-  /// Panel için grup listesini oluştur: Tümü, sonra alfabetik gruplar.
   void _buildPanelGroups() {
     final g = <String>{};
     for (final c in widget.channels) {
       g.add(c.displayGroup);
     }
     final sorted = g.toList()..sort();
-    // Türkçe grupları en üste koy
     final turkish = sorted.where(_isTurkish).toList();
     final rest = sorted.where((x) => !_isTurkish(x)).toList();
     _panelGroups = ['all', ...turkish, ...rest];
@@ -110,25 +106,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  /// Sağ tuş: kategorileri göster veya bir üst kategoriye geç.
   void _panelRightArrow() {
-    if (_panelGroups.length <= 2) return; // sadece "all" varsa bir şey yapma
+    if (_panelGroups.length <= 2) return;
     final currentIdx = _panelGroups.indexOf(_panelFilterGroup);
     if (currentIdx < 0 || currentIdx >= _panelGroups.length - 1) {
-      // En sonda ise başa dön
       _panelFilterGroup = _panelGroups.first;
     } else {
       _panelFilterGroup = _panelGroups[currentIdx + 1];
     }
     _updatePanelChannels();
-    // Seçili indeksi mevcut listede korumaya çalış
     final currentChannel = widget.channels[_index];
     final idxInNew = _panelChannels.indexOf(currentChannel);
     _listIndex = idxInNew >= 0 ? idxInNew : 0;
     setState(() {});
   }
 
-  /// Sol tuş: kategoriden çık, tüm listeye dön.
   void _panelLeftArrow() {
     if (_panelFilterGroup != 'all') {
       _panelFilterGroup = 'all';
@@ -154,6 +146,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _overlayTimer?.cancel();
     _volumeHudTimer?.cancel();
     _retryTimer?.cancel();
+    _epgBannerTimer?.cancel();
     WakelockPlus.disable();
     unawaited(_player.dispose());
     super.dispose();
@@ -189,7 +182,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _player.position.listen((p) {
       if (!mounted) return;
       if (_duration == Duration.zero) return;
-      if (!_overlayVisible) return;
+      if (!_overlayVisible && !_showEpgBanner) return;
       final now = DateTime.now();
       if (now.difference(_lastPositionAt) < const Duration(milliseconds: 500)) return;
       _lastPositionAt = now;
@@ -260,11 +253,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
+  // ==================== TiviMate EPG Banner ====================
+
+  /// Kanal değiştirildiğinde TiviMate tarzı anlık EPG bilgi çubuğunu göster.
+  void _showEpgInfo(AppState state) {
+    _epgBannerTimer?.cancel();
+    final nowProgram = state.nowPlaying(_channel);
+    final nextProgram = state.nextProgram(_channel);
+    setState(() {
+      _showEpgBanner = true;
+      _epgBannerTitle = nowProgram?.title;
+      _epgBannerNext = nextProgram?.title;
+      _epgBannerCategory = _channel.displayGroup;
+    });
+    // 5 saniye sonra kaybol
+    _epgBannerTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _showEpgBanner = false);
+    });
+  }
+
+  // ==================== Kanal listesi ====================
+
   void _toggleChannelList() {
     setState(() {
       _showList = !_showList;
       if (_showList) {
-        // Mevcut kanalın grubunu seç
         _panelFilterGroup = _channel.displayGroup;
         if (!_panelGroups.contains(_panelFilterGroup)) {
           _panelFilterGroup = 'all';
@@ -300,12 +313,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _selectListChannel() {
     final panelChannel = _panelChannels[_listIndex];
-    // Paneldeki indeksi asıl listede bul
     final globalIndex = widget.channels.indexOf(panelChannel);
     _closeList();
     if (globalIndex == _index) return;
     setState(() => _index = globalIndex);
     _openUser(_channel);
+    _showEpgInfo(context.read<AppState>());
   }
 
   void _selectListChannelAt(int i) {
@@ -325,6 +338,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _listIndex = next;
     });
     _openUser(_channel);
+    _showEpgInfo(context.read<AppState>());
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -435,6 +449,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             fit: StackFit.expand,
             children: [
               _player.buildVideo(fit: BoxFit.contain),
+              // Ekran üstü altyazı
               if (_subtitleText != null && _subtitleText!.isNotEmpty)
                 Positioned(
                   left: 24, right: 24, bottom: 80,
@@ -458,6 +473,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                 ),
+              // Yükleme / hata
               if (_buffering && !_hasPlayed && _error == null)
                 const _BufferingIndicator()
               else if (_error != null)
@@ -466,6 +482,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   onRetry: () => _openUser(_channel),
                   onBack: () => Navigator.of(context).pop(),
                 ),
+              // TiviMate tarzı EPG bilgi çubuğu (kanal değiştirmede anlık görünür)
+              if (_showEpgBanner && _error == null && !_showList)
+                _EpgInfoBanner(
+                  channelName: _channel.name,
+                  groupName: _epgBannerCategory ?? _channel.displayGroup,
+                  nowTitle: _epgBannerTitle,
+                  nextTitle: _epgBannerNext,
+                  index: _index,
+                  total: widget.channels.length,
+                ),
+              // Üst/alt kontrol paneli
               if (_overlayVisible && _error == null)
                 _ControlsOverlay(
                   channel: _channel,
@@ -494,6 +521,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                 ),
+              // Kanal listesi paneli
               if (_showList && _error == null)
                 _ChannelListPanel(
                   channels: widget.channels,
@@ -509,6 +537,163 @@ class _PlayerScreenState extends State<PlayerScreen> {
               if (_showVolumeHud)
                 _VolumeHud(volume: _volume),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== TiviMate EPG Banner ====================
+
+/// Kanal değiştirildiğinde üstte kısa süreliğine görünen EPG bilgi çubuğu.
+/// TiviMate'in kanal değiştirmedeki "şimdi ne var" bilgisi gibi.
+class _EpgInfoBanner extends StatefulWidget {
+  const _EpgInfoBanner({
+    required this.channelName,
+    required this.groupName,
+    this.nowTitle,
+    this.nextTitle,
+    required this.index,
+    required this.total,
+  });
+
+  final String channelName;
+  final String groupName;
+  final String? nowTitle;
+  final String? nextTitle;
+  final int index;
+  final int total;
+
+  @override
+  State<_EpgInfoBanner> createState() => _EpgInfoBannerState();
+}
+
+class _EpgInfoBannerState extends State<_EpgInfoBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _fade = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
+    _anim.forward();
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 16, top: 60, right: 16,
+      child: FadeTransition(
+        opacity: _fade,
+        child: Material(
+          color: Colors.black.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white12, width: 1),
+            ),
+            child: Row(
+              children: [
+                // Kanal numarası
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${widget.index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Kanal adı + grup
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.channelName,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16, fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white10,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              widget.groupName,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white60, fontSize: 10),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      // Şimdi yayında
+                      if (widget.nowTitle != null && widget.nowTitle!.isNotEmpty)
+                        Row(
+                          children: [
+                            Container(
+                              width: 6, height: 6,
+                              decoration: const BoxDecoration(
+                                color: Colors.red, shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Şimdi: ${widget.nowTitle}',
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.lightBlueAccent, fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      // Sıradaki
+                      if (widget.nextTitle != null && widget.nextTitle!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Sonra: ${widget.nextTitle}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -700,16 +885,8 @@ class _ControlsOverlay extends StatelessWidget {
   }
 }
 
-// ==================== TVMate Tarzı Kanal Listesi Paneli ====================
+// ==================== TVMate Kanal Listesi Paneli ====================
 
-/// TVMate tarzı kanal listesi paneli:
-/// - Ekranın sağ ~%25'ini kaplar
-/// - Şeffaf (arkadaki yayın görünür)
-/// - Üstte kategori başlığı + ▶ indicator'ı
-/// - ↓ ile kanallar listelenir
-/// - → ile bir sonraki kategoriye geçilir (kanal kapanmaz!)
-/// - ← ile kategoriden çık, tüm listeye dön
-/// - OK ile kanal seçilir ve oynatılır
 class _ChannelListPanel extends StatefulWidget {
   const _ChannelListPanel({
     required this.channels,
@@ -774,11 +951,6 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
     }
   }
 
-  String _groupDisplayName(String g) {
-    if (g == 'all') return 'TÜMÜ';
-    return g;
-  }
-
   @override
   Widget build(BuildContext context) {
     final channels = widget.panelChannels;
@@ -786,10 +958,9 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
     final currentIndex = widget.currentIndex;
     final width = (MediaQuery.of(context).size.width * 0.28).clamp(260.0, 420.0).toDouble();
 
-    // Kategori adı ve sırası
     final groupIdx = widget.groups.indexOf(widget.filterGroup);
     final groupCount = widget.groups.length;
-    final groupLabel = _groupDisplayName(widget.filterGroup);
+    final groupLabel = widget.filterGroup == 'all' ? 'TÜMÜ' : widget.filterGroup;
 
     return Positioned(
       right: 0, top: 0, bottom: 0, width: width,
@@ -798,7 +969,6 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Kategori başlığı
             SafeArea(
               bottom: false,
               child: Padding(
@@ -811,29 +981,18 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
                         const Icon(Icons.folder, color: Colors.white70, size: 16),
                         const SizedBox(width: 6),
                         Expanded(
-                          child: Text(
-                            groupLabel,
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.amber, fontSize: 15, fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          child: Text(groupLabel, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.amber, fontSize: 15, fontWeight: FontWeight.bold)),
                         ),
                         if (groupCount > 1)
-                          Text(
-                            '${groupIdx + 1}/$groupCount',
-                            style: const TextStyle(color: Colors.white54, fontSize: 11),
-                          ),
+                          Text('${groupIdx + 1}/$groupCount',
+                            style: const TextStyle(color: Colors.white54, fontSize: 11)),
                         const SizedBox(width: 4),
-                        IconButton(
-                          onPressed: widget.onClose,
-                          tooltip: 'Kapat',
-                          icon: const Icon(Icons.close, color: Colors.white54, size: 18),
-                        ),
+                        IconButton(onPressed: widget.onClose, tooltip: 'Kapat',
+                          icon: const Icon(Icons.close, color: Colors.white54, size: 18)),
                       ],
                     ),
                     const SizedBox(height: 2),
-                    // İpucu
                     Row(
                       children: const [
                         Icon(Icons.arrow_right, color: Colors.white38, size: 14),
@@ -851,7 +1010,6 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
               ),
             ),
             const Divider(color: Colors.white24, height: 1),
-            // Kanal listesi
             Expanded(
               child: ListView.builder(
                 controller: _scroll,
@@ -880,28 +1038,20 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: isCurrent ? Colors.amber : Colors.white,
                                     fontSize: 13,
                                     fontWeight: selected ? FontWeight.bold : FontWeight.w400,
-                                  ),
-                                ),
-                                Text(
-                                  c.displayGroup, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white38, fontSize: 10),
-                                ),
+                                  )),
+                                Text(c.displayGroup, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white38, fontSize: 10)),
                               ],
                             ),
                           ),
                           if (isCurrent)
-                            Container(
-                              width: 6, height: 6,
-                              decoration: const BoxDecoration(
-                                color: Colors.amber, shape: BoxShape.circle,
-                              ),
-                            ),
+                            Container(width: 6, height: 6,
+                              decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle)),
                         ],
                       ),
                     ),
@@ -909,27 +1059,24 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
                 },
               ),
             ),
-            // Alt bilgi
             SafeArea(
               top: false,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 color: Colors.black.withValues(alpha: 0.4),
                 child: Row(
-                  children: [
-                    const Icon(Icons.keyboard_arrow_up, color: Colors.white54, size: 14),
-                    const Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 14),
-                    const SizedBox(width: 4),
-                    const Expanded(
-                      child: Text('Gezin', style: TextStyle(color: Colors.white54, fontSize: 10)),
-                    ),
-                    const Icon(Icons.arrow_right, color: Colors.white54, size: 14),
-                    const SizedBox(width: 2),
-                    const Text('Kategori', style: TextStyle(color: Colors.white54, fontSize: 10)),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.check_circle, color: Colors.white54, size: 14),
-                    const SizedBox(width: 2),
-                    const Text('Aç', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                  children: const [
+                    Icon(Icons.keyboard_arrow_up, color: Colors.white54, size: 14),
+                    Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 14),
+                    SizedBox(width: 4),
+                    Expanded(child: Text('Gezin', style: TextStyle(color: Colors.white54, fontSize: 10))),
+                    Icon(Icons.arrow_right, color: Colors.white54, size: 14),
+                    SizedBox(width: 2),
+                    Text('Kategori', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                    SizedBox(width: 8),
+                    Icon(Icons.check_circle, color: Colors.white54, size: 14),
+                    SizedBox(width: 2),
+                    Text('Aç', style: TextStyle(color: Colors.white54, fontSize: 10)),
                   ],
                 ),
               ),
