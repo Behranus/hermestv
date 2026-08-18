@@ -409,6 +409,43 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
           ),
 
+          // ---- Bölüm 2.5: Premium Sağlayıcı ----
+          _sectionHeader(
+            theme,
+            Icons.workspace_premium,
+            'Premium Sağlayıcı',
+            '4400+ kanal, 4K UHD spor, 7 gün ücretsiz deneme',
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.workspace_premium, color: Colors.amber),
+              title: const Text('Premium IPTV Sağlayıcısı'),
+              subtitle: const Text('4400+ kanal • 4K UHD • Spor • Film • Dizi'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                final state = context.read<AppState>();
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Premium kanallar yükleniyor…')),
+                );
+                // Sağlayıcı M3U URL'si — 7 günlük deneme süresi.
+                await state.loadFromUrl(
+                  'http://5gociftci.lance5g.xyz:8080/get.php?'
+                  'username=5gociftci&password=Ve6gA526eb2ns63a'
+                  '&type=m3u_plus&output=mpegts',
+                );
+                if (!mounted) return;
+                if (state.error != null) {
+                  messenger.showSnackBar(SnackBar(content: Text('Hata: ${state.error}')));
+                } else {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('${state.channels.length} premium kanal yüklendi.')),
+                  );
+                }
+              },
+            ),
+          ),
+
           // ---- Bölüm 3: Oynatıcı ----
           _sectionHeader(
             theme,
