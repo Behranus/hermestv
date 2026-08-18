@@ -3,16 +3,34 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:iptv_player/services/resume_service.dart';
 import 'package:iptv_player/services/stream_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Tek bir medya (film/bölüm) için kaydırıcılı, ileri/geri sarmalı oynatıcı.
 /// **ExoPlayer** (resmi video_player) motorunu kullanır.
+/// Kaldığın yerden devam: izleme kaydı otomatik kaydedilir.
 class VodPlayerScreen extends StatefulWidget {
-  const VodPlayerScreen({super.key, required this.url, required this.title});
+  const VodPlayerScreen({
+    super.key,
+    required this.url,
+    required this.title,
+    this.mediaId,
+    this.poster,
+    this.isMovie = true,
+    this.resumePosition,
+  });
 
   final String url;
   final String title;
+
+  /// VOD media ID'si (resume için gerekli).
+  final int? mediaId;
+  final String? poster;
+  final bool isMovie;
+
+  /// Devam edilecek konum (sıfırdan başlamıyorsa).
+  final Duration? resumePosition;
 
   @override
   State<VodPlayerScreen> createState() => _VodPlayerScreenState();
@@ -40,6 +58,10 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   late final List<String> _candidates;
   int _candidateIndex = 0;
 
+  /// Resume için zamanlayıcı: her 10 saniyede bir konumu kaydet.
+  Timer? _resumeTimer;
+  bool _resumeApplied = false;
+
   /// URL'nin son uzantısını değiştirerek yedek adaylar üretir.
   /// Örn. `{base}/movie/u/p/123.m3u8` → ayrıca .mp4 ve .mkv denenir.
   static List<String> _alternates(String url) {
@@ -66,6 +88,8 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     _candidates = [widget.url, ..._alternates(widget.url)];
     _openCandidate();
     _scheduleOverlayHide();
+    // Resume: her 10 saniyede bir konumu kaydet.
+    _resumeTimer = Timer.periodic(const Duration(seconds: 10), (_) => _saveResume());
   }
 
   /// Sıradaki adayı açar; hepsi başarısız olursa hata gösterilir.
@@ -99,9 +123,28 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   @override
   void dispose() {
     _overlayTimer?.cancel();
+    _resumeTimer?.cancel();
+    _saveResume(); // Çıkarken son konumu kaydet.
     WakelockPlus.disable();
     unawaited(_player.dispose());
     super.dispose();
+  }
+
+  /// Mevcut izleme konumunu disk'e kaydet.
+  void _saveResume() {
+    if (widget.mediaId == null) return;
+    if (_position.inSeconds < 3) return; // Çok kısaysa kaydetme.
+    if (_duration.inSeconds == 0) return;
+    ResumeService.save(ResumeRecord(
+      id: widget.mediaId!,
+      title: widget.title,
+      poster: widget.poster,
+      url: widget.url,
+      position: _position,
+      duration: _duration,
+      isMovie: widget.isMovie,
+      watchedAt: DateTime.now(),
+    ));
   }
 
   void _subscribe() {
@@ -110,9 +153,6 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     });
     _player.error.listen((e) {
       if (!mounted) return;
-      // ExoPlayer hatası: bu aday başarısız → sıradaki yedek uzantıyı dene.
-      // (Oynatma başladıysa hata sonradan geldiyse yeniden deneme; çoğu
-      // durumda uzantı sorunudur, ilk adayda çözülür.)
       if (!_playing && _candidateIndex < _candidates.length) {
         _nextCandidate(e);
       } else {
@@ -132,7 +172,16 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       setState(() => _position = p);
     });
     _player.duration.listen((d) {
-      if (mounted) setState(() => _duration = d);
+      if (!mounted) return;
+      setState(() => _duration = d);
+      // Resume: süre belli olduğunda kaydedilmiş konuma atla.
+      if (!_resumeApplied && widget.resumePosition != null &&
+          widget.resumePosition!.inSeconds > 5 &&
+          d.inSeconds > 0 && _position.inSeconds < 3) {
+        _resumeApplied = true;
+        _player.seek(widget.resumePosition!);
+        setState(() => _position = widget.resumePosition!);
+      }
     });
     // Ekran üstü altyazı (SRT/VTT).
     _player.subtitleText.listen((text) {

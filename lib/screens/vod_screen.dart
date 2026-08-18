@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iptv_player/screens/movie_detail_screen.dart';
 import 'package:iptv_player/screens/series_detail_screen.dart';
+import 'package:iptv_player/screens/vod_player_screen.dart';
+import 'package:iptv_player/services/resume_service.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:iptv_player/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
@@ -129,8 +131,22 @@ class _VodTab extends StatefulWidget {
 
 class _VodTabState extends State<_VodTab>
     with AutomaticKeepAliveClientMixin {
+  List<ResumeRecord> _resumeRecords = [];
+
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadResume();
+  }
+
+  Future<void> _loadResume() async {
+    final records = await ResumeService.load();
+    if (!mounted) return;
+    setState(() => _resumeRecords = records);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +163,13 @@ class _VodTabState extends State<_VodTab>
           _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId),
     ];
 
-    if (all.isEmpty && !state.vodLoading) {
+    // Devam ettirme kayıtları (film/dizi ayrımı)
+    final relevantResume = _resumeRecords
+        .where((r) => r.isMovie == isMovies && !r.isCompleted)
+        .toList()
+      ..sort((a, b) => b.watchedAt.compareTo(a.watchedAt));
+
+    if (all.isEmpty && !state.vodLoading && relevantResume.isEmpty) {
       return const EmptyState(
         icon: Icons.search_off,
         title: 'Sonuç bulunamadı',
@@ -155,33 +177,44 @@ class _VodTabState extends State<_VodTab>
       );
     }
 
-    return CustomScrollView(
-      slivers: [
-        // ---- İçerik ----
-        SliverList(
-          delegate: SliverChildListDelegate([
-            if (all.isNotEmpty) ...[
-              // Hero: büyük tanıtım kartı
-              _HeroCard(
-                item: all.first,
-                isMovie: isMovies,
-                onTap: () => _openItem(all.first),
-              ),
-              const SizedBox(height: 20),
-              // Tümünü göster
-              _RowSection(
-                title: isMovies ? 'Tüm Filmler' : 'Tüm Diziler',
-                items: all,
-                isMovie: isMovies,
-                onTap: _openItem,
-              ),
-              // Kategori satırları
-              ..._buildCategoryRows(all),
-            ],
-            const SizedBox(height: 24),
-          ]),
-        ),
-      ],
+    return RefreshIndicator(
+      onRefresh: () async {
+        await state.loadVod();
+        await _loadResume();
+      },
+      child: CustomScrollView(
+        slivers: [
+          SliverList(
+            delegate: SliverChildListDelegate([
+              // Kaldığın Yerden Devam (varsa)
+              if (relevantResume.isNotEmpty) ...[
+                _ResumeSection(
+                  records: relevantResume,
+                  isMovie: isMovies,
+                  state: state,
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (all.isNotEmpty) ...[
+                _HeroCard(
+                  item: all.first,
+                  isMovie: isMovies,
+                  onTap: () => _openItem(all.first),
+                ),
+                const SizedBox(height: 20),
+                _RowSection(
+                  title: isMovies ? 'Tüm Filmler' : 'Tüm Diziler',
+                  items: all,
+                  isMovie: isMovies,
+                  onTap: _openItem,
+                ),
+                ..._buildCategoryRows(all),
+              ],
+              const SizedBox(height: 24),
+            ]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -220,6 +253,149 @@ class _VodTabState extends State<_VodTab>
       final s = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
       if (s != null) widget.onItemTap(s);
     }
+  }
+}
+
+// ==================== Kaldığın Yerden Devam Bölümü ====================
+
+class _ResumeSection extends StatelessWidget {
+  const _ResumeSection({
+    required this.records,
+    required this.isMovie,
+    required this.state,
+  });
+
+  final List<ResumeRecord> records;
+  final bool isMovie;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              const Icon(Icons.history, size: 20, color: Colors.amber),
+              const SizedBox(width: 8),
+              Text(
+                isMovie ? 'Filmlerde Devam Et' : 'Dizilerde Devam Et',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.amber,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 140,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: records.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final r = records[i];
+              return _ResumeCard(record: r, state: state);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResumeCard extends StatelessWidget {
+  const _ResumeCard({required this.record, required this.state});
+  final ResumeRecord record;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        // VOD oynatıcıyı aç, kaldığın yerden devam et
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => VodPlayerScreen(
+              url: record.url,
+              title: record.title,
+              mediaId: record.id,
+              poster: record.poster,
+              isMovie: record.isMovie,
+              resumePosition: record.position,
+            ),
+          ),
+        );
+      },
+      child: SizedBox(
+        width: 120,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (record.poster != null && record.poster!.isNotEmpty)
+                      Image.network(
+                        record.poster!,
+                        fit: BoxFit.cover,
+                        cacheWidth: 240,
+                        errorBuilder: (_, _, _) => _placeholder(),
+                        loadingBuilder: (_, child, p) => p == null ? child : _placeholder(),
+                      )
+                    else
+                      _placeholder(),
+                    // İlerleme çubuğu
+                    Positioned(
+                      left: 0, right: 0, bottom: 0,
+                      child: Container(
+                        height: 4,
+                        color: Colors.black.withValues(alpha: 0.5),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: record.progress,
+                          child: Container(color: Colors.amber),
+                        ),
+                      ),
+                    ),
+                    // Oynat ikonu
+                    const Center(
+                      child: Icon(Icons.play_circle_fill, color: Colors.white70, size: 36),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              record.title,
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              record.remainingText,
+              maxLines: 1,
+              style: const TextStyle(fontSize: 10, color: Colors.white54),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: Colors.white12,
+      child: const Center(child: Icon(Icons.movie, color: Colors.white38, size: 32)),
+    );
   }
 }
 

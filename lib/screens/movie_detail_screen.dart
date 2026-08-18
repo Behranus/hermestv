@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iptv_player/models/vod.dart';
 import 'package:iptv_player/screens/vod_player_screen.dart';
+import 'package:iptv_player/services/resume_service.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:provider/provider.dart';
 
@@ -125,21 +126,13 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 20),
-                  // Oynat
-                  if (playUrl != null)
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => VodPlayerScreen(url: playUrl, title: movie.name),
-                          ),
-                        ),
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Filmi İzle', style: TextStyle(fontSize: 16)),
-                        style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                      ),
+                  // Oynat + Resume
+                  if (playUrl != null) ...[
+                    _ResumeButton(
+                      movie: movie,
+                      playUrl: playUrl,
                     ),
+                  ],
                   const SizedBox(height: 20),
                   if (details == null)
                     const Center(
@@ -192,6 +185,104 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       child: Center(
         child: Icon(Icons.movie, size: 72, color: colors.primary.withValues(alpha: 0.4)),
       ),
+    );
+  }
+}
+
+// ==================== Resume Butonu ====================
+
+class _ResumeButton extends StatefulWidget {
+  const _ResumeButton({required this.movie, required this.playUrl});
+  final VodMovie movie;
+  final String playUrl;
+
+  @override
+  State<_ResumeButton> createState() => _ResumeButtonState();
+}
+
+class _ResumeButtonState extends State<_ResumeButton> {
+  ResumeRecord? _resumeRecord;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadResume();
+  }
+
+  Future<void> _loadResume() async {
+    final records = await ResumeService.load();
+    if (!mounted) return;
+    final match = records.where((r) => r.id == widget.movie.id).firstOrNull;
+    if (match != null && !match.isCompleted) {
+      setState(() => _resumeRecord = match);
+    }
+  }
+
+  void _play({Duration? resumeFrom}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VodPlayerScreen(
+          url: widget.playUrl,
+          title: widget.movie.name,
+          mediaId: widget.movie.id,
+          poster: widget.movie.poster,
+          isMovie: true,
+          resumePosition: resumeFrom,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resume = _resumeRecord;
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () => _play(),
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Filmi İzle', style: TextStyle(fontSize: 16)),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+          ),
+        ),
+        if (resume != null) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _play(resumeFrom: resume.position),
+              icon: const Icon(Icons.play_circle_outline),
+              label: Text(
+                'Kaldığın yerden devam (${resume.positionText} / ${resume.durationText})',
+                style: const TextStyle(fontSize: 14),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                side: const BorderSide(color: Colors.amber),
+                foregroundColor: Colors.amber,
+              ),
+            ),
+          ),
+          // İlerleme çubuğu
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: resume.progress,
+              minHeight: 3,
+              backgroundColor: Colors.white24,
+              valueColor: const AlwaysStoppedAnimation(Colors.amber),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${resume.remainingText} kaldı',
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ],
+      ],
     );
   }
 }

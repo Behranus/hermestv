@@ -10,18 +10,16 @@ import 'package:iptv_player/state/app_state.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-/// Tam ekran IPTV oynatıcısı.
+/// Tam ekran IPTV oynatıcısı — TVMate tarzı kategorili kanal listesi.
 ///
-/// Uzaktan kumanda (D-pad) / klavye:
+/// Kumanda (D-pad) / klavye:
 /// - ↑↓          : kanal değiştirir (liste kapalıyken)
 /// - ←→          : ses seviyesi
-/// - OK (Enter)  : sol tarafta kanal listesini açar/kapatır (logo + isim)
-/// - Boşluk / ekrana dokunma: üst/alt kontrol panelini (ses dahil) gösterir/gizler
-/// - Geri tuşu   : oynatıcıdan çıkar
-///
-/// Oynatma motoru [StreamPlayer] soyutlaması üzerinden çalışır:
-/// **ExoPlayer** (resmi video_player — donanım hızlandırmalı MediaCodec,
-/// TiviMate ve tüm büyük IPTV oynatıcılarının kullandığı motor).
+/// - OK (Enter)  : sağ tarafta kanal listesini açar/kapatır
+/// - → (listede) : kategori gösterir / bir üst kategoriye geçer
+/// - ← (listede) : kategoriden çık
+/// - Boşluk       : kontrol panelini gösterir/gizler
+/// - Geri tuşu    : oynatıcıdan çıkar
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -29,7 +27,6 @@ class PlayerScreen extends StatefulWidget {
     required this.initialIndex,
   });
 
-  /// Kanal değiştirme ve liste için tüm kanal listesi.
   final List<Channel> channels;
   final int initialIndex;
 
@@ -63,6 +60,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _subtitleText;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // TVMate tarzı kategori navigasyonu
+  String _panelFilterGroup = 'all'; // 'all' = tümü, yoksa grup adı
+  List<String> _panelGroups = [];
+  List<Channel> _panelChannels = [];
+
   Channel get _channel => widget.channels[_index];
 
   @override
@@ -75,9 +77,69 @@ class _PlayerScreenState extends State<PlayerScreen> {
     WakelockPlus.enable();
     _loadSettings();
     _open(_channel);
+    _buildPanelGroups();
   }
 
-  /// Kayıtlı bağlantı hızını ve ses seviyesini uygular.
+  /// Panel için grup listesini oluştur: Tümü, sonra alfabetik gruplar.
+  void _buildPanelGroups() {
+    final g = <String>{};
+    for (final c in widget.channels) {
+      g.add(c.displayGroup);
+    }
+    final sorted = g.toList()..sort();
+    // Türkçe grupları en üste koy
+    final turkish = sorted.where(_isTurkish).toList();
+    final rest = sorted.where((x) => !_isTurkish(x)).toList();
+    _panelGroups = ['all', ...turkish, ...rest];
+    _updatePanelChannels();
+  }
+
+  static bool _isTurkish(String g) {
+    final l = g.toLowerCase();
+    return l.contains('türk') || l.contains('turk') || l.contains('tr |') ||
+        l.startsWith('tr ') || l.startsWith('tr|') || l == 'tr' || l.contains('türkiye');
+  }
+
+  void _updatePanelChannels() {
+    if (_panelFilterGroup == 'all') {
+      _panelChannels = List.from(widget.channels);
+    } else {
+      _panelChannels = widget.channels
+          .where((c) => c.displayGroup == _panelFilterGroup)
+          .toList();
+    }
+  }
+
+  /// Sağ tuş: kategorileri göster veya bir üst kategoriye geç.
+  void _panelRightArrow() {
+    if (_panelGroups.length <= 2) return; // sadece "all" varsa bir şey yapma
+    final currentIdx = _panelGroups.indexOf(_panelFilterGroup);
+    if (currentIdx < 0 || currentIdx >= _panelGroups.length - 1) {
+      // En sonda ise başa dön
+      _panelFilterGroup = _panelGroups.first;
+    } else {
+      _panelFilterGroup = _panelGroups[currentIdx + 1];
+    }
+    _updatePanelChannels();
+    // Seçili indeksi mevcut listede korumaya çalış
+    final currentChannel = widget.channels[_index];
+    final idxInNew = _panelChannels.indexOf(currentChannel);
+    _listIndex = idxInNew >= 0 ? idxInNew : 0;
+    setState(() {});
+  }
+
+  /// Sol tuş: kategoriden çık, tüm listeye dön.
+  void _panelLeftArrow() {
+    if (_panelFilterGroup != 'all') {
+      _panelFilterGroup = 'all';
+      _updatePanelChannels();
+      final currentChannel = widget.channels[_index];
+      final idxInNew = _panelChannels.indexOf(currentChannel);
+      _listIndex = idxInNew >= 0 ? idxInNew : 0;
+      setState(() {});
+    }
+  }
+
   Future<void> _loadSettings() async {
     final speed = await SettingsService.loadSpeed();
     final volume = await SettingsService.loadVolume();
@@ -101,26 +163,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _player.buffering.listen((b) {
       if (mounted) setState(() => _buffering = b);
     });
-    // Geçici ağ hatalarında oynatıcıyı 2 kez otomatik yeniden bağla
-    // (TiviMate tarzı kendi kendini kurtarma); 2 deneme de başarısızsa hata göster.
-    // Hata yönetimi (TiviMate tarzı): en fazla 1 otomatik yeniden bağlanma.
-    // Oynatma bir kez başladıysa sayaç sıfırlanır → geçici ağ kesintisinde
-    // oynatıcı durmadan sıfırlanmaz (döngü = sürekli donma hissi).
     _player.error.listen((e) {
       if (!mounted) return;
       if (_errorRetries < 1) {
         _errorRetries++;
         _retryTimer?.cancel();
         _retryTimer = Timer(const Duration(seconds: 3), () {
-          if (mounted) {
-            _open(_channel);
-          }
+          if (mounted) _open(_channel);
         });
       } else {
         setState(() => _error = e);
       }
     });
-    // Oynatma başarıyla başlayınca hata sayacını sıfırla.
     _player.playing.listen((p) {
       if (!mounted) return;
       if (p) {
@@ -132,9 +186,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!mounted) return;
       setState(() => _volume = v);
     });
-    // Konum güncellemeleri: canlı yayında (süre 0) hiç güncelleme yapma;
-    // VOD benzeri akışta ise yalnızca arayüz görünürken saniyede en fazla 2 kez.
-    // (Her karede setState yapmak tüm oynatıcıyı yeniden çizer → takılma/donma.)
     _player.position.listen((p) {
       if (!mounted) return;
       if (_duration == Duration.zero) return;
@@ -147,18 +198,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _player.duration.listen((d) {
       if (mounted) setState(() => _duration = d);
     });
-    // Altyazı parçaları (menü için). Harici altyazının otomatik yüklenmesi
-    // oynatıcı motorunun open() adımında yapılır.
     _player.subtitleTracks.listen((tracks) {
       if (mounted) setState(() => _subtitleTracks = tracks);
     });
-    // Ekran üstü altyazı metni (SRT/VTT — ExoPlayer'da harici altyazı
-    // olmadığı için metin Flutter tarafında çizilir).
     _player.subtitleText.listen((text) {
       if (mounted) setState(() => _subtitleText = text);
     });
-    // Otomatik seçilen parça (örn. Türkçe gömülü altyazı) menüde işaretli
-    // gelsin — kullanıcı "Kapalı" sandığında aslında açık olduğunu görür.
     _player.activeSubtitleId.listen((id) {
       if (mounted && id != null) setState(() => _activeSubtitleId = id);
     });
@@ -181,7 +226,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _scheduleOverlayHide();
   }
 
-  /// Kullanıcının bilinçli bir kanal seçiminde retry sayacını sıfırlar.
   void _openUser(Channel channel) {
     _errorRetries = 0;
     _open(channel);
@@ -201,8 +245,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_overlayVisible) _scheduleOverlayHide();
   }
 
-  // ---- Ses ----
-
   Future<void> _changeVolume(double delta) async {
     final next = (_volume + delta).clamp(0.0, 1.0);
     await _player.setVolume(next);
@@ -210,8 +252,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _flashVolumeHud();
   }
 
-  /// Ses değiştiğinde, kontrol paneli kapalıyken bile kısa süreliğine
-  /// altta ses çubuğu gösterir.
   void _flashVolumeHud() {
     _volumeHudTimer?.cancel();
     setState(() => _showVolumeHud = true);
@@ -220,16 +260,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
-  // ---- Kanal listesi paneli (OK) ----
-
   void _toggleChannelList() {
     setState(() {
       _showList = !_showList;
       if (_showList) {
-        _listIndex = _index;
+        // Mevcut kanalın grubunu seç
+        _panelFilterGroup = _channel.displayGroup;
+        if (!_panelGroups.contains(_panelFilterGroup)) {
+          _panelFilterGroup = 'all';
+        }
+        _updatePanelChannels();
+        final idxInNew = _panelChannels.indexOf(_channel);
+        _listIndex = idxInNew >= 0 ? idxInNew : 0;
         _overlayVisible = true;
         _overlayTimer?.cancel();
       } else {
+        _panelFilterGroup = 'all';
+        _updatePanelChannels();
         _scheduleOverlayHide();
       }
     });
@@ -237,32 +284,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _closeList() {
     if (!_showList) return;
-    setState(() => _showList = false);
+    setState(() {
+      _showList = false;
+      _panelFilterGroup = 'all';
+      _updatePanelChannels();
+    });
     _scheduleOverlayHide();
   }
 
   void _moveList(int delta) {
     final next = _listIndex + delta;
-    if (next < 0 || next >= widget.channels.length) return;
+    if (next < 0 || next >= _panelChannels.length) return;
     setState(() => _listIndex = next);
   }
 
   void _selectListChannel() {
-    final next = _listIndex;
+    final panelChannel = _panelChannels[_listIndex];
+    // Paneldeki indeksi asıl listede bul
+    final globalIndex = widget.channels.indexOf(panelChannel);
     _closeList();
-    if (next == _index) return;
-    setState(() => _index = next);
+    if (globalIndex == _index) return;
+    setState(() => _index = globalIndex);
     _openUser(_channel);
   }
 
-  /// Dokunmatik seçim: paneldeki satıra dokununca o kanal açılır.
   void _selectListChannelAt(int i) {
-    if (i < 0 || i >= widget.channels.length) return;
+    if (i < 0 || i >= _panelChannels.length) return;
     _listIndex = i;
     _selectListChannel();
   }
-
-  // ---- Kanal değiştirme (↑↓) ----
 
   void _switchChannel(int delta) {
     final next = _index + delta;
@@ -281,7 +331,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
 
-    // Kanal listesi açıkken ↑↓ listede gezinir, OK seçimi oynatır.
     if (_showList) {
       if (key == LogicalKeyboardKey.arrowUp) {
         _moveList(-1);
@@ -291,13 +340,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _moveList(1);
         return KeyEventResult.handled;
       }
+      if (key == LogicalKeyboardKey.arrowRight) {
+        _panelRightArrow();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowLeft) {
+        _panelLeftArrow();
+        return KeyEventResult.handled;
+      }
       if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
         _selectListChannel();
         return KeyEventResult.handled;
       }
-      if (key == LogicalKeyboardKey.arrowLeft ||
-          key == LogicalKeyboardKey.arrowRight ||
-          key == LogicalKeyboardKey.escape) {
+      if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
         _closeList();
         return KeyEventResult.handled;
       }
@@ -355,7 +410,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _player.setExternalSubtitle('file://$path');
       setState(() => _activeSubtitleId = 'file://$path');
     } else {
-      // Akış içi parça seçimi.
       await _player.setSubtitleTrackById(selected);
       setState(() => _activeSubtitleId = selected);
     }
@@ -381,17 +435,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
             fit: StackFit.expand,
             children: [
               _player.buildVideo(fit: BoxFit.contain),
-              // Ekran üstü altyazı (SRT/VTT dosyası yüklendiyse).
               if (_subtitleText != null && _subtitleText!.isNotEmpty)
                 Positioned(
-                  left: 24,
-                  right: 24,
-                  bottom: 80,
+                  left: 24, right: 24, bottom: 80,
                   child: IgnorePointer(
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(8),
@@ -400,24 +450,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           _subtitleText!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            height: 1.3,
-                            shadows: [
-                              Shadow(
-                                blurRadius: 4,
-                                color: Colors.black,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
+                            color: Colors.white, fontSize: 22, height: 1.3,
+                            shadows: [Shadow(blurRadius: 4, color: Colors.black, offset: Offset(0, 1))],
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              // Oynatma bir kez başladıysa yükleme çipini gizle (canlıda
-              // isBuffering asılı kalabiliyor → sonsuz "yükleniyor" olmasın).
               if (_buffering && !_hasPlayed && _error == null)
                 const _BufferingIndicator()
               else if (_error != null)
@@ -443,30 +483,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   onChannelDown: () => _switchChannel(-1),
                   onSubtitles: _showSubtitlesMenu,
                 ),
-              // Üstteki gradyan, kontrollerin okunabilirliği için.
               if (_overlayVisible && _error == null)
                 const IgnorePointer(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.center,
+                        begin: Alignment.topCenter, end: Alignment.center,
                         colors: [Colors.black54, Colors.transparent],
                       ),
                     ),
                   ),
                 ),
-              // OK tuşuyla açılan sağ kanal listesi (Türkcell TV Plus tarzı,
-              // ekranın ~%25'i, şeffaf). Kumandada → ile kapatılır.
               if (_showList && _error == null)
                 _ChannelListPanel(
                   channels: widget.channels,
+                  panelChannels: _panelChannels,
                   selectedIndex: _listIndex,
                   currentIndex: _index,
+                  filterGroup: _panelFilterGroup,
+                  groups: _panelGroups,
                   onSelectIndex: _selectListChannelAt,
                   onClose: _closeList,
+                  onRightArrow: _panelRightArrow,
                 ),
-              // Ses HUD'u — panel kapalıyken bile ses değişince görünür.
               if (_showVolumeHud)
                 _VolumeHud(volume: _volume),
             ],
@@ -477,17 +516,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 }
 
-/// Kanal açılırken üstte görünen küçük yükleme göstergesi.
-/// Önceki kanalın görüntüsü ekranda kalır → geçiş hızlı hissettirir.
+// ==================== Buffering Indicator ====================
+
 class _BufferingIndicator extends StatelessWidget {
   const _BufferingIndicator();
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
+      top: 0, left: 0, right: 0,
       child: SafeArea(
         child: Center(
           child: Container(
@@ -500,11 +537,8 @@ class _BufferingIndicator extends StatelessWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                ),
+                SizedBox(width: 14, height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
                 SizedBox(width: 10),
                 Text('Kanal yükleniyor…', style: TextStyle(color: Colors.white, fontSize: 13)),
               ],
@@ -516,12 +550,10 @@ class _BufferingIndicator extends StatelessWidget {
   }
 }
 
+// ==================== Error Overlay ====================
+
 class _ErrorOverlay extends StatelessWidget {
-  const _ErrorOverlay({
-    required this.message,
-    required this.onRetry,
-    required this.onBack,
-  });
+  const _ErrorOverlay({required this.message, required this.onRetry, required this.onBack});
 
   final String message;
   final VoidCallback onRetry;
@@ -539,34 +571,20 @@ class _ErrorOverlay extends StatelessWidget {
             children: [
               const Icon(Icons.error_outline, color: Colors.redAccent, size: 56),
               const SizedBox(height: 16),
-              const Text(
-                'Akış açılamadı',
-                style: TextStyle(color: Colors.white, fontSize: 18),
-              ),
+              const Text('Akış açılamadı', style: TextStyle(color: Colors.white, fontSize: 18)),
               const SizedBox(height: 8),
-              Text(
-                message,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
+              Text(message, style: const TextStyle(color: Colors.white70, fontSize: 13),
+                textAlign: TextAlign.center, maxLines: 3, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 20),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  FilledButton.icon(
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Tekrar Dene'),
-                  ),
+                  FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh),
+                    label: const Text('Tekrar Dene')),
                   const SizedBox(width: 12),
-                  OutlinedButton.icon(
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back),
+                  OutlinedButton.icon(onPressed: onBack, icon: const Icon(Icons.arrow_back),
                     label: const Text('Geri'),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
-                  ),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white)),
                 ],
               ),
             ],
@@ -577,38 +595,24 @@ class _ErrorOverlay extends StatelessWidget {
   }
 }
 
+// ==================== Controls Overlay ====================
+
 class _ControlsOverlay extends StatelessWidget {
   const _ControlsOverlay({
-    required this.channel,
-    required this.index,
-    required this.total,
-    required this.position,
-    required this.duration,
-    required this.isLive,
-    required this.streamInfo,
-    required this.nowProgram,
-    required this.nextProgram,
-    required this.nextStart,
-    required this.onBack,
-    required this.onChannelUp,
-    required this.onChannelDown,
-    required this.onSubtitles,
+    required this.channel, required this.index, required this.total,
+    required this.position, required this.duration, required this.isLive,
+    required this.streamInfo, required this.nowProgram, required this.nextProgram,
+    required this.nextStart, required this.onBack, required this.onChannelUp,
+    required this.onChannelDown, required this.onSubtitles,
   });
 
   final Channel channel;
-  final int index;
-  final int total;
-  final Duration position;
-  final Duration duration;
+  final int index, total;
+  final Duration position, duration;
   final bool isLive;
-  final String? streamInfo;
-  final String? nowProgram;
-  final String? nextProgram;
+  final String? streamInfo, nowProgram, nextProgram;
   final DateTime? nextStart;
-  final VoidCallback onBack;
-  final VoidCallback onChannelUp;
-  final VoidCallback onChannelDown;
-  final VoidCallback onSubtitles;
+  final VoidCallback onBack, onChannelUp, onChannelDown, onSubtitles;
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -631,113 +635,62 @@ class _ControlsOverlay extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: onBack,
-                  tooltip: 'Geri',
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                ),
+                IconButton(onPressed: onBack, tooltip: 'Geri',
+                  icon: const Icon(Icons.arrow_back, color: Colors.white)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        channel.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '${channel.displayGroup} • ${index + 1}/$total',
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
+                      Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('${channel.displayGroup} • ${index + 1}/$total',
+                        style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       if (streamInfo != null && streamInfo!.isNotEmpty)
-                        Text(
-                          streamInfo!,
-                          style: const TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
+                        Text(streamInfo!, style: const TextStyle(color: Colors.white54, fontSize: 12)),
                       if (nowProgram != null && nowProgram!.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.play_arrow, size: 14, color: Colors.lightBlueAccent),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Şimdi: $nowProgram',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
+                        Row(children: [
+                          const Icon(Icons.play_arrow, size: 14, color: Colors.lightBlueAccent),
+                          const SizedBox(width: 4),
+                          Expanded(child: Text('Şimdi: $nowProgram', maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 13))),
+                        ]),
                       ],
-                      if (nextProgram != null && nextProgram!.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Sonra: $nextProgram (${nextStart != null ? _time(nextStart!) : ''})',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                      ],
+                      if (nextProgram != null && nextProgram!.isNotEmpty)
+                        Text('Sonra: $nextProgram (${nextStart != null ? _time(nextStart!) : ''})',
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white54, fontSize: 12)),
                     ],
                   ),
                 ),
                 if (isLive)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'CANLI',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                    child: const Text('CANLI', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                   )
                 else
-                  Text(
-                    '${_fmt(position)} / ${_fmt(duration)}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
+                  Text('${_fmt(position)} / ${_fmt(duration)}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
               ],
             ),
           ),
           const Spacer(),
-          // Ses kontrol paneli bilinçli olarak kaldırıldı — kullanıcı isteği.
-          // Ses, kumandadaki ← → tuşlarıyla değişir (kısa HUD dışında ekranda
-          // ses paneli görünmez).
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconButton(
-                  onPressed: onChannelDown,
-                  tooltip: 'Önceki kanal',
-                  iconSize: 36,
-                  icon: const Icon(Icons.keyboard_arrow_up, color: Colors.white),
-                ),
+                IconButton(onPressed: onChannelDown, tooltip: 'Önceki kanal',
+                  iconSize: 36, icon: const Icon(Icons.keyboard_arrow_up, color: Colors.white)),
                 const SizedBox(width: 16),
-                IconButton(
-                  onPressed: onSubtitles,
-                  tooltip: 'Altyazılar',
-                  iconSize: 30,
-                  icon: const Icon(Icons.subtitles, color: Colors.white),
-                ),
+                IconButton(onPressed: onSubtitles, tooltip: 'Altyazılar',
+                  iconSize: 30, icon: const Icon(Icons.subtitles, color: Colors.white)),
                 const SizedBox(width: 16),
-                IconButton(
-                  onPressed: onChannelUp,
-                  tooltip: 'Sonraki kanal',
-                  iconSize: 36,
-                  icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-                ),
+                IconButton(onPressed: onChannelUp, tooltip: 'Sonraki kanal',
+                  iconSize: 36, icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white)),
               ],
             ),
           ),
@@ -747,22 +700,38 @@ class _ControlsOverlay extends StatelessWidget {
   }
 }
 
-/// OK tuşuyla açılan, ekranın sol ~%25'ini kaplayan kanal listesi.
-/// Her satırda kanal logosu ve adı; seçili kanal vurgulanır.
+// ==================== TVMate Tarzı Kanal Listesi Paneli ====================
+
+/// TVMate tarzı kanal listesi paneli:
+/// - Ekranın sağ ~%25'ini kaplar
+/// - Şeffaf (arkadaki yayın görünür)
+/// - Üstte kategori başlığı + ▶ indicator'ı
+/// - ↓ ile kanallar listelenir
+/// - → ile bir sonraki kategoriye geçilir (kanal kapanmaz!)
+/// - ← ile kategoriden çık, tüm listeye dön
+/// - OK ile kanal seçilir ve oynatılır
 class _ChannelListPanel extends StatefulWidget {
   const _ChannelListPanel({
     required this.channels,
+    required this.panelChannels,
     required this.selectedIndex,
     required this.currentIndex,
+    required this.filterGroup,
+    required this.groups,
     required this.onSelectIndex,
     required this.onClose,
+    required this.onRightArrow,
   });
 
   final List<Channel> channels;
+  final List<Channel> panelChannels;
   final int selectedIndex;
   final int currentIndex;
+  final String filterGroup;
+  final List<String> groups;
   final ValueChanged<int> onSelectIndex;
   final VoidCallback onClose;
+  final VoidCallback onRightArrow;
 
   @override
   State<_ChannelListPanel> createState() => _ChannelListPanelState();
@@ -781,7 +750,8 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
   @override
   void didUpdateWidget(covariant _ChannelListPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedIndex != widget.selectedIndex) {
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.filterGroup != widget.filterGroup) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
     }
   }
@@ -804,93 +774,134 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
     }
   }
 
+  String _groupDisplayName(String g) {
+    if (g == 'all') return 'TÜMÜ';
+    return g;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final channels = widget.channels;
+    final channels = widget.panelChannels;
     final selectedIndex = widget.selectedIndex;
     final currentIndex = widget.currentIndex;
-    // Ekran genişliğinin %25'i, en az 240 en çok 400 px.
-    final width = (MediaQuery.of(context).size.width * 0.25)
-        .clamp(240.0, 400.0)
-        .toDouble();
+    final width = (MediaQuery.of(context).size.width * 0.28).clamp(260.0, 420.0).toDouble();
+
+    // Kategori adı ve sırası
+    final groupIdx = widget.groups.indexOf(widget.filterGroup);
+    final groupCount = widget.groups.length;
+    final groupLabel = _groupDisplayName(widget.filterGroup);
 
     return Positioned(
-      right: 0,
-      top: 0,
-      bottom: 0,
-      width: width,
-      // Şeffaf kanal listesi: arkasındaki yayın görünsün (Türkcell TV Plus
-      // tarzı). NOT: BackdropFilter/blur kullanılmıyor — eski GPU'lu Box'larda
-      // blur beyaz ekran çizme hatasına yol açıyordu; yarı saydam zemin
-      // şeffaflığı korur ve her cihazda güvenli çalışır.
+      right: 0, top: 0, bottom: 0, width: width,
       child: Material(
         color: Colors.black.withValues(alpha: 0.55),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-                SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Row(
+            // Kategori başlığı
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        const Icon(Icons.list, color: Colors.white, size: 18),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.folder, color: Colors.white70, size: 16),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Kanallar (${channels.length})',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            groupLabel,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
+                              color: Colors.amber, fontSize: 15, fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
+                        if (groupCount > 1)
+                          Text(
+                            '${groupIdx + 1}/$groupCount',
+                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                        const SizedBox(width: 4),
                         IconButton(
                           onPressed: widget.onClose,
                           tooltip: 'Kapat',
-                          icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                          icon: const Icon(Icons.close, color: Colors.white54, size: 18),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    // İpucu
+                    Row(
+                      children: const [
+                        Icon(Icons.arrow_right, color: Colors.white38, size: 14),
+                        Text('Kategori', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                        SizedBox(width: 8),
+                        Icon(Icons.arrow_drop_down, color: Colors.white38, size: 14),
+                        Text('Kanal', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                        SizedBox(width: 8),
+                        Icon(Icons.check_circle, color: Colors.white38, size: 14),
+                        Text('Seç', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                      ],
+                    ),
+                  ],
                 ),
-                const Divider(color: Colors.white24, height: 1),
+              ),
+            ),
+            const Divider(color: Colors.white24, height: 1),
+            // Kanal listesi
             Expanded(
               child: ListView.builder(
                 controller: _scroll,
                 itemCount: channels.length,
+                itemExtent: 48,
                 itemBuilder: (context, i) {
                   final c = channels[i];
                   final selected = i == selectedIndex;
-                  final isCurrent = i == currentIndex;
+                  final isCurrent = widget.channels.indexOf(c) == currentIndex;
                   return InkWell(
                     onTap: () => widget.onSelectIndex(i),
-                    child: Container(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
                       color: selected
                           ? Colors.lightBlue.withValues(alpha: 0.35)
-                          : Colors.transparent,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          : isCurrent
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       child: Row(
                         children: [
                           _ListLogo(channel: c),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              c.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isCurrent ? Colors.amber : Colors.white,
-                                fontSize: 13,
-                                fontWeight: selected ? FontWeight.bold : FontWeight.w400,
-                              ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isCurrent ? Colors.amber : Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: selected ? FontWeight.bold : FontWeight.w400,
+                                  ),
+                                ),
+                                Text(
+                                  c.displayGroup, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white38, fontSize: 10),
+                                ),
+                              ],
                             ),
                           ),
                           if (isCurrent)
-                            const Icon(Icons.play_arrow, color: Colors.amber, size: 18),
+                            Container(
+                              width: 6, height: 6,
+                              decoration: const BoxDecoration(
+                                color: Colors.amber, shape: BoxShape.circle,
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -898,37 +909,40 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
                 },
               ),
             ),
-                SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    color: Colors.black.withValues(alpha: 0.4),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.keyboard_arrow_up, color: Colors.white54, size: 16),
-                        Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 16),
-                        SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            'Gezin • OK: Aç • →: Kapat',
-                            style: TextStyle(color: Colors.white54, fontSize: 11),
-                          ),
-                        ),
-                      ],
+            // Alt bilgi
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                color: Colors.black.withValues(alpha: 0.4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.keyboard_arrow_up, color: Colors.white54, size: 14),
+                    const Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 14),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Text('Gezin', style: TextStyle(color: Colors.white54, fontSize: 10)),
                     ),
-                  ),
+                    const Icon(Icons.arrow_right, color: Colors.white54, size: 14),
+                    const SizedBox(width: 2),
+                    const Text('Kategori', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.check_circle, color: Colors.white54, size: 14),
+                    const SizedBox(width: 2),
+                    const Text('Aç', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                  ],
                 ),
-              ],
+              ),
             ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Paneldeki kanal logosu (yoksa baş harf).
 class _ListLogo extends StatelessWidget {
   const _ListLogo({required this.channel});
-
   final Channel channel;
 
   @override
@@ -937,16 +951,10 @@ class _ListLogo extends StatelessWidget {
     if (logo != null && logo.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
-        child: Image.network(
-          logo,
-          width: 36,
-          height: 36,
-          fit: BoxFit.cover,
-          cacheWidth: 72,
+        child: Image.network(logo, width: 34, height: 34, fit: BoxFit.cover,
+          cacheWidth: 68,
           errorBuilder: (_, _, _) => _fallback(),
-          loadingBuilder: (_, child, progress) =>
-              progress == null ? child : _fallback(),
-        ),
+          loadingBuilder: (_, child, progress) => progress == null ? child : _fallback()),
       );
     }
     return _fallback();
@@ -955,33 +963,23 @@ class _ListLogo extends StatelessWidget {
   Widget _fallback() {
     final initial = channel.name.isNotEmpty ? channel.name[0].toUpperCase() : '?';
     return Container(
-      width: 36,
-      height: 36,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white12,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        initial,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70),
-      ),
+      width: 34, height: 34, alignment: Alignment.center,
+      decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(6)),
+      child: Text(initial, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white70)),
     );
   }
 }
 
-/// Ses değişince altta beliren kısa ses çubuğu (HUD).
+// ==================== Volume HUD ====================
+
 class _VolumeHud extends StatelessWidget {
   const _VolumeHud({required this.volume});
-
   final double volume;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 40,
+      left: 0, right: 0, bottom: 40,
       child: IgnorePointer(
         child: Center(
           child: Container(
@@ -991,36 +989,18 @@ class _VolumeHud extends StatelessWidget {
               color: Colors.black.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              children: [
-                Icon(
-                  volume == 0
-                      ? Icons.volume_off
-                      : volume < 0.5
-                          ? Icons.volume_down
-                          : Icons.volume_up,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: volume,
-                      minHeight: 6,
-                      backgroundColor: Colors.white24,
-                      valueColor: const AlwaysStoppedAnimation(Colors.white),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  '${(volume * 100).round()}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ],
-            ),
+            child: Row(children: [
+              Icon(volume == 0 ? Icons.volume_off : volume < 0.5 ? Icons.volume_down : Icons.volume_up,
+                color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(value: volume, minHeight: 6,
+                  backgroundColor: Colors.white24, valueColor: const AlwaysStoppedAnimation(Colors.white)),
+              )),
+              const SizedBox(width: 10),
+              Text('${(volume * 100).round()}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+            ]),
           ),
         ),
       ),
@@ -1028,10 +1008,10 @@ class _VolumeHud extends StatelessWidget {
   }
 }
 
-/// Altyazı seçim sayfası.
+// ==================== Subtitles Sheet ====================
+
 class _SubtitlesSheet extends StatelessWidget {
   const _SubtitlesSheet({required this.tracks, required this.activeId});
-
   final List<SubtitleInfo> tracks;
   final String? activeId;
 
@@ -1053,8 +1033,7 @@ class _SubtitlesSheet extends StatelessWidget {
             leading: const Icon(Icons.subtitles_off),
             title: const Text('Kapalı'),
             trailing: activeId == null || activeId == 'off'
-                ? const Icon(Icons.check, color: Colors.green)
-                : null,
+                ? const Icon(Icons.check, color: Colors.green) : null,
             onTap: () => Navigator.of(context).pop('off'),
           ),
           if (hasStreamTracks) ...[
@@ -1065,8 +1044,7 @@ class _SubtitlesSheet extends StatelessWidget {
             ),
             Flexible(
               child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: tracks.length,
+                shrinkWrap: true, itemCount: tracks.length,
                 itemBuilder: (context, i) {
                   final t = tracks[i];
                   final label = [t.title, t.language].whereType<String>().where((s) => s.isNotEmpty).join(' • ');

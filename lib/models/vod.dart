@@ -180,11 +180,30 @@ class SeriesInfo {
         if (s is! Map<String, dynamic>) continue;
         final numRaw = s['season_number']?.toString() ?? s['season']?.toString() ?? '1';
         final number = int.tryParse(numRaw) ?? 1;
-        // Bölüm listesini ayrı sözlükten çek.
-        final episodes = episodesBySeason[numRaw.toString()] ??
-            episodesBySeason[number.toString()] ??
-            const <VodEpisode>[];
-        seasons.add(VodSeason(number: number, name: s['name']?.toString(), episodes: episodes));
+        // 1) Ayrı sözlükten çek (Xtream API formatı).
+        var episodes = episodesBySeason[numRaw.toString()] ??
+            episodesBySeason[number.toString()];
+        // 2) Yedek: sezonun içindeki 'episodes' alanından çek (eski/test formatı).
+        if (episodes == null && s['episodes'] is List) {
+          episodes = [];
+          for (final e in (s['episodes'] as List)) {
+            if (e is! Map<String, dynamic>) continue;
+            final epInfo = e['info'];
+            final infoMap = epInfo is Map<String, dynamic> ? epInfo : null;
+            episodes.add(VodEpisode(
+              id: int.tryParse(e['id']?.toString() ?? '') ?? 0,
+              title: (e['title']?.toString() ?? '').trim(),
+              season: number,
+              episodeNum: e['episode_num']?.toString(),
+              plot: infoMap?['plot']?.toString() ?? e['plot']?.toString(),
+              cover: _nonEmpty(e['cover']),
+              duration: infoMap?['duration']?.toString(),
+              airDate: infoMap?['release_date']?.toString(),
+              containerExtension: _nonEmpty(e['container_extension']),
+            ));
+          }
+        }
+        seasons.add(VodSeason(number: number, name: s['name']?.toString(), episodes: episodes ?? const <VodEpisode>[]));
       }
       seasons.sort((a, b) => a.number.compareTo(b.number));
     }
