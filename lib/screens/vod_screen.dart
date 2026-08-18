@@ -156,11 +156,21 @@ class _VodTabState extends State<_VodTab>
 
     final all = <_RowItem>[
       if (isMovies)
-        for (final m in state.filteredVodMovies)
-          _RowItem(m.id, m.name, m.poster, m.rating, m.categoryId)
+        for (final m in state.filteredVodMovies) ...[
+          () {
+            final d = state.movieDetailsCached(m.id);
+            return _RowItem(m.id, m.name, m.poster, m.rating, m.categoryId,
+                d?.plot, d?.genre);
+          }(),
+        ]
       else
-        for (final s in state.filteredVodSeries)
-          _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId),
+        for (final s in state.filteredVodSeries) ...[
+          () {
+            final d = state.seriesInfoCached(s.id);
+            return _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId,
+                d?.plot ?? s.plot, d?.genre);
+          }(),
+        ],
     ];
 
     // Devam ettirme kayıtları (film/dizi ayrımı)
@@ -402,13 +412,15 @@ class _ResumeCard extends StatelessWidget {
 // ==================== Yardımcı Sınıflar ====================
 
 class _RowItem {
-  const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId);
+  const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId, [this.plot, this.genre]);
 
   final int id;
   final String name;
   final String? poster;
   final String? rating;
   final String? categoryId;
+  final String? plot;   // Konu/açıklama
+  final String? genre;  // Tür
 }
 
 // ==================== Hero Card ====================
@@ -840,10 +852,10 @@ class _RowCardState extends State<_RowCard> {
   }
 }
 
-// ==================== TiviMate Künye Kartı ====================
+// ==================== Netflix Tarzı Bilgi Paneli ====================
 
-/// Odaklanınca kartın üstünde görünen bilgi kartı.
-/// Film/dizi künyesi: puan, tür, açıklama (kısaltılmış).
+/// Odaklanınca kartın üstünde görünen geniş bilgi paneli.
+/// Büyük poster + film/dizi bilgileri: puan, tür, konu.
 class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.item, required this.isMovie});
   final _RowItem item;
@@ -852,82 +864,130 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black.withValues(alpha: 0.92),
-      borderRadius: BorderRadius.circular(10),
-      elevation: 8,
+      color: Colors.black.withValues(alpha: 0.95),
+      borderRadius: BorderRadius.circular(12),
+      elevation: 12,
       child: Container(
-        width: 260,
-        padding: const EdgeInsets.all(10),
+        width: 340,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white12, width: 1),
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Başlık + rozet
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    item.name,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white10, borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    isMovie ? 'Film' : 'Dizi',
-                    style: const TextStyle(color: Colors.white60, fontSize: 9),
-                  ),
-                ),
-              ],
+            // Büyük poster
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 100, height: 140,
+                child: item.poster != null && item.poster!.isNotEmpty
+                    ? Image.network(
+                        item.poster!,
+                        fit: BoxFit.cover,
+                        cacheWidth: 200,
+                        errorBuilder: (_, _, _) => _posterFallback(),
+                        loadingBuilder: (_, child, p) => p == null ? child : _posterFallback(),
+                      )
+                    : _posterFallback(),
+              ),
             ),
-            const SizedBox(height: 6),
-            // Puan + tür satırı
-            if (item.rating != null && item.rating!.isNotEmpty)
-              Row(
+            const SizedBox(width: 12),
+            // Bilgi paneli
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.star, color: Colors.amber, size: 14),
-                  const SizedBox(width: 4),
-                  Text(
-                    item.rating!,
-                    style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 8),
-                  if (item.categoryId != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.white10, borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: Text(
-                        'Kategori ${item.categoryId}',
-                        style: const TextStyle(color: Colors.white54, fontSize: 9),
+                  // Film/Dizi rozeti
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isMovie ? Colors.blue.withValues(alpha: 0.3) : Colors.purple.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      isMovie ? 'FILM' : 'DIZI',
+                      style: TextStyle(
+                        color: isMovie ? Colors.blue[200] : Colors.purple[200],
+                        fontSize: 10, fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Başlık
+                  Text(
+                    item.name,
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Puan + tür
+                  Row(
+                    children: [
+                      if (item.rating != null && item.rating!.isNotEmpty) ...[
+                        const Icon(Icons.star, color: Colors.amber, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          item.rating!,
+                          style: const TextStyle(
+                            color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      if (item.genre != null && item.genre!.isNotEmpty)
+                        Expanded(
+                          child: Text(
+                            item.genre!,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white60, fontSize: 11),
+                          ),
+                        ),
+                    ],
+                  ),
+                  // Konu (varsa)
+                  if (item.plot != null && item.plot!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      item.plot!,
+                      maxLines: 3, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70, fontSize: 11, height: 1.3,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  // İpucu
+                  Row(
+                    children: const [
+                      Icon(Icons.play_circle_outline, color: Colors.white38, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'OK ile izle',
+                        style: TextStyle(color: Colors.white38, fontSize: 10),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            const SizedBox(height: 6),
-            // İpucu
-            Row(
-              children: const [
-                Icon(Icons.info_outline, color: Colors.white38, size: 12),
-                SizedBox(width: 4),
-                Text(
-                  'OK ile aç',
-                  style: TextStyle(color: Colors.white38, fontSize: 10),
-                ),
-              ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _posterFallback() {
+    return Container(
+      color: Colors.white12,
+      child: Center(
+        child: Icon(
+          isMovie ? Icons.movie : Icons.tv,
+          color: Colors.white38, size: 32,
         ),
       ),
     );

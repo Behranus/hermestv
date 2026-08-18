@@ -594,7 +594,7 @@ class _EpgInfoBannerState extends State<_EpgInfoBanner>
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 16, top: 60, right: 16,
+      left: 16, bottom: 100, right: 16,
       child: FadeTransition(
         opacity: _fade,
         child: Material(
