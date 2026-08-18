@@ -9,7 +9,7 @@ class TestStreamService {
 
   /// Aday test yayınları. `live` alanı Canlı/VOD grubunu belirler.
   static const candidates = <TestStreamCandidate>[
-    // ---- Canlı test kanalları ----
+    // ---- Canlı test kanalları (global) ----
     TestStreamCandidate(
       'Akamai Live Test 1',
       'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8',
@@ -35,6 +35,32 @@ class TestStreamService {
       'https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8',
       live: true,
     ),
+    TestStreamCandidate(
+      'Al Jazeera English',
+      'https://live-hls-web-aje.getaj.net/AJE/index.m3u8',
+      live: true,
+    ),
+    TestStreamCandidate(
+      'Euronews English',
+      'https://euronews-euronews-english-2-us.plex.wurl.tv/playlist.m3u8',
+      live: true,
+    ),
+    TestStreamCandidate(
+      'Bloomberg TV',
+      'https://cdn.livepeer.com/hls/index.m3u8',
+      live: true,
+    ),
+    // ---- 4K Test Akışları ----
+    TestStreamCandidate(
+      '4K Demo (Akamai)',
+      'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8',
+      live: true,
+    ),
+    TestStreamCandidate(
+      '4K Tears of Steel',
+      'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+      live: false,
+    ),
     // ---- VOD / demo akışları ----
     TestStreamCandidate(
       'Big Buck Bunny (Mux)',
@@ -44,11 +70,6 @@ class TestStreamService {
     TestStreamCandidate(
       'Tears of Steel (Mux)',
       'https://test-streams.mux.dev/tos_ismc/main.m3u8',
-      live: false,
-    ),
-    TestStreamCandidate(
-      'Tears of Steel (Unified)',
-      'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
       live: false,
     ),
     TestStreamCandidate(

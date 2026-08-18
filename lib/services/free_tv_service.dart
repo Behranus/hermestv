@@ -39,10 +39,26 @@ class FreeTvService {
   /// Ek ücretsiz HD/4K kanal kaynakları.
   /// Her biri bir M3U playlist URL'si.
   static const extraSources = <(String label, String url)>[
-    ('Free-TV HD/4K', 'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8'),
-    ('Pluto TV (Global)', 'https://i.mjh.nz/pluto/tv.m3u'),
-    ('Samsung TV Plus', 'https://i.mjh.nz/samsung-tv-plus/tv.m3u'),
-    ('Plex TV', 'https://i.mjh.nz/plex/tv.m3u'),
+    // ---- Türkçe Kanallar ----
+    ('🇹🇷 Türkçe Kanallar (TURKTV)',
+        'https://itasli.github.io/TURKTV/index.m3u'),
+    ('🇹🇷 Türkçe Kanallar (iptv-org TR)',
+        '${baseUrl}countries/tr.m3u'),
+    ('🇹🇷 Türkçe Haber Kanalları',
+        '${baseUrl}categories/news/tr.m3u'),
+    ('🇹🇷 Türkçe Müzik Kanalları',
+        '${baseUrl}categories/music/tr.m3u'),
+    ('🇹🇷 Türkçe Eğlence',
+        '${baseUrl}categories/entertainment/tr.m3u'),
+    // ---- HD/4K Global ----
+    ('Free-TV HD/4K',
+        'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8'),
+    ('Pluto TV (Global)',
+        'https://i.mjh.nz/pluto/tv.m3u'),
+    ('Samsung TV Plus',
+        'https://i.mjh.nz/samsung-tv-plus/tv.m3u'),
+    ('Plex TV',
+        'https://i.mjh.nz/plex/tv.m3u'),
   ];
 
   static const categories = <FreeTvCategory>[

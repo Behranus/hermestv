@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:iptv_player/models/vod.dart';
 import 'package:iptv_player/screens/movie_detail_screen.dart';
 import 'package:iptv_player/screens/series_detail_screen.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:iptv_player/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
 
-enum _VodMode { movies, series }
-
-/// VOD ana ekranı — Netflix tarzı: arama + film/dizi seçici
-/// kaydırılınca kaybolur, tam ekran film/dizi ızgarasına yer açılır.
+/// VOD ana ekranı — Film ve Dizi bağımsız sekmeler.
+///
+/// Her sekme kendi Netflix tarzı listesine sahip: hero kart +
+/// yatay kategori satırları. Kumanda ile sekmeler arası geçiş
+/// TabController ile sağlanır.
 class VodScreen extends StatefulWidget {
   const VodScreen({super.key, this.onGoToSetup});
 
@@ -20,25 +20,19 @@ class VodScreen extends StatefulWidget {
   State<VodScreen> createState() => _VodScreenState();
 }
 
-class _VodScreenState extends State<VodScreen> {
-  _VodMode _mode = _VodMode.movies;
+class _VodScreenState extends State<VodScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
 
-  final FocusNode _searchFocus = FocusNode(
-    onKeyEvent: (node, event) {
-      if (event is KeyDownEvent &&
-          (event.logicalKey == LogicalKeyboardKey.goBack ||
-              event.logicalKey == LogicalKeyboardKey.escape)) {
-        node.unfocus();
-        SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
-    },
-  );
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
 
   @override
   void dispose() {
-    _searchFocus.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -63,58 +57,87 @@ class _VodScreenState extends State<VodScreen> {
     }
 
     return Scaffold(
-      body: _VodBody(
-        state: state,
-        mode: _mode,
-        onModeChanged: (m) => setState(() => _mode = m),
-        searchFocus: _searchFocus,
-        onMovieTap: (m) => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)),
+      appBar: AppBar(
+        title: const Text('VOD'),
+        actions: [
+          if (state.vodLoading)
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          IconButton(
+            tooltip: 'Kataloğu yenile',
+            icon: const Icon(Icons.refresh),
+            onPressed: state.loadVod,
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.movie, size: 18), text: 'Filmler'),
+            Tab(icon: Icon(Icons.tv, size: 18), text: 'Diziler'),
+          ],
         ),
-        onSeriesTap: (s) => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)),
-        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // ---- Film sekmesi ----
+          _VodTab(
+            isMovies: true,
+            state: state,
+            onItemTap: (m) => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => MovieDetailScreen(movie: m)),
+            ),
+          ),
+          // ---- Dizi sekmesi ----
+          _VodTab(
+            isMovies: false,
+            state: state,
+            onItemTap: (s) => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => SeriesDetailScreen(series: s)),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Netflix tarzı: SliverAppBar ile arama + kategori, scroll'da kaybolur.
-class _VodBody extends StatelessWidget {
-  const _VodBody({
+// ==================== Tek sekme (Film veya Dizi) ====================
+
+class _VodTab extends StatefulWidget {
+  const _VodTab({
+    required this.isMovies,
     required this.state,
-    required this.mode,
-    required this.onModeChanged,
-    required this.searchFocus,
-    required this.onMovieTap,
-    required this.onSeriesTap,
+    required this.onItemTap,
   });
 
+  final bool isMovies;
   final AppState state;
-  final _VodMode mode;
-  final ValueChanged<_VodMode> onModeChanged;
-  final FocusNode searchFocus;
-  final void Function(VodMovie) onMovieTap;
-  final void Function(VodSeries) onSeriesTap;
+  final void Function(dynamic) onItemTap;
+
+  @override
+  State<_VodTab> createState() => _VodTabState();
+}
+
+class _VodTabState extends State<_VodTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    if (state.vodLoading && state.vodMovies.isEmpty && state.vodSeries.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (state.vodError != null &&
-        state.vodMovies.isEmpty &&
-        state.vodSeries.isEmpty) {
-      return EmptyState(
-        icon: Icons.error_outline,
-        title: 'VOD kataloğu yüklenemedi',
-        subtitle: state.vodError,
-        actionLabel: 'Tekrar dene',
-        onAction: state.loadVod,
-      );
-    }
+    super.build(context);
+    final state = widget.state;
+    final isMovies = widget.isMovies;
 
-    final isMovies = mode == _VodMode.movies;
     final all = <_RowItem>[
       if (isMovies)
         for (final m in state.filteredVodMovies)
@@ -124,111 +147,139 @@ class _VodBody extends StatelessWidget {
           _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId),
     ];
 
-    return CustomScrollView(
-      slivers: [
-        // ---- Collapsible search + category bar ----
-        SliverAppBar(
-          expandedHeight: 120,
-          pinned: true,
-          floating: true,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          flexibleSpace: FlexibleSpaceBar(
-            background: Column(
-              children: [
-                const SizedBox(height: 48), // AppBar collapse padding
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  child: TextField(
-                    focusNode: searchFocus,
-                    onChanged: state.setVodQuery,
-                    onSubmitted: (_) => searchFocus.unfocus(),
-                    decoration: InputDecoration(
-                      hintText: 'Film veya dizi ara…',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: state.vodQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => state.setVodQuery(''),
-                            )
-                          : null,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+    if (all.isEmpty && !state.vodLoading) {
+      return Column(
+        children: [
+          // Arama kutusu — her zaman üstte sabit
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: TextField(
+              onChanged: state.setVodQuery,
+              decoration: InputDecoration(
+                hintText: isMovies ? 'Film ara…' : 'Dizi ara…',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: state.vodQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => state.setVodQuery(''),
+                      )
+                    : null,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                  child: SegmentedButton<_VodMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: _VodMode.movies,
-                        label: Text('Filmler'),
-                        icon: Icon(Icons.movie, size: 16),
-                      ),
-                      ButtonSegment(
-                        value: _VodMode.series,
-                        label: Text('Diziler'),
-                        icon: Icon(Icons.tv, size: 16),
-                      ),
-                    ],
-                    selected: {mode},
-                    onSelectionChanged: (s) => onModeChanged(s.first),
-                    style: ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-          actions: [
-            if (state.vodLoading)
-              const Padding(
-                padding: EdgeInsets.all(14),
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            if (state.vodMovies.isNotEmpty || state.vodSeries.isNotEmpty)
-              IconButton(
-                tooltip: 'Kataloğu yenile',
-                icon: const Icon(Icons.refresh),
-                onPressed: state.loadVod,
-              ),
-          ],
-        ),
-
-        // ---- Content ----
-        if (all.isEmpty)
-          const SliverFillRemaining(
+          const Expanded(
             child: EmptyState(
               icon: Icons.search_off,
               title: 'Sonuç bulunamadı',
               subtitle:
                   'Arama veya kategori filtresini değiştirmeyi deneyin.',
             ),
-          )
-        else
-          _NetflixSliverList(
-            isMovies: isMovies,
-            all: all,
-            movies: isMovies ? state.filteredVodMovies : null,
-            series: isMovies ? null : state.filteredVodSeries,
-            categories: state.vodCategories,
-            onMovieTap: onMovieTap,
-            onSeriesTap: onSeriesTap,
           ),
+        ],
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        // ---- Arama kutusu: scroll'da kaybolur ----
+        SliverAppBar(
+          pinned: false,
+          floating: true,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          toolbarHeight: 56,
+          title: TextField(
+            onChanged: state.setVodQuery,
+            decoration: InputDecoration(
+              hintText: isMovies ? 'Film ara…' : 'Dizi ara…',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: state.vodQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => state.setVodQuery(''),
+                    )
+                  : null,
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        // ---- İçerik ----
+        SliverList(
+          delegate: SliverChildListDelegate([
+            if (all.isNotEmpty) ...[
+              // Hero: büyük tanıtım kartı
+              _HeroCard(
+                item: all.first,
+                isMovie: isMovies,
+                onTap: () => _openItem(all.first),
+              ),
+              const SizedBox(height: 20),
+              // Tümünü göster
+              _RowSection(
+                title: isMovies ? 'Tüm Filmler' : 'Tüm Diziler',
+                items: all,
+                isMovie: isMovies,
+                onTap: _openItem,
+              ),
+              // Kategori satırları
+              ..._buildCategoryRows(all),
+            ],
+            const SizedBox(height: 24),
+          ]),
+        ),
       ],
     );
   }
+
+  List<Widget> _buildCategoryRows(List<_RowItem> all) {
+    final state = widget.state;
+    final isMovies = widget.isMovies;
+
+    // Kategorilere göre grupla (ilk eleman hariç — hero olarak kullanıldı)
+    final byCategory = <String?, List<_RowItem>>{};
+    for (final item in all.skip(1)) {
+      byCategory.putIfAbsent(item.categoryId, () => []).add(item);
+    }
+
+    final rows = <Widget>[];
+    for (final (id, name) in state.vodCategories) {
+      if (id == 'all') continue;
+      final items = byCategory[id];
+      if (items == null || items.isEmpty) continue;
+      rows.add(const SizedBox(height: 20));
+      rows.add(_RowSection(
+        title: name,
+        items: items,
+        isMovie: isMovies,
+        onTap: _openItem,
+      ));
+    }
+    return rows;
+  }
+
+  void _openItem(_RowItem item) {
+    final state = widget.state;
+    if (widget.isMovies) {
+      final m = state.filteredVodMovies.where((m) => m.id == item.id).firstOrNull;
+      if (m != null) widget.onItemTap(m);
+    } else {
+      final s = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
+      if (s != null) widget.onItemTap(s);
+    }
+  }
 }
+
+// ==================== Yardımcı Sınıflar ====================
 
 class _RowItem {
   const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId);
@@ -240,82 +291,11 @@ class _RowItem {
   final String? categoryId;
 }
 
-/// Netflix tarzı sliver list — hero + kategori satırları.
-class _NetflixSliverList extends StatelessWidget {
-  const _NetflixSliverList({
-    required this.isMovies,
-    required this.all,
-    required this.categories,
-    required this.onMovieTap,
-    required this.onSeriesTap,
-    this.movies,
-    this.series,
-  });
-
-  final bool isMovies;
-  final List<_RowItem> all;
-  final List<(String, String)> categories;
-  final void Function(VodMovie) onMovieTap;
-  final void Function(VodSeries) onSeriesTap;
-  final List<VodMovie>? movies;
-  final List<VodSeries>? series;
-
-  void _openItem(_RowItem item) {
-    if (isMovies) {
-      final m = movies?.where((m) => m.id == item.id).firstOrNull;
-      if (m != null) onMovieTap(m);
-    } else {
-      final s = series?.where((s) => s.id == item.id).firstOrNull;
-      if (s != null) onSeriesTap(s);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hero = all.first;
-
-    // Kategorilere göre grupla
-    final byCategory = <String?, List<_RowItem>>{};
-    for (final item in all.skip(1)) {
-      byCategory.putIfAbsent(item.categoryId, () => []).add(item);
-    }
-
-    return SliverList(
-      delegate: SliverChildListDelegate([
-        // ---- Hero: büyük tanıtım kartı ----
-        _HeroCard(
-          item: hero,
-          isMovie: isMovies,
-          onTap: () => _openItem(hero),
-        ),
-        const SizedBox(height: 20),
-        _RowSection(
-          title: isMovies ? 'Tüm Filmler' : 'Tüm Diziler',
-          items: all,
-          isMovie: isMovies,
-          onTap: _openItem,
-        ),
-        // ---- Kategori satırları ----
-        for (final (id, name) in categories)
-          if (id != 'all' && (byCategory[id]?.length ?? 0) > 0) ...[
-            const SizedBox(height: 20),
-            _RowSection(
-              title: name,
-              items: byCategory[id]!,
-              isMovie: isMovies,
-              onTap: _openItem,
-            ),
-          ],
-        const SizedBox(height: 24),
-      ]),
-    );
-  }
-}
-
 // ==================== Hero Card ====================
 
 class _HeroCard extends StatefulWidget {
-  const _HeroCard({required this.item, required this.isMovie, required this.onTap});
+  const _HeroCard(
+      {required this.item, required this.isMovie, required this.onTap});
 
   final _RowItem item;
   final bool isMovie;
@@ -423,10 +403,8 @@ class _HeroCardState extends State<_HeroCard> {
                               ),
                               const SizedBox(width: 12),
                             ],
-                            if (widget.isMovie)
-                              const _Pill(label: 'Film')
-                            else
-                              const _Pill(label: 'Dizi'),
+                            _Pill(
+                                label: widget.isMovie ? 'Film' : 'Dizi'),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -515,7 +493,8 @@ class _HeroButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: filled ? Colors.black : Colors.white, size: 20),
+              Icon(icon,
+                  color: filled ? Colors.black : Colors.white, size: 20),
               const SizedBox(width: 6),
               Text(
                 label,
