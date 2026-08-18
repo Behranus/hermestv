@@ -21,7 +21,24 @@ class ChannelsScreen extends StatefulWidget {
 class _ChannelsScreenState extends State<ChannelsScreen> {
   /// Arama kutusu odağı. Kumandada OK ile kutuya girildiğinde, Geri tuşu
   /// aramadan çıksın diye goBack/escape burada yakalanıp odak bırakılır.
-  final FocusNode _searchFocus = FocusNode();
+  ///
+  /// Önemli: `Focus` widget'ı + aynı node'u kullanan TextField kombinasyonu
+  /// Linux'ta sonsuz focus/rebuild döngüsü yaratıp belleği saniyede ~1GB
+  /// şişiriyordu (OOM → oturum kapanması). Bunun yerine tuş işleme doğrudan
+  /// FocusNode üzerinde yapılır — aynı davranış, sızıntı yok.
+  final FocusNode _searchFocus = FocusNode(
+    onKeyEvent: (node, event) {
+      // Kumanda Geri / klavye Escape → aramadan çık (odak bırak).
+      if (event is KeyDownEvent &&
+          (event.logicalKey == LogicalKeyboardKey.goBack ||
+              event.logicalKey == LogicalKeyboardKey.escape)) {
+        node.unfocus();
+        SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    },
+  );
 
   @override
   void dispose() {
@@ -61,37 +78,22 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 preferredSize: const Size.fromHeight(64),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                  child: Focus(
+                  child: TextField(
                     focusNode: _searchFocus,
-                    onKeyEvent: (node, event) {
-                      // Kumanda Geri / klavye Escape → aramadan çık (odak bırak).
-                      if (event is KeyDownEvent &&
-                          (event.logicalKey == LogicalKeyboardKey.goBack ||
-                              event.logicalKey == LogicalKeyboardKey.escape)) {
-                        node.unfocus();
-                        SystemChannels.textInput
-                            .invokeMethod<void>('TextInput.hide');
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: TextField(
-                      focusNode: _searchFocus,
-                      onChanged: state.setQuery,
-                      onSubmitted: (_) => _searchFocus.unfocus(),
-                      decoration: InputDecoration(
-                        hintText: 'Kanal ara…',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: state.query.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () => state.setQuery(''),
-                              )
-                            : null,
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                    onChanged: state.setQuery,
+                    onSubmitted: (_) => _searchFocus.unfocus(),
+                    decoration: InputDecoration(
+                      hintText: 'Kanal ara…',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: state.query.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => state.setQuery(''),
+                            )
+                          : null,
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),

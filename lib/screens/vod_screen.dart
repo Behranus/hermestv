@@ -28,7 +28,21 @@ class _VodScreenState extends State<VodScreen> {
   _VodMode _mode = _VodMode.movies;
 
   /// Arama kutusu odağı — Geri tuşu aramadan çıksın (kanal aramasıyla aynı).
-  final FocusNode _searchFocus = FocusNode();
+  // Focus widget'ı + aynı node'u kullanan TextField kombinasyonu Linux'ta
+  // sonsuz focus/rebuild döngüsü → OOM yapıyordu. Tuş işleme doğrudan
+  // FocusNode üzerinde: aynı Geri/OK davranışı, sızıntı yok.
+  final FocusNode _searchFocus = FocusNode(
+    onKeyEvent: (node, event) {
+      if (event is KeyDownEvent &&
+          (event.logicalKey == LogicalKeyboardKey.goBack ||
+              event.logicalKey == LogicalKeyboardKey.escape)) {
+        node.unfocus();
+        SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    },
+  );
 
   @override
   void dispose() {
@@ -79,36 +93,22 @@ class _VodScreenState extends State<VodScreen> {
           preferredSize: const Size.fromHeight(64),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: Focus(
+            child: TextField(
               focusNode: _searchFocus,
-              onKeyEvent: (node, event) {
-                // Kumanda Geri / klavye Escape → aramadan çık (odak bırak).
-                if (event is KeyDownEvent &&
-                    (event.logicalKey == LogicalKeyboardKey.goBack ||
-                        event.logicalKey == LogicalKeyboardKey.escape)) {
-                  node.unfocus();
-                  SystemChannels.textInput
-                      .invokeMethod<void>('TextInput.hide');
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: TextField(
-                focusNode: _searchFocus,
-                onChanged: state.setVodQuery,
-                onSubmitted: (_) => _searchFocus.unfocus(),
-                decoration: InputDecoration(
-                  hintText: 'Film veya dizi ara…',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: state.vodQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => state.setVodQuery(''),
-                        )
-                      : null,
-                  isDense: true,
-                  border:
-                      OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              onChanged: state.setVodQuery,
+              onSubmitted: (_) => _searchFocus.unfocus(),
+              decoration: InputDecoration(
+                hintText: 'Film veya dizi ara…',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: state.vodQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => state.setVodQuery(''),
+                      )
+                    : null,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
