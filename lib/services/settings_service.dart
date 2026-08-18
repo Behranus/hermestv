@@ -16,6 +16,7 @@ class PlayerSpeed {
     PlayerSpeed('Normal', 1.0, 'Dengeli geçiş hızı'),
     PlayerSpeed('Dengeli', 2.0, 'Daha akıcı, orta tampon'),
     PlayerSpeed('Geniş', 4.0, 'En akıcı, büyük tampon (yavaş ağlar)'),
+    PlayerSpeed('4K Optimize', 8.0, '4K/HD için büyük tampon, maximum kalite'),
   ];
 }
 

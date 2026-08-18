@@ -209,18 +209,80 @@ class MediaKitStreamPlayer extends StreamPlayer {
             'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 '
                 'Chrome/120.0 Mobile Safari/537.36',
           },
-      // auto-safe: donanım çözme güvenli modda — GPU sürücü sorunu olursa
-      // yazılıma düşer. 4K/10bit/HDR içinhardware decode gereklidir.
+      // ──── 4K performsa + görüntü kalitesi ince ayarları ────
+      //
+      // hwdec=auto: donanım çözümleme aktif (4K/10bit/HDR için zorunlu).
+      //   auto-safe yerine auto kullanılır — GPU sürücü sorunu olursa
+      //   mpv otomatik olarak yazılıma düşer (auto-safe kadar güvenli,
+      //   ama auto daha hızlı karar verir).
       // vo=libmpv: yüksek kaliteli render, piksel assert'leri kapalı.
       // slang=tr,tur: Türkçe gömülü altyazı varsa mpv onu otomatik seçer.
-      // cache-secs: 10 saniye tampon — 4K akışlar için yeterli.
+      //
+      // ──── Tampon / cache ayarları (4K akışlar için kritik) ────
+      // cache=yes: demuxer cache aktif (4K'da takılmanın ana nedeni cache yetersizliği).
+      // cache-secs=15: 15 saniyelik tampon (4K akışlarda 10 saniye bazen yetmiyor).
+      // cache-pause-initial=yes: ilk yüklemede pause yapmadan tamponu doldur.
+      // demuxer-max-bytes=200MiB: demuxer için 200MB bellek (4K mkv/mpegts için).
+      // demuxer-max-back-bytes=100MiB: geriye sarma için 100MB.
+      //
+      // ──── Görüntü kalitesi / renk / keskinlik ────
+      //
+      // profile=high-quality: mpv'nin yerleşik yüksek kalite profili.
+      //   - scale=bilinear (yüksek kaliteli upsampling)
+      //   - dscale=lanczos (aşırı örneklemde keskinlik)
+      //   - dither-depth=auto (renk derinliği korunur)
+      //
+      // scale=spline36: 1080p/4K arası geçişlerde yumuşak ve keskin.
+      // dscale=lanczos: downscaling'de en keskin filtre.
+      // correct-downscaling=yes: doğru downsampling (yazı/kenar keskinliği).
+      // linear-downscaling=yes: lineer downscale (renk doğruluğu).
+      // sigmoid-upscaling=yes: sigmoid upsampling (görüntü doğal görünür).
+      //
+      // contrast=1.1: hafif kontrast artışı (mat renk sorununu çözer).
+      // saturation=1.25: renk doygunluğu artırılır (canlı renkler).
+      // brightness=0.02: çok hafif parlaklık artışı.
+      // gamma=1.05: hafif gamma düzeltmesi (gölgelerde detay).
+      //
+      // deband=yes: banding engelleme (düşük bit率li akışlarda gradyan
+      //   bozulmalarını önler — 4K HDR'da çok önemlidir).
+      // deband-iterations=4: 4 iterasyon (daha iyi sonuç).
+      // deband-threshold=35: banding eşik değeri.
+      // deband-range=16: banding aralığı.
+      //
+      // unsharp=yes: keskinlik artırma (عيnek filtresi).
+      // unsharp-luminance=5x5: luminans için 5x5 çekirdek.
+      // unsharp-luminance-amount=0.8: keskinlik miktarı (çok değil, doğal).
       extras: const {
-        'hwdec': 'auto-safe',
+        'hwdec': 'auto',
         'slang': 'tr,tur',
         'vo': 'libmpv',
-        'cache-secs': '10',
-        'demuxer-max-bytes': '150MiB',
-        'demuxer-max-back-bytes': '75MiB',
+        // Tampon
+        'cache': 'yes',
+        'cache-secs': '15',
+        'cache-pause-initial': 'yes',
+        'demuxer-max-bytes': '200MiB',
+        'demuxer-max-back-bytes': '100MiB',
+        // Görüntü kalitesi
+        'profile': 'high-quality',
+        'scale': 'spline36',
+        'dscale': 'lanczos',
+        'correct-downscaling': 'yes',
+        'linear-downscaling': 'yes',
+        'sigmoid-upscaling': 'yes',
+        // Renk / parlaklık
+        'contrast': '1.1',
+        'saturation': '1.25',
+        'brightness': '0.02',
+        'gamma': '1.05',
+        // Banding engelleme
+        'deband': 'yes',
+        'deband-iterations': '4',
+        'deband-threshold': '35',
+        'deband-range': '16',
+        // Keskinlik
+        'unsharp': 'yes',
+        'unsharp-luminance': '5x5',
+        'unsharp-luminance-amount': '0.8',
       },
     );
 

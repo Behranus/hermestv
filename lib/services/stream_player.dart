@@ -235,6 +235,7 @@ class ExoStreamPlayer extends StreamPlayer {
 
     // Doğrulama (ChannelProbeService) ile aynı User-Agent → doğrulanan
     // kanallar oynatıcıda da aynı şekilde açılır (bazı CDN'ler UA ister).
+    // 4K/HD akışlarda tampon süresi 20→30 saniyeye çıkarıldı.
     final c = VideoPlayerController.networkUrl(
       Uri.parse(url),
       httpHeaders: headers ??
@@ -246,7 +247,7 @@ class ExoStreamPlayer extends StreamPlayer {
     c.addListener(() => _onValueChanged(c));
 
     try {
-      await c.initialize().timeout(const Duration(seconds: 20));
+      await c.initialize().timeout(const Duration(seconds: 30));
     } catch (e) {
       // Kontrolcüyü serbest bırak (kaynak sızıntısı olmasın) ve hatayı bildir.
       unawaited(c.dispose());
