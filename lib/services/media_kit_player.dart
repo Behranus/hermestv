@@ -95,7 +95,9 @@ class MediaKitStreamPlayer extends StreamPlayer {
     // bağımlılık yok, her altyazı türü çalışır. (Varsayılan false'ta mpv
     // altyazıyı çizmez; widget katmanı sadece basit metinleri gösterir.)
     final player = mk.Player(
-      configuration: const mk.PlayerConfiguration(libass: true),
+      configuration: const mk.PlayerConfiguration(
+        libass: true,
+      ),
     );
     _player = player;
     _videoController = mkv.VideoController(player);
@@ -207,10 +209,19 @@ class MediaKitStreamPlayer extends StreamPlayer {
             'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 '
                 'Chrome/120.0 Mobile Safari/537.36',
           },
-      // hwdec=no: donanım çözme kapalı (yazılım çözme — GPU sürücü güvenliği).
-      // slang=tr,tur: Türkçe gömülü altyazı varsa mpv onu otomatik seçer
-      // (varsayılan AÇIK). sid kapatılmaz — mpv gömülü altyazıyı kendisi çizer.
-      extras: const {'hwdec': 'no', 'slang': 'tr,tur'},
+      // auto-safe: donanım çözme güvenli modda — GPU sürücü sorunu olursa
+      // yazılıma düşer. 4K/10bit/HDR içinhardware decode gereklidir.
+      // vo=libmpv: yüksek kaliteli render, piksel assert'leri kapalı.
+      // slang=tr,tur: Türkçe gömülü altyazı varsa mpv onu otomatik seçer.
+      // cache-secs: 10 saniye tampon — 4K akışlar için yeterli.
+      extras: const {
+        'hwdec': 'auto-safe',
+        'slang': 'tr,tur',
+        'vo': 'libmpv',
+        'cache-secs': '10',
+        'demuxer-max-bytes': '150MiB',
+        'demuxer-max-back-bytes': '75MiB',
+      },
     );
 
     try {

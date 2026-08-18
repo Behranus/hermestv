@@ -9,15 +9,11 @@ import 'package:provider/provider.dart';
 
 enum _VodMode { movies, series }
 
-/// VOD ana ekranı — Netflix tarzı film seçme sayfası.
-///
-/// Üstte büyük bir tanıtım (hero) kartı; altında yatay kaydırılabilir
-/// kategoriler ("Tüm Filmler", ardından her kategori bir satır). Kumandada
-/// yukarı/aşağı satırlar arasında, sol/sağ bir satır içinde gezinir, OK açar.
+/// VOD ana ekranı — Netflix tarzı: arama + film/dizi seçici
+/// kaydırılınca kaybolur, tam ekran film/dizi ızgarasına yer açılır.
 class VodScreen extends StatefulWidget {
   const VodScreen({super.key, this.onGoToSetup});
 
-  /// VOD yokken "Kurulum" sekmesine geçmek için.
   final VoidCallback? onGoToSetup;
 
   @override
@@ -27,10 +23,6 @@ class VodScreen extends StatefulWidget {
 class _VodScreenState extends State<VodScreen> {
   _VodMode _mode = _VodMode.movies;
 
-  /// Arama kutusu odağı — Geri tuşu aramadan çıksın (kanal aramasıyla aynı).
-  // Focus widget'ı + aynı node'u kullanan TextField kombinasyonu Linux'ta
-  // sonsuz focus/rebuild döngüsü → OOM yapıyordu. Tuş işleme doğrudan
-  // FocusNode üzerinde: aynı Geri/OK davranışı, sızıntı yok.
   final FocusNode _searchFocus = FocusNode(
     onKeyEvent: (node, event) {
       if (event is KeyDownEvent &&
@@ -60,8 +52,9 @@ class _VodScreenState extends State<VodScreen> {
         body: EmptyState(
           icon: Icons.movie_filter_outlined,
           title: 'VOD için Xtream bağlantısı gerekir',
-          subtitle: 'Kurulum sekmesinden Xtream Codes girişi yap, Xtream tabanlı bir '
-              'playlist URL\'si (get.php) ekle veya M3U kanalları live/kullanıcı/şifre '
+          subtitle:
+              'Kurulum sekmesinden Xtream Codes girişi yap, Xtream tabanlı bir '
+              "playlist URL'si (get.php) ekle veya M3U kanalları live/kullanıcı/şifre "
               'adresleri içeriyorsa VOD otomatik açılır.',
           actionLabel: 'Kuruluma git',
           onAction: widget.onGoToSetup,
@@ -70,60 +63,48 @@ class _VodScreenState extends State<VodScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('VOD'),
-        actions: [
-          if (state.vodLoading)
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          if (state.vodMovies.isNotEmpty || state.vodSeries.isNotEmpty)
-            IconButton(
-              tooltip: 'Kataloğu yenile',
-              icon: const Icon(Icons.refresh),
-              onPressed: state.loadVod,
-            ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(64),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: TextField(
-              focusNode: _searchFocus,
-              onChanged: state.setVodQuery,
-              onSubmitted: (_) => _searchFocus.unfocus(),
-              decoration: InputDecoration(
-                hintText: 'Film veya dizi ara…',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: state.vodQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => state.setVodQuery(''),
-                      )
-                    : null,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
+      body: _VodBody(
+        state: state,
+        mode: _mode,
+        onModeChanged: (m) => setState(() => _mode = m),
+        searchFocus: _searchFocus,
+        onMovieTap: (m) => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)),
+        ),
+        onSeriesTap: (s) => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)),
         ),
       ),
-      body: _buildBody(context, state),
     );
   }
+}
 
-  Widget _buildBody(BuildContext context, AppState state) {
+/// Netflix tarzı: SliverAppBar ile arama + kategori, scroll'da kaybolur.
+class _VodBody extends StatelessWidget {
+  const _VodBody({
+    required this.state,
+    required this.mode,
+    required this.onModeChanged,
+    required this.searchFocus,
+    required this.onMovieTap,
+    required this.onSeriesTap,
+  });
+
+  final AppState state;
+  final _VodMode mode;
+  final ValueChanged<_VodMode> onModeChanged;
+  final FocusNode searchFocus;
+  final void Function(VodMovie) onMovieTap;
+  final void Function(VodSeries) onSeriesTap;
+
+  @override
+  Widget build(BuildContext context) {
     if (state.vodLoading && state.vodMovies.isEmpty && state.vodSeries.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (state.vodError != null && state.vodMovies.isEmpty && state.vodSeries.isEmpty) {
+    if (state.vodError != null &&
+        state.vodMovies.isEmpty &&
+        state.vodSeries.isEmpty) {
       return EmptyState(
         icon: Icons.error_outline,
         title: 'VOD kataloğu yüklenemedi',
@@ -133,7 +114,7 @@ class _VodScreenState extends State<VodScreen> {
       );
     }
 
-    final isMovies = _mode == _VodMode.movies;
+    final isMovies = mode == _VodMode.movies;
     final all = <_RowItem>[
       if (isMovies)
         for (final m in state.filteredVodMovies)
@@ -143,47 +124,112 @@ class _VodScreenState extends State<VodScreen> {
           _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId),
     ];
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-          child: SegmentedButton<_VodMode>(
-            segments: const [
-              ButtonSegment(value: _VodMode.movies, label: Text('Filmler'), icon: Icon(Icons.movie)),
-              ButtonSegment(value: _VodMode.series, label: Text('Diziler'), icon: Icon(Icons.tv)),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (s) => setState(() => _mode = s.first),
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: all.isEmpty
-              ? const EmptyState(
-                  icon: Icons.search_off,
-                  title: 'Sonuç bulunamadı',
-                  subtitle: 'Arama veya kategori filtresini değiştirmeyi deneyin.',
-                )
-              : _NetflixRows(
-                  isMovies: isMovies,
-                  movies: isMovies ? state.filteredVodMovies : null,
-                  series: isMovies ? null : state.filteredVodSeries,
-                  all: all,
-                  categories: state.vodCategories,
-                  onMovieTap: (m) => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)),
-                  ),
-                  onSeriesTap: (s) => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)),
+    return CustomScrollView(
+      slivers: [
+        // ---- Collapsible search + category bar ----
+        SliverAppBar(
+          expandedHeight: 120,
+          pinned: true,
+          floating: true,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          flexibleSpace: FlexibleSpaceBar(
+            background: Column(
+              children: [
+                const SizedBox(height: 48), // AppBar collapse padding
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: TextField(
+                    focusNode: searchFocus,
+                    onChanged: state.setVodQuery,
+                    onSubmitted: (_) => searchFocus.unfocus(),
+                    decoration: InputDecoration(
+                      hintText: 'Film veya dizi ara…',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: state.vodQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => state.setVodQuery(''),
+                            )
+                          : null,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                  child: SegmentedButton<_VodMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: _VodMode.movies,
+                        label: Text('Filmler'),
+                        icon: Icon(Icons.movie, size: 16),
+                      ),
+                      ButtonSegment(
+                        value: _VodMode.series,
+                        label: Text('Diziler'),
+                        icon: Icon(Icons.tv, size: 16),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (s) => onModeChanged(s.first),
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (state.vodLoading)
+              const Padding(
+                padding: EdgeInsets.all(14),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            if (state.vodMovies.isNotEmpty || state.vodSeries.isNotEmpty)
+              IconButton(
+                tooltip: 'Kataloğu yenile',
+                icon: const Icon(Icons.refresh),
+                onPressed: state.loadVod,
+              ),
+          ],
         ),
+
+        // ---- Content ----
+        if (all.isEmpty)
+          const SliverFillRemaining(
+            child: EmptyState(
+              icon: Icons.search_off,
+              title: 'Sonuç bulunamadı',
+              subtitle:
+                  'Arama veya kategori filtresini değiştirmeyi deneyin.',
+            ),
+          )
+        else
+          _NetflixSliverList(
+            isMovies: isMovies,
+            all: all,
+            movies: isMovies ? state.filteredVodMovies : null,
+            series: isMovies ? null : state.filteredVodSeries,
+            categories: state.vodCategories,
+            onMovieTap: onMovieTap,
+            onSeriesTap: onSeriesTap,
+          ),
       ],
     );
   }
 }
 
-/// Yatay satırlarda kullanılan ortak öğe görünümü (film veya dizi).
 class _RowItem {
   const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId);
 
@@ -194,9 +240,9 @@ class _RowItem {
   final String? categoryId;
 }
 
-/// Netflix tarzı ana gövde: üstte hero (ilk öğe), altta kategoriler satırları.
-class _NetflixRows extends StatelessWidget {
-  const _NetflixRows({
+/// Netflix tarzı sliver list — hero + kategori satırları.
+class _NetflixSliverList extends StatelessWidget {
+  const _NetflixSliverList({
     required this.isMovies,
     required this.all,
     required this.categories,
@@ -214,20 +260,29 @@ class _NetflixRows extends StatelessWidget {
   final List<VodMovie>? movies;
   final List<VodSeries>? series;
 
+  void _openItem(_RowItem item) {
+    if (isMovies) {
+      final m = movies?.where((m) => m.id == item.id).firstOrNull;
+      if (m != null) onMovieTap(m);
+    } else {
+      final s = series?.where((s) => s.id == item.id).firstOrNull;
+      if (s != null) onSeriesTap(s);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final hero = all.first;
 
-    // Kategorilere göre grupla: her kategori bir satır (boş kategoriler atlanır).
+    // Kategorilere göre grupla
     final byCategory = <String?, List<_RowItem>>{};
     for (final item in all.skip(1)) {
       byCategory.putIfAbsent(item.categoryId, () => []).add(item);
     }
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        // ---- Hero: büyük tanıtım kartı (ilk film/dizi) ----
+    return SliverList(
+      delegate: SliverChildListDelegate([
+        // ---- Hero: büyük tanıtım kartı ----
         _HeroCard(
           item: hero,
           isMovie: isMovies,
@@ -251,23 +306,14 @@ class _NetflixRows extends StatelessWidget {
               onTap: _openItem,
             ),
           ],
-      ],
+        const SizedBox(height: 24),
+      ]),
     );
-  }
-
-  void _openItem(_RowItem item) {
-    if (isMovies) {
-      final m = movies?.where((m) => m.id == item.id).firstOrNull;
-      if (m != null) onMovieTap(m);
-    } else {
-      final s = series?.where((s) => s.id == item.id).firstOrNull;
-      if (s != null) onSeriesTap(s);
-    }
   }
 }
 
-/// Netflix tarzı hero: geniş tanıtım görseli + altta başlık/puan, odaklanınca
-/// büyür. Kumandada yukarı/aşağı diğer satırlara geçer, OK açılır.
+// ==================== Hero Card ====================
+
 class _HeroCard extends StatefulWidget {
   const _HeroCard({required this.item, required this.isMovie, required this.onTap});
 
@@ -330,7 +376,6 @@ class _HeroCardState extends State<_HeroCard> {
                 fit: StackFit.expand,
                 children: [
                   _HeroImage(url: item.poster, name: item.name),
-                  // Karartma: başlığın okunması için.
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -344,7 +389,6 @@ class _HeroCardState extends State<_HeroCard> {
                       ),
                     ),
                   ),
-                  // Kenar vurgusu (odak).
                   if (focused)
                     DecoratedBox(
                       decoration: BoxDecoration(
@@ -364,8 +408,10 @@ class _HeroCardState extends State<_HeroCard> {
                       children: [
                         Row(
                           children: [
-                            if (item.rating != null && item.rating!.isNotEmpty) ...[
-                              const Icon(Icons.star, color: Colors.amber, size: 18),
+                            if (item.rating != null &&
+                                item.rating!.isNotEmpty) ...[
+                              const Icon(Icons.star,
+                                  color: Colors.amber, size: 18),
                               const SizedBox(width: 4),
                               Text(
                                 item.rating!,
@@ -427,7 +473,6 @@ class _HeroCardState extends State<_HeroCard> {
 
 class _Pill extends StatelessWidget {
   const _Pill({required this.label});
-
   final String label;
 
   @override
@@ -438,10 +483,8 @@ class _Pill extends StatelessWidget {
         color: Colors.white24,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(color: Colors.white, fontSize: 12),
-      ),
+      child: Text(label,
+          style: const TextStyle(color: Colors.white, fontSize: 12)),
     );
   }
 }
@@ -491,7 +534,6 @@ class _HeroButton extends StatelessWidget {
 
 class _HeroImage extends StatelessWidget {
   const _HeroImage({required this.url, required this.name});
-
   final String? url;
   final String name;
 
@@ -504,16 +546,18 @@ class _HeroImage extends StatelessWidget {
     return Image.network(
       url!,
       fit: BoxFit.cover,
-      // Hero büyük olduğundan daha yüksek çözünürlük; yine de RAM için sınırlı.
       cacheWidth: 720,
-      errorBuilder: (_, _, _) => ColoredBox(color: colors.surfaceContainerHighest),
-      loadingBuilder: (_, child, progress) =>
-          progress == null ? child : ColoredBox(color: colors.surfaceContainerHighest),
+      errorBuilder: (_, _, _) =>
+          ColoredBox(color: colors.surfaceContainerHighest),
+      loadingBuilder: (_, child, progress) => progress == null
+          ? child
+          : ColoredBox(color: colors.surfaceContainerHighest),
     );
   }
 }
 
-/// Bir başlık + yatay kaydırılabilir poster satırı.
+// ==================== Row Section ====================
+
 class _RowSection extends StatelessWidget {
   const _RowSection({
     required this.title,
@@ -537,7 +581,8 @@ class _RowSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
         SizedBox(
@@ -562,9 +607,12 @@ class _RowSection extends StatelessWidget {
   }
 }
 
-/// Satırdaki poster kartı — Netflix tarzı dikey poster, odak vurgulu.
 class _RowCard extends StatefulWidget {
-  const _RowCard({required this.item, required this.isMovie, required this.onTap});
+  const _RowCard({
+    required this.item,
+    required this.isMovie,
+    required this.onTap,
+  });
 
   final _RowItem item;
   final bool isMovie;
@@ -626,14 +674,18 @@ class _RowCardState extends State<_RowCard> {
                   width: focused ? 3 : 0,
                 ),
                 boxShadow: focused
-                    ? [BoxShadow(color: colors.primary.withValues(alpha: 0.4), blurRadius: 12)]
+                    ? [
+                        BoxShadow(
+                          color: colors.primary.withValues(alpha: 0.4),
+                          blurRadius: 12,
+                        )
+                      ]
                     : null,
               ),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   _poster(colors),
-                  // Alt karartma + başlık.
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -664,11 +716,13 @@ class _RowCardState extends State<_RowCard> {
                         if (item.rating != null && item.rating!.isNotEmpty)
                           Row(
                             children: [
-                              const Icon(Icons.star, color: Colors.amber, size: 11),
+                              const Icon(Icons.star,
+                                  color: Colors.amber, size: 11),
                               const SizedBox(width: 2),
                               Text(
                                 item.rating!,
-                                style: const TextStyle(color: Colors.white70, fontSize: 10),
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 10),
                               ),
                             ],
                           ),
@@ -693,9 +747,11 @@ class _RowCardState extends State<_RowCard> {
       url,
       fit: BoxFit.cover,
       cacheWidth: 220,
-      errorBuilder: (_, _, _) => ColoredBox(color: colors.surfaceContainerHighest),
-      loadingBuilder: (_, child, progress) =>
-          progress == null ? child : ColoredBox(color: colors.surfaceContainerHighest),
+      errorBuilder: (_, _, _) =>
+          ColoredBox(color: colors.surfaceContainerHighest),
+      loadingBuilder: (_, child, progress) => progress == null
+          ? child
+          : ColoredBox(color: colors.surfaceContainerHighest),
     );
   }
 }
