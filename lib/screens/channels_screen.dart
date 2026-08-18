@@ -7,11 +7,16 @@ import 'package:iptv_player/state/app_state.dart';
 import 'package:iptv_player/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
 
-/// Kanal listesi ana ekranı: grup seçimi + arama + liste.
+/// Kanal listesi ana ekranı: kategorili grup + arama + liste.
+///
+/// Gruplar:
+/// - Premium en üstte (varsa)
+/// - Sonra alfabetik diğer gruplar
+/// - Sağ tuş: kategoride iken bir üst kategoriye geç (kanal kapanmaz)
+/// - OK tuşu: arama modunu açar
 class ChannelsScreen extends StatefulWidget {
   const ChannelsScreen({super.key, this.onGoToSetup});
 
-  /// Kanal yokken "Kaynak Ekle" ile Kurulum sekmesine geçmek için.
   final VoidCallback? onGoToSetup;
 
   @override
@@ -19,26 +24,26 @@ class ChannelsScreen extends StatefulWidget {
 }
 
 class _ChannelsScreenState extends State<ChannelsScreen> {
-  /// Arama kutusu odağı. Kumandada OK ile kutuya girildiğinde, Geri tuşu
-  /// aramadan çıksın diye goBack/escape burada yakalanıp odak bırakılır.
-  ///
-  /// Önemli: `Focus` widget'ı + aynı node'u kullanan TextField kombinasyonu
-  /// Linux'ta sonsuz focus/rebuild döngüsü yaratıp belleği saniyede ~1GB
-  /// şişiriyordu (OOM → oturum kapanması). Bunun yerine tuş işleme doğrudan
-  /// FocusNode üzerinde yapılır — aynı davranış, sızıntı yok.
-  final FocusNode _searchFocus = FocusNode(
-    onKeyEvent: (node, event) {
-      // Kumanda Geri / klavye Escape → aramadan çık (odak bırak).
-      if (event is KeyDownEvent &&
-          (event.logicalKey == LogicalKeyboardKey.goBack ||
-              event.logicalKey == LogicalKeyboardKey.escape)) {
-        node.unfocus();
-        SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
-    },
-  );
+  bool _searchMode = false;
+  late final FocusNode _searchFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchFocus = FocusNode(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.goBack ||
+                event.logicalKey == LogicalKeyboardKey.escape)) {
+          node.unfocus();
+          if (mounted) setState(() => _searchMode = false);
+          SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+    );
+  }
 
   @override
   void dispose() {
@@ -58,6 +63,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     );
   }
 
+  /// Sağ tuş: kategorideyken bir üst kategoriye geç.
+  void _onRightArrow(AppState state) {
+    if (state.selectedGroup != 'all') {
+      state.setGroup('all');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -66,14 +78,27 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       appBar: AppBar(
         title: const Text('Kanallar'),
         actions: [
-          if (state.hasChannels)
+          if (state.hasChannels) ...[
+            // Arama ikonu — sadece OK ile aktif olur
+            IconButton(
+              tooltip: 'Ara (OK tuşu)',
+              icon: const Icon(Icons.search),
+              onPressed: () {
+                setState(() => _searchMode = true);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _searchFocus.requestFocus();
+                  SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+                });
+              },
+            ),
             IconButton(
               tooltip: 'Listeyi temizle',
               icon: const Icon(Icons.delete_outline),
               onPressed: () => state.clearPlaylist(),
             ),
+          ],
         ],
-        bottom: state.hasChannels
+        bottom: _searchMode && state.hasChannels
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(64),
                 child: Padding(
@@ -103,8 +128,6 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       ),
       body: Builder(builder: (context) {
         if (state.isLoading) {
-          // Devasa ücretsiz kanal listeleri kademeli ayrıştırılır; ilerleme
-          // gösterilir — uygulama "donuyor" gibi görünmez.
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -136,7 +159,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
           return EmptyState(
             icon: Icons.live_tv_outlined,
             title: 'Henüz kanal eklenmedi',
-            subtitle: 'Playlist URL\'si, Xtream Codes hesabı, cihazdan M3U dosyası,\n'
+            subtitle: "Playlist URL'si, Xtream Codes hesabı, cihazdan M3U dosyası,\n"
                 'internetteki test yayınları veya ücretsiz ve yasal kanallar\n'
                 '— hepsi tek ekranda.',
             actionLabel: 'Kaynak Ekle',
@@ -150,15 +173,24 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
           if (wide) {
             return Row(
               children: [
-                _GroupSidebar(state: state, width: 240),
+                _GroupSidebar(
+                  state: state,
+                  width: 240,
+                  onRightArrow: () => _onRightArrow(state),
+                ),
                 const VerticalDivider(width: 1),
-                Expanded(child: _channelList(context, state, channels)),
+                Expanded(
+                  child: _channelList(context, state, channels),
+                ),
               ],
             );
           }
           return Column(
             children: [
-              _GroupChips(state: state),
+              _GroupChips(
+                state: state,
+                onRightArrow: () => _onRightArrow(state),
+              ),
               Expanded(child: _channelList(context, state, channels)),
             ],
           );
@@ -172,7 +204,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       return const EmptyState(
         icon: Icons.search_off,
         title: 'Sonuç bulunamadı',
-        subtitle: 'Arama veya grup filtresini değiştirmeyi deneyin.',
+        subtitle: 'Grup filtresini değiştirmeyi deneyin.',
       );
     }
     return ChannelList(
@@ -187,14 +219,17 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   }
 }
 
+// ==================== Grup Çipleri (mobil) ====================
+
 class _GroupChips extends StatelessWidget {
-  const _GroupChips({required this.state});
+  const _GroupChips({required this.state, required this.onRightArrow});
 
   final AppState state;
+  final VoidCallback onRightArrow;
 
   @override
   Widget build(BuildContext context) {
-    final groups = state.groups;
+    final groups = state.sortedGroups;
     return SizedBox(
       height: 52,
       child: ListView.separated(
@@ -205,10 +240,30 @@ class _GroupChips extends StatelessWidget {
         itemBuilder: (context, i) {
           final g = groups[i];
           final selected = state.selectedGroup == g;
-          return ChoiceChip(
-            label: Text(i == 0 ? 'Tümü' : g),
-            selected: selected,
-            onSelected: (_) => state.setGroup(g),
+          final isPremium = g.toLowerCase().contains('premium');
+          return Focus(
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                onRightArrow();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: ChoiceChip(
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isPremium) ...[
+                    const Icon(Icons.workspace_premium, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(i == 0 ? 'Tümü' : g),
+                ],
+              ),
+              selected: selected,
+              onSelected: (_) => state.setGroup(g),
+            ),
           );
         },
       ),
@@ -216,15 +271,22 @@ class _GroupChips extends StatelessWidget {
   }
 }
 
+// ==================== Grup Kenar Çubuğu (geniş ekran) ====================
+
 class _GroupSidebar extends StatelessWidget {
-  const _GroupSidebar({required this.state, required this.width});
+  const _GroupSidebar({
+    required this.state,
+    required this.width,
+    required this.onRightArrow,
+  });
 
   final AppState state;
   final double width;
+  final VoidCallback onRightArrow;
 
   @override
   Widget build(BuildContext context) {
-    final groups = state.groups;
+    final groups = state.sortedGroups;
     return SizedBox(
       width: width,
       child: ListView.builder(
@@ -232,11 +294,22 @@ class _GroupSidebar extends StatelessWidget {
         itemBuilder: (context, i) {
           final g = groups[i];
           final selected = state.selectedGroup == g;
+          final isPremium = g.toLowerCase().contains('premium');
           return ListTile(
             autofocus: i == 0 && !selected,
             selected: selected,
             selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
-            title: Text(i == 0 ? 'Tümü' : g, maxLines: 1, overflow: TextOverflow.ellipsis),
+            leading: isPremium
+                ? const Icon(Icons.workspace_premium, color: Colors.amber, size: 20)
+                : (i == 0 ? const Icon(Icons.public, size: 20) : null),
+            title: Text(
+              i == 0 ? 'Tümü' : g,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: selected && state.selectedGroup != 'all'
+                ? const Icon(Icons.arrow_forward, size: 18)
+                : null,
             onTap: () => state.setGroup(g),
           );
         },

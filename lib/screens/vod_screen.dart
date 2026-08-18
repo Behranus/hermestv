@@ -148,71 +148,15 @@ class _VodTabState extends State<_VodTab>
     ];
 
     if (all.isEmpty && !state.vodLoading) {
-      return Column(
-        children: [
-          // Arama kutusu — her zaman üstte sabit
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: TextField(
-              onChanged: state.setVodQuery,
-              decoration: InputDecoration(
-                hintText: isMovies ? 'Film ara…' : 'Dizi ara…',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: state.vodQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => state.setVodQuery(''),
-                      )
-                    : null,
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
-          const Expanded(
-            child: EmptyState(
-              icon: Icons.search_off,
-              title: 'Sonuç bulunamadı',
-              subtitle:
-                  'Arama veya kategori filtresini değiştirmeyi deneyin.',
-            ),
-          ),
-        ],
+      return const EmptyState(
+        icon: Icons.search_off,
+        title: 'Sonuç bulunamadı',
+        subtitle: 'İçerik yükleniyor veya kategori boş.',
       );
     }
 
     return CustomScrollView(
       slivers: [
-        // ---- Arama kutusu: scroll'da kaybolur ----
-        SliverAppBar(
-          pinned: false,
-          floating: true,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          toolbarHeight: 56,
-          title: TextField(
-            onChanged: state.setVodQuery,
-            decoration: InputDecoration(
-              hintText: isMovies ? 'Film ara…' : 'Dizi ara…',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: state.vodQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () => state.setVodQuery(''),
-                    )
-                  : null,
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
         // ---- İçerik ----
         SliverList(
           delegate: SliverChildListDelegate([

@@ -76,6 +76,19 @@ class AppState extends ChangeNotifier {
     return ['all', ...turkish, ...rest];
   }
 
+  /// Gruplar: Premium en üstte, sonra Türkçe, sonra diğerleri.
+  List<String> get sortedGroups {
+    final g = <String>{};
+    for (final c in _channels) {
+      g.add(c.displayGroup);
+    }
+    final list = g.toList()..sort();
+    final premium = list.where((x) => x.toLowerCase().contains('premium')).toList();
+    final turkish = list.where((x) => _isTurkishGroup(x) && !x.toLowerCase().contains('premium')).toList();
+    final rest = list.where((x) => !_isTurkishGroup(x) && !x.toLowerCase().contains('premium')).toList();
+    return ['all', ...premium, ...turkish, ...rest];
+  }
+
   /// Grup adı Türkçe/Türkiye/Turkey vb. içeriyorsa true.
   static bool _isTurkishGroup(String group) {
     final g = group.toLowerCase();

@@ -50,6 +50,9 @@ class FreeTvService {
         '${baseUrl}categories/music/tr.m3u'),
     ('🇹🇷 Türkçe Eğlence',
         '${baseUrl}categories/entertainment/tr.m3u'),
+    // ---- Kürtçe Kanallar ----
+    ('Kurdish TV (Kanallar)',
+        'https://iptv-org.github.io/iptv/languages/kur.m3u'),
     // ---- HD/4K Global ----
     ('Free-TV HD/4K',
         'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8'),
@@ -86,6 +89,7 @@ class FreeTvService {
 
   static const countries = <FreeTvCountry>[
     FreeTvCountry('tr', 'Türkiye', '🇹🇷'),
+    FreeTvCountry('kur', 'Kürdistan', '🏴'),
     FreeTvCountry('us', 'ABD', '🇺🇸'),
     FreeTvCountry('gb', 'İngiltere', '🇬🇧'),
     FreeTvCountry('de', 'Almanya', '🇩🇪'),
@@ -119,8 +123,12 @@ class FreeTvService {
       ? '${baseUrl}categories/$slug.m3u'
       : '${baseUrl}categories/$slug/$country.m3u';
 
-  /// Ülkenin tüm kanalları.
-  static String countryM3u(String code) => '${baseUrl}countries/$code.m3u';
+  /// Ülkenin (veya dilin) tüm kanalları.
+  /// Kürtçe özel durum: iptv-org dil bazlı playlist kullanır.
+  static String countryM3u(String code) {
+    if (code == 'kur') return '${baseUrl}languages/kur.m3u';
+    return '${baseUrl}countries/$code.m3u';
+  }
 
   static const allM3u = '${baseUrl}index.m3u';
 
