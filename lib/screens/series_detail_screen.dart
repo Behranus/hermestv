@@ -46,7 +46,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 240,
+            expandedHeight: 180,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
@@ -76,7 +76,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -86,7 +86,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                       Expanded(
                         child: Text(
                           series.name,
-                          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
                       if (rating != null && rating.isNotEmpty)
@@ -111,23 +111,25 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     ],
                   ),
                   if (year != null || genre != null) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Wrap(
-                      spacing: 8,
+                      spacing: 6,
                       runSpacing: 4,
                       children: [
                         if (year != null)
-                          _chip(theme, Icons.calendar_today, year),
+                          _chip(Icons.calendar_today, year),
                         if (genre != null)
-                          _chip(theme, Icons.local_movies, genre),
+                          _chip(Icons.local_movies, genre),
                       ],
                     ),
                   ],
                   if (plot != null && plot.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Text(plot, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5)),
+                    const SizedBox(height: 10),
+                    Text(plot,
+                      style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+                      maxLines: 6, overflow: TextOverflow.ellipsis),
                   ],
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -237,19 +239,19 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     return info.seasons.first.episodes;
   }
 
-  Widget _chip(ThemeData theme, IconData icon, String label) {
+  Widget _chip(IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 6),
-          Text(label, style: theme.textTheme.labelMedium),
+          Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 4),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
         ],
       ),
     );

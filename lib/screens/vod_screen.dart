@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iptv_player/screens/movie_detail_screen.dart';
 import 'package:iptv_player/screens/series_detail_screen.dart';
 import 'package:iptv_player/screens/vod_player_screen.dart';
 import 'package:iptv_player/services/resume_service.dart';
-import 'package:iptv_player/services/stream_player.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:iptv_player/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
@@ -160,8 +157,7 @@ class _VodTabState extends State<_VodTab>
     final all = <_RowItem>[
       if (isMovies)
         for (final m in state.filteredVodMovies)
-          _RowItem(m.id, m.name, m.poster, m.rating, m.categoryId,
-              m.directUrl ?? state.moviePlayUrl(m.id))
+          _RowItem(m.id, m.name, m.poster, m.rating, m.categoryId)
       else
         for (final s in state.filteredVodSeries)
           _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId),
@@ -406,14 +402,13 @@ class _ResumeCard extends StatelessWidget {
 // ==================== Yardımcı Sınıflar ====================
 
 class _RowItem {
-  const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId, [this.url]);
+  const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId);
 
   final int id;
   final String name;
   final String? poster;
   final String? rating;
   final String? categoryId;
-  final String? url; // VOD oynatma URL'si (preview için)
 }
 
 // ==================== Hero Card ====================
@@ -728,50 +723,17 @@ class _RowCard extends StatefulWidget {
 
 class _RowCardState extends State<_RowCard> {
   final _focus = FocusNode(debugLabel: 'vod-row-card');
-  StreamPlayer? _previewPlayer;
-  Timer? _previewTimer;
-  bool _showPreview = false;
 
   @override
   void initState() {
     super.initState();
-    _focus.addListener(_onFocusChange);
+    _focus.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _previewTimer?.cancel();
-    _disposePlayer();
     _focus.dispose();
     super.dispose();
-  }
-
-  void _onFocusChange() {
-    if (_focus.hasFocus && widget.item.url != null) {
-      _previewTimer?.cancel();
-      _previewTimer = Timer(const Duration(seconds: 5), () {
-        if (mounted && _focus.hasFocus) _startPreview();
-      });
-    } else {
-      _previewTimer?.cancel();
-      _disposePlayer();
-      if (mounted && _showPreview) setState(() => _showPreview = false);
-    }
-  }
-
-  void _startPreview() {
-    if (widget.item.url == null) return;
-    _disposePlayer();
-    _previewPlayer = createStreamPlayer(bufferSecs: 0.5);
-    _previewPlayer!.open(widget.item.url!);
-    if (mounted) setState(() => _showPreview = true);
-  }
-
-  void _disposePlayer() {
-    if (_previewPlayer != null) {
-      unawaited(_previewPlayer!.dispose());
-      _previewPlayer = null;
-    }
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -780,8 +742,6 @@ class _RowCardState extends State<_RowCard> {
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.select ||
         key == LogicalKeyboardKey.space) {
-      _previewTimer?.cancel();
-      _disposePlayer();
       widget.onTap();
       return KeyEventResult.handled;
     }
@@ -800,113 +760,69 @@ class _RowCardState extends State<_RowCard> {
       onKeyEvent: _onKey,
       child: SizedBox(
         width: w,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: InkWell(
-            onTap: () {
-              _previewTimer?.cancel();
-              _disposePlayer();
-              widget.onTap();
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: focused ? colors.primary : Colors.transparent,
-                  width: focused ? 3 : 0,
-                ),
-                boxShadow: focused
-                    ? [
-                        BoxShadow(
-                          color: colors.primary.withValues(alpha: 0.4),
-                          blurRadius: 12,
-                        )
-                      ]
-                    : null,
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _poster(colors),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.center,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black87],
-                      ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Ana kart
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                onTap: widget.onTap,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: focused ? colors.primary : Colors.transparent,
+                      width: focused ? 3 : 0,
                     ),
+                    boxShadow: focused
+                        ? [BoxShadow(color: colors.primary.withValues(alpha: 0.4), blurRadius: 12)]
+                        : null,
                   ),
-                  // Video preview (5 saniye odaklanınca)
-                  if (_showPreview && _previewPlayer != null)
-                    Positioned.fill(
-                      child: Container(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _poster(colors),
+                      const DecoratedBox(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.9),
-                              blurRadius: 20,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            FittedBox(
-                              fit: BoxFit.cover,
-                              child: SizedBox(
-                                width: 320, height: 180,
-                                child: _previewPlayer!.buildVideo(fit: BoxFit.cover),
-                              ),
-                            ),
-                            const Center(
-                              child: Icon(Icons.play_circle_fill,
-                                  color: Colors.white54, size: 32),
-                            ),
-                            const DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [Colors.black26, Colors.transparent, Colors.black54],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    left: 6, right: 6, bottom: 6,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.name,
-                          maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white, fontSize: 11,
-                            fontWeight: FontWeight.w600, height: 1.2,
+                          gradient: LinearGradient(
+                            begin: Alignment.center, end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black87],
                           ),
                         ),
-                        if (item.rating != null && item.rating!.isNotEmpty)
-                          Row(children: [
-                            const Icon(Icons.star, color: Colors.amber, size: 11),
-                            const SizedBox(width: 2),
-                            Text(item.rating!,
-                              style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                          ]),
-                      ],
-                    ),
+                      ),
+                      Positioned(
+                        left: 6, right: 6, bottom: 6,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 11,
+                                fontWeight: FontWeight.w600, height: 1.2)),
+                            if (item.rating != null && item.rating!.isNotEmpty)
+                              Row(children: [
+                                const Icon(Icons.star, color: Colors.amber, size: 11),
+                                const SizedBox(width: 2),
+                                Text(item.rating!,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                              ]),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            // TiviMate tarzı künye bilgi kartı (odaklanınca üstte çıkar)
+            if (focused)
+              Positioned(
+                bottom: w * 1.35,
+                left: 0, right: 0,
+                child: _InfoCard(item: item, isMovie: widget.isMovie),
+              ),
+          ],
         ),
       ),
     );
@@ -917,13 +833,103 @@ class _RowCardState extends State<_RowCard> {
     if (url == null || url.isEmpty) {
       return ColoredBox(color: colors.surfaceContainerHighest);
     }
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      cacheWidth: 220,
+    return Image.network(url, fit: BoxFit.cover, cacheWidth: 220,
       errorBuilder: (_, _, _) => ColoredBox(color: colors.surfaceContainerHighest),
       loadingBuilder: (_, child, progress) => progress == null
-          ? child : ColoredBox(color: colors.surfaceContainerHighest),
+          ? child : ColoredBox(color: colors.surfaceContainerHighest));
+  }
+}
+
+// ==================== TiviMate Künye Kartı ====================
+
+/// Odaklanınca kartın üstünde görünen bilgi kartı.
+/// Film/dizi künyesi: puan, tür, açıklama (kısaltılmış).
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.item, required this.isMovie});
+  final _RowItem item;
+  final bool isMovie;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(10),
+      elevation: 8,
+      child: Container(
+        width: 260,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white12, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Başlık + rozet
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white10, borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    isMovie ? 'Film' : 'Dizi',
+                    style: const TextStyle(color: Colors.white60, fontSize: 9),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Puan + tür satırı
+            if (item.rating != null && item.rating!.isNotEmpty)
+              Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    item.rating!,
+                    style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  if (item.categoryId != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.white10, borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        'Kategori ${item.categoryId}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 9),
+                      ),
+                    ),
+                ],
+              ),
+            const SizedBox(height: 6),
+            // İpucu
+            Row(
+              children: const [
+                Icon(Icons.info_outline, color: Colors.white38, size: 12),
+                SizedBox(width: 4),
+                Text(
+                  'OK ile aç',
+                  style: TextStyle(color: Colors.white38, fontSize: 10),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

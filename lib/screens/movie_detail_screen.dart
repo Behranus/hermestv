@@ -5,7 +5,7 @@ import 'package:iptv_player/services/resume_service.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:provider/provider.dart';
 
-/// Film detay sayfası: tanıtım görseli, IMDb puanı, açıklama ve oynat.
+/// Film detay sayfası: kompakt, tam sayfa scroll edilebilir.
 class MovieDetailScreen extends StatefulWidget {
   const MovieDetailScreen({super.key, required this.movie});
 
@@ -19,7 +19,6 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Detayları (açıklama, tanıtım, puan) arka planda yükle.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<AppState>().movieDetails(widget.movie.id);
@@ -46,7 +45,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 240,
+            expandedHeight: 180,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
@@ -56,10 +55,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                     Image.network(
                       backdrop,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _placeholder(context, movie.name),
+                      errorBuilder: (_, _, _) => _placeholder(context),
                     )
                   else
-                    _placeholder(context, movie.name),
+                    _placeholder(context),
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -76,76 +75,75 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Başlık + puan
+                  // Başlık + puan (kompakt)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Text(
                           movie.name,
-                          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
-                      if (rating != null && rating.isNotEmpty) ...[
-                        const SizedBox(width: 12),
+                      if (rating != null && rating.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.star, color: Colors.amber, size: 18),
+                              const Icon(Icons.star, color: Colors.amber, size: 16),
                               const SizedBox(width: 4),
-                              Text(
-                                rating,
-                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                              ),
+                              Text(rating, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
-                      ],
                     ],
                   ),
-                  if (year != null || duration != null || genre != null) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        if (year != null) _metaChip(theme, Icons.calendar_today, year),
-                        if (duration != null) _metaChip(theme, Icons.schedule, duration),
-                        if (genre != null) _metaChip(theme, Icons.local_movies, genre),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 6),
+                  // Meta bilgiler (yatay)
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (year != null) _metaChip(Icons.calendar_today, year),
+                      if (duration != null) _metaChip(Icons.schedule, duration),
+                      if (genre != null) _metaChip(Icons.local_movies, genre),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   // Oynat + Resume
-                  if (playUrl != null) ...[
-                    _ResumeButton(
-                      movie: movie,
-                      playUrl: playUrl,
-                    ),
-                  ],
-                  const SizedBox(height: 20),
+                  if (playUrl != null)
+                    _ResumeButton(movie: movie, playUrl: playUrl),
+                  const SizedBox(height: 12),
+                  // Yükleniyor
                   if (details == null)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(),
-                      ),
+                    const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Center(child: SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )),
                     ),
+                  // Konu (kompakt)
                   if (plot != null && plot.isNotEmpty) ...[
-                    Text('Konu', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(plot, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5)),
+                    Text('Konu', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(
+                      plot,
+                      style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+                      maxLines: 10,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -160,30 +158,30 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     return releaseDate.length >= 4 ? releaseDate.substring(0, 4) : releaseDate;
   }
 
-  Widget _metaChip(ThemeData theme, IconData icon, String label) {
+  Widget _metaChip(IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 6),
-          Text(label, style: theme.textTheme.labelMedium),
+          Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 4),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
         ],
       ),
     );
   }
 
-  Widget _placeholder(BuildContext context, String name) {
+  Widget _placeholder(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return ColoredBox(
       color: colors.surfaceContainerHighest,
       child: Center(
-        child: Icon(Icons.movie, size: 72, color: colors.primary.withValues(alpha: 0.4)),
+        child: Icon(Icons.movie, size: 56, color: colors.primary.withValues(alpha: 0.4)),
       ),
     );
   }
@@ -243,43 +241,37 @@ class _ResumeButtonState extends State<_ResumeButton> {
           child: FilledButton.icon(
             onPressed: () => _play(),
             icon: const Icon(Icons.play_arrow),
-            label: const Text('Filmi İzle', style: TextStyle(fontSize: 16)),
-            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            label: const Text('Filmi İzle', style: TextStyle(fontSize: 14)),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10)),
           ),
         ),
         if (resume != null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => _play(resumeFrom: resume.position),
-              icon: const Icon(Icons.play_circle_outline),
+              icon: const Icon(Icons.play_circle_outline, size: 18),
               label: Text(
-                'Kaldığın yerden devam (${resume.positionText} / ${resume.durationText})',
-                style: const TextStyle(fontSize: 14),
+                'Kaldığın yerden (${resume.positionText} / ${resume.durationText})',
+                style: const TextStyle(fontSize: 12),
               ),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 side: const BorderSide(color: Colors.amber),
                 foregroundColor: Colors.amber,
               ),
             ),
           ),
-          // İlerleme çubuğu
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
             child: LinearProgressIndicator(
               value: resume.progress,
-              minHeight: 3,
+              minHeight: 2,
               backgroundColor: Colors.white24,
               valueColor: const AlwaysStoppedAnimation(Colors.amber),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${resume.remainingText} kaldı',
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
         ],
       ],
