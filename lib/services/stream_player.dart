@@ -44,6 +44,10 @@ abstract class StreamPlayer {
   /// Şu an gösterilecek altyazı metni (null = altyazı yok).
   Stream<String?> get subtitleText;
 
+  /// Aktif altyazı parçasının id'si (menüde işaretli gösterim için;
+  /// 'off' = kapalı). Otomatik seçim (örn. Türkçe) buradan bildirilir.
+  Stream<String?> get activeSubtitleId;
+
   /// Akış canlı mı? (biliniyorsa; bilinmiyorsa null → ekran süre tahminini kullanır)
   bool? get isLive;
 
@@ -121,6 +125,7 @@ class ExoStreamPlayer extends StreamPlayer {
   final _completed = StreamController<bool>.broadcast();
   final _subtitleTracks = StreamController<List<SubtitleInfo>>.broadcast();
   final _subtitleText = StreamController<String?>.broadcast();
+  final _activeSubtitleId = StreamController<String?>.broadcast();
 
   DateTime _lastPositionEmit = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -142,6 +147,8 @@ class ExoStreamPlayer extends StreamPlayer {
   Stream<List<SubtitleInfo>> get subtitleTracks => _subtitleTracks.stream;
   @override
   Stream<String?> get subtitleText => _subtitleText.stream;
+  @override
+  Stream<String?> get activeSubtitleId => _activeSubtitleId.stream;
   @override
   bool? get isLive => _live;
   @override
@@ -206,6 +213,7 @@ class ExoStreamPlayer extends StreamPlayer {
     _cues = const [];
     _activeSubtitle = null;
     _subtitleText.add(null);
+    _activeSubtitleId.add(null);
     _buffering.add(true);
     _position.add(Duration.zero);
     _duration.add(Duration.zero);
@@ -302,6 +310,7 @@ class ExoStreamPlayer extends StreamPlayer {
     pick ??= tracks.first;
     await setSubtitleTrackById(pick.id);
   }
+
 
   /// Seçilen HLS altyazı parçasının WebVTT segmentlerini yükler.
   /// Canlı akışlarda playlist kaydığı için periyodik olarak tazelenir.
@@ -406,6 +415,7 @@ class ExoStreamPlayer extends StreamPlayer {
     _cues = const [];
     _activeSubtitle = null;
     _subtitleText.add(null);
+    _activeSubtitleId.add('off');
   }
 
   @override
@@ -415,6 +425,7 @@ class ExoStreamPlayer extends StreamPlayer {
     for (final t in _hlsTracks) {
       if (t.id == id) {
         await _loadHlsTrack(t);
+        _activeSubtitleId.add(id);
         return;
       }
     }
@@ -485,6 +496,7 @@ class ExoStreamPlayer extends StreamPlayer {
     await _completed.close();
     await _subtitleTracks.close();
     await _subtitleText.close();
+    await _activeSubtitleId.close();
   }
 }
 

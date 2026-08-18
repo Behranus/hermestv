@@ -157,6 +157,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _player.subtitleText.listen((text) {
       if (mounted) setState(() => _subtitleText = text);
     });
+    // Otomatik seçilen parça (örn. Türkçe gömülü altyazı) menüde işaretli
+    // gelsin — kullanıcı "Kapalı" sandığında aslında açık olduğunu görür.
+    _player.activeSubtitleId.listen((id) {
+      if (mounted && id != null) setState(() => _activeSubtitleId = id);
+    });
   }
 
   void _open(Channel channel) {

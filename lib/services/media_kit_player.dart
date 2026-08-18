@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
-import 'package:iptv_player/services/hls_subtitle_service.dart';
 import 'package:iptv_player/services/stream_player.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
@@ -40,14 +39,15 @@ class MediaKitStreamPlayer extends StreamPlayer {
   bool _startedPlaying = false;
   Duration _lastPosition = Duration.zero;
 
-  // ---- Altyazı durumu (ExoStreamPlayer ile aynı yaklaşım) ----
+  // ---- Altyazı durumu ----
+  // Harici SRT/VTT dosyası için uygulama içi çizim (Android'le aynı).
   List<SubtitleCue> _cues = const [];
   String? _activeSubtitle;
-  List<HlsSubtitleTrack> _hlsTracks = const [];
-  HlsSubtitleTrack? _selectedHlsTrack;
-  Timer? _hlsSubtitleRefresh;
-  Map<String, String>? _headers;
-  String? _lastUrl;
+
+  // mpv'nin kendi (yerleşik) altyazı parçaları — menüde listelenir ve
+  // seçim mpv'ye iletilir (ExoPlayer'daki gibi kendi başımıza çizmeyiz;
+  // mpv libass ile çizer — DVB/teletext gömülü altyazılar da dahil).
+  List<mk.SubtitleTrack> _nativeSubtitleTracks = const [];
 
   final _buffering = StreamController<bool>.broadcast();
   final _error = StreamController<String>.broadcast();
@@ -58,6 +58,7 @@ class MediaKitStreamPlayer extends StreamPlayer {
   final _completed = StreamController<bool>.broadcast();
   final _subtitleTracks = StreamController<List<SubtitleInfo>>.broadcast();
   final _subtitleText = StreamController<String?>.broadcast();
+  final _activeSubtitleId = StreamController<String?>.broadcast();
 
   @override
   Stream<bool> get buffering => _buffering.stream;
@@ -78,6 +79,8 @@ class MediaKitStreamPlayer extends StreamPlayer {
   @override
   Stream<String?> get subtitleText => _subtitleText.stream;
   @override
+  Stream<String?> get activeSubtitleId => _activeSubtitleId.stream;
+  @override
   bool? get isLive => _live;
   @override
   String? get streamInfo => _streamInfo;
@@ -87,7 +90,13 @@ class MediaKitStreamPlayer extends StreamPlayer {
 
   Future<void> _initPlayer() async {
     if (_player != null) return;
-    final player = mk.Player();
+    // libass=true: mpv altyazıları video karesine kendisi çizer (gömülü
+    // DVB/teletext/EXT-X-MEDIA dahil) — medya kütüphanesi widget render'ına
+    // bağımlılık yok, her altyazı türü çalışır. (Varsayılan false'ta mpv
+    // altyazıyı çizmez; widget katmanı sadece basit metinleri gösterir.)
+    final player = mk.Player(
+      configuration: const mk.PlayerConfiguration(libass: true),
+    );
     _player = player;
     _videoController = mkv.VideoController(player);
 
@@ -139,6 +148,25 @@ class MediaKitStreamPlayer extends StreamPlayer {
     player.stream.height.listen((h) {
       if (!_disposed && h != null && h > 0) _captureStreamInfo();
     });
+    // mpv'nin yerleşik altyazı parçaları: menüye aktar ve varsayılan
+    // seçimi (slang=tr,tur ile mpv Türkçe parçayı seçer) bildir.
+    player.stream.tracks.listen((tracks) {
+      if (_disposed) return;
+      final subs = tracks.subtitle
+          .where((t) => t.id != 'auto' && t.id != 'no')
+          .toList();
+      if (subs.isEmpty) return;
+      _nativeSubtitleTracks = subs;
+      _subtitleTracks.add(subs
+          .map((t) => SubtitleInfo(
+                id: t.id,
+                title: t.title ?? '',
+                language: t.language,
+              ))
+          .toList());
+      // mpv slang=tr,tur ile otomatik seçim yapar; aktif parçayı bildir.
+      _activeSubtitleId.add(subs.first.id);
+    });
   }
 
   void _captureStreamInfo() {
@@ -167,10 +195,7 @@ class MediaKitStreamPlayer extends StreamPlayer {
     _buffering.add(true);
     _position.add(Duration.zero);
     _duration.add(Duration.zero);
-    _headers = headers;
-    _lastUrl = url;
-    _hlsSubtitleRefresh?.cancel();
-    _hlsSubtitleRefresh = null;
+    _nativeSubtitleTracks = const [];
 
     await _initPlayer();
     final player = _player!;
@@ -182,10 +207,10 @@ class MediaKitStreamPlayer extends StreamPlayer {
             'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 '
                 'Chrome/120.0 Mobile Safari/537.36',
           },
-      // mpv'nin kendi altyazı çizimini kapat: altyazılar uygulama içinde
-      // çizilir (Android davranışıyla aynı; çift altyazı olmasın).
       // hwdec=no: donanım çözme kapalı (yazılım çözme — GPU sürücü güvenliği).
-      extras: const {'sid': 'no', 'hwdec': 'no'},
+      // slang=tr,tur: Türkçe gömülü altyazı varsa mpv onu otomatik seçer
+      // (varsayılan AÇIK). sid kapatılmaz — mpv gömülü altyazıyı kendisi çizer.
+      extras: const {'hwdec': 'no', 'slang': 'tr,tur'},
     );
 
     try {
@@ -202,10 +227,12 @@ class MediaKitStreamPlayer extends StreamPlayer {
     _live = (_player?.state.duration ?? Duration.zero) == Duration.zero;
 
     if (subtitleUrl != null && subtitleUrl.isNotEmpty) {
+      // Harici dosya: uygulama içi çizim (SRT/VTT parser) — Android'le aynı.
       await setExternalSubtitle(subtitleUrl);
-    } else {
-      unawaited(_discoverHlsSubtitles(url));
     }
+    // NOT: mpv gömülü parçaları (DVB/teletext/EXT-X-MEDIA) kendisi çözer ve
+    // stream.tracks ile bildirir. Uygulama içi HLS keşfi burada ÇALIŞTIRILMAZ
+    // — aksi halde aynı altyazı iki kez çizilir (mpv libass + uygulama çizimi).
 
     try {
       await player.setVolume(_pendingVolume);
@@ -213,70 +240,7 @@ class MediaKitStreamPlayer extends StreamPlayer {
     try {
       await player.play();
     } catch (_) {}
-  }
-
-  /// HLS master playlist'ten altyazı parçalarını bulur ve varsayılan olarak
-  /// Türkçe parçayı (yoksa ilk parçayı) otomatik seçer. (ExoStreamPlayer ile
-  /// aynı — motor bağımsız, sadece HLS playlist ayrıştırması.)
-  Future<void> _discoverHlsSubtitles(String url) async {
-    if (!url.toLowerCase().endsWith('.m3u8')) return;
-    final tracks = await HlsSubtitleService.discoverTracks(url, headers: _headers);
-    if (_disposed || tracks.isEmpty) return;
-    if (_lastUrl != url) return; // Kanal değiştiyse eski sonucu yoksay.
-    _hlsTracks = tracks;
-    _subtitleTracks.add(tracks.map((t) => t.toInfo()).toList());
-
-    HlsSubtitleTrack? pick;
-    for (final t in tracks) {
-      if (t.isTurkish) {
-        pick = t;
-        break;
-      }
-    }
-    pick ??= tracks.where((t) => t.isDefault || t.isAutoselect).firstOrNull;
-    pick ??= tracks.first;
-    await setSubtitleTrackById(pick.id);
-  }
-
-  Future<void> _loadHlsTrack(HlsSubtitleTrack track) async {
-    _selectedHlsTrack = track;
-    final cues = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
-    if (_disposed) return;
-    if (!identical(_selectedHlsTrack, track)) return; // Başka parça seçildi.
-    _cues = cues;
-    _updateSubtitleAt(_lastPosition);
-
-    _hlsSubtitleRefresh?.cancel();
-    if (_live == true) {
-      _hlsSubtitleRefresh = Timer.periodic(const Duration(seconds: 45), (_) {
-        if (_disposed || _selectedHlsTrack == null) return;
-        unawaited(_refreshHlsTrack(track));
-      });
-    }
-  }
-
-  Future<void> _refreshHlsTrack(HlsSubtitleTrack track) async {
-    final fresh = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
-    if (_disposed || !identical(_selectedHlsTrack, track)) return;
-    final byStart = <int, SubtitleCue>{};
-    for (final c in _cues) {
-      byStart[c.start.inMilliseconds] = c;
-    }
-    var changed = false;
-    for (final c in fresh) {
-      final k = c.start.inMilliseconds;
-      if (!byStart.containsKey(k)) {
-        byStart[k] = c;
-        changed = true;
-      }
-    }
-    if (changed) {
-      _cues = byStart.values.toList()..sort((a, b) => a.start.compareTo(b.start));
-      _updateSubtitleAt(_lastPosition);
-    }
-  }
-
-  @override
+  }  @override
   Widget buildVideo({BoxFit fit = BoxFit.contain}) {
     final vc = _videoController;
     if (vc == null) return const SizedBox.shrink();
@@ -332,13 +296,21 @@ class MediaKitStreamPlayer extends StreamPlayer {
     _cues = const [];
     _activeSubtitle = null;
     _subtitleText.add(null);
+    _activeSubtitleId.add('off');
+    try {
+      await _player?.setSubtitleTrack(const mk.SubtitleTrack('no', null, null));
+    } catch (_) {}
   }
 
   @override
   Future<void> setSubtitleTrackById(String id) async {
-    for (final t in _hlsTracks) {
+    // mpv'nin yerleşik parçaları (Linux — mpv kendisi çizer).
+    for (final t in _nativeSubtitleTracks) {
       if (t.id == id) {
-        await _loadHlsTrack(t);
+        try {
+          await _player?.setSubtitleTrack(t);
+          _activeSubtitleId.add(id);
+        } catch (_) {}
         return;
       }
     }
@@ -389,8 +361,6 @@ class MediaKitStreamPlayer extends StreamPlayer {
   Future<void> dispose() async {
     _disposed = true;
     _generation++;
-    _hlsSubtitleRefresh?.cancel();
-    _hlsSubtitleRefresh = null;
     final player = _player;
     _player = null;
     _videoController = null;
@@ -408,5 +378,6 @@ class MediaKitStreamPlayer extends StreamPlayer {
     await _completed.close();
     await _subtitleTracks.close();
     await _subtitleText.close();
+    await _activeSubtitleId.close();
   }
 }

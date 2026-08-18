@@ -142,6 +142,10 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     _player.subtitleTracks.listen((tracks) {
       if (mounted) setState(() => _subtitleTracks = tracks);
     });
+    // Otomatik seçilen parça (örn. Türkçe) menüde işaretli gelsin.
+    _player.activeSubtitleId.listen((id) {
+      if (mounted && id != null) setState(() => _activeSubtitleId = id);
+    });
     _player.completed.listen((_) {
       if (mounted) setState(() => _playing = false);
     });
