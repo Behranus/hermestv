@@ -77,27 +77,27 @@ class IptvApp extends StatelessWidget {
     );
   }
 
-  /// Zorin OS mavisi — masaüstü deneyimindeki vurgu rengi.
-  static const _zorinBlue = Color(0xFF2C79EA);
+  /// TiviMate mavisi — koyu tema vurgu rengi.
+  static const _tiviMateBlue = Color(0xFF1E88E5);
 
-  /// Zorin OS koyu teması yüzey tonları.
-  static const _zorinDarkBg = Color(0xFF191C1F);
-  static const _zorinDarkSurface = Color(0xFF23272B);
-  static const _zorinDarkSurfaceHigh = Color(0xFF2C3136);
+  /// TiviMate koyu teması yüzey tonları.
+  static const _tiviMateDarkBg = Color(0xFF0D1117);
+  static const _tiviMateDarkSurface = Color(0xFF161B22);
+  static const _tiviMateDarkSurfaceHigh = Color(0xFF21262D);
 
   ThemeData _buildTheme(Brightness brightness) {
     final scheme = ColorScheme.fromSeed(
-      seedColor: _zorinBlue,
+      seedColor: _tiviMateBlue,
       brightness: brightness,
     );
     final isDark = brightness == Brightness.dark;
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
-      scaffoldBackgroundColor: isDark ? _zorinDarkBg : scheme.surface,
+      scaffoldBackgroundColor: isDark ? _tiviMateDarkBg : scheme.surface,
       cardTheme: CardThemeData(
         elevation: isDark ? 1 : 2,
-        color: isDark ? _zorinDarkSurface : scheme.surface,
+        color: isDark ? _tiviMateDarkSurface : scheme.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: isDark
@@ -106,7 +106,7 @@ class IptvApp extends StatelessWidget {
         ),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? _zorinDarkBg : scheme.surface,
+        backgroundColor: isDark ? _tiviMateDarkBg : scheme.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
@@ -117,20 +117,20 @@ class IptvApp extends StatelessWidget {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? _zorinDarkSurface : scheme.surface,
+        backgroundColor: isDark ? _tiviMateDarkSurface : scheme.surface,
         indicatorColor: scheme.primaryContainer,
         height: 68,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
       navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: isDark ? _zorinDarkSurface : scheme.surface,
+        backgroundColor: isDark ? _tiviMateDarkSurface : scheme.surface,
         indicatorColor: scheme.primaryContainer,
         selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: isDark
-            ? _zorinDarkSurfaceHigh.withValues(alpha: 0.6)
+            ? _tiviMateDarkSurfaceHigh.withValues(alpha: 0.6)
             : Colors.black.withValues(alpha: 0.03),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -156,7 +156,7 @@ class IptvApp extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: isDark ? _zorinDarkSurface : scheme.surface,
+        backgroundColor: isDark ? _tiviMateDarkSurface : scheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );

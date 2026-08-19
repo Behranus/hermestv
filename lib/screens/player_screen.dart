@@ -400,6 +400,104 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  // ==================== Uyku Zamanlayıcı ====================
+
+  Timer? _sleepTimer;
+
+  void _showSleepTimer(BuildContext context) {
+    showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF161B22),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Uyku Zamanlayıcı',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            if (_sleepTimer != null)
+              ListTile(
+                leading: const Icon(Icons.timer_off, color: Colors.red),
+                title: const Text('Zamanlayıcıyı iptal et', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  _sleepTimer?.cancel();
+                  setState(() => _sleepTimer = null);
+                  Navigator.pop(ctx);
+                },
+              ),
+            for (final mins in [15, 30, 45, 60, 90, 120])
+              ListTile(
+                leading: Icon(Icons.timer, color: Colors.white70),
+                title: Text('$mins dakika', style: const TextStyle(color: Colors.white)),
+                subtitle: Text('${(mins / 60).toStringAsFixed(1)} saat',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                onTap: () {
+                  _sleepTimer?.cancel();
+                  _sleepTimer = Timer(Duration(minutes: mins), () {
+                    if (mounted) {
+                      _player.pause();
+                      Navigator.of(context).pop();
+                    }
+                  });
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$mins dakika sonra duracak')),
+                  );
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== Ekran Oranı ====================
+
+  BoxFit _boxFit = BoxFit.contain;
+
+  void _showAspectRatio(BuildContext context) {
+    showModalBottomSheet<BoxFit>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF161B22),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Ekran Oranı',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            for (final entry in {
+              BoxFit.contain: 'Otomatik (Sığdır)',
+              BoxFit.fill: 'Tam Ekran (Doldur)',
+              BoxFit.cover: 'Kapla (Kırp)',
+              BoxFit.fitWidth: 'Genişliği Sığdır',
+              BoxFit.fitHeight: 'Yüksekliği Sığdır',
+            }.entries)
+              ListTile(
+                leading: Icon(
+                  entry.key == _boxFit ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: entry.key == _boxFit ? const Color(0xFF1E88E5) : Colors.white54,
+                ),
+                title: Text(entry.value, style: const TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() => _boxFit = entry.key);
+                  Navigator.pop(ctx);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -430,7 +528,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               // Ana içerik: her zaman tam ekran video (RepaintBoundary ile sarılı)
               RepaintBoundary(
-                child: _player.buildVideo(fit: BoxFit.contain),
+                child: _player.buildVideo(fit: _boxFit),
               ),
 
               // Sol overlay: kanal listesi
@@ -528,6 +626,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   onChannelUp: () => _switchChannel(1),
                   onChannelDown: () => _switchChannel(-1),
                   onSubtitles: _showSubtitlesMenu,
+                  onSleepTimer: () => _showSleepTimer(context),
+                  onAspectRatio: () => _showAspectRatio(context),
                 ),
 
               if (_overlayVisible && _error == null && !_showPanel)
@@ -1176,6 +1276,7 @@ class _ControlsOverlay extends StatelessWidget {
     required this.streamInfo, required this.nowProgram, required this.nextProgram,
     required this.nextStart, required this.onBack, required this.onChannelUp,
     required this.onChannelDown, required this.onSubtitles,
+    required this.onSleepTimer, required this.onAspectRatio,
   });
 
   final Channel channel;
@@ -1185,6 +1286,7 @@ class _ControlsOverlay extends StatelessWidget {
   final String? streamInfo, nowProgram, nextProgram;
   final DateTime? nextStart;
   final VoidCallback onBack, onChannelUp, onChannelDown, onSubtitles;
+  final VoidCallback onSleepTimer, onAspectRatio;
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -1231,19 +1333,81 @@ class _ControlsOverlay extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          // Alt kontrol çubuğu — TiviMate tarzı
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Colors.black.withValues(alpha: 0.8), Colors.transparent],
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(onPressed: onChannelDown, tooltip: 'Önceki kanal',
-                  iconSize: 36, icon: const Icon(Icons.keyboard_arrow_up, color: Colors.white)),
-                const SizedBox(width: 16),
-                IconButton(onPressed: onSubtitles, tooltip: 'Altyazılar',
-                  iconSize: 30, icon: const Icon(Icons.subtitles, color: Colors.white)),
-                const SizedBox(width: 16),
-                IconButton(onPressed: onChannelUp, tooltip: 'Sonraki kanal',
-                  iconSize: 36, icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white)),
+                // İlerleme çubuğu (VOD için)
+                if (!isLive)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Text(_fmt(position), style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: LinearProgressIndicator(
+                            value: duration.inMilliseconds > 0
+                                ? position.inMilliseconds / duration.inMilliseconds
+                                : 0,
+                            backgroundColor: Colors.white24,
+                            valueColor: const AlwaysStoppedAnimation(Color(0xFF1E88E5)),
+                            minHeight: 3,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_fmt(duration), style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Önceki kanal
+                    IconButton(
+                      onPressed: onChannelDown, tooltip: 'Önceki kanal',
+                      iconSize: 36,
+                      icon: const Icon(Icons.skip_previous, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
+                    // Altyazı
+                    IconButton(
+                      onPressed: onSubtitles, tooltip: 'Altyazılar',
+                      iconSize: 28,
+                      icon: const Icon(Icons.subtitles, color: Colors.white70),
+                    ),
+                    const SizedBox(width: 12),
+                    // Uyku zamanlayıcı
+                    IconButton(
+                      onPressed: onSleepTimer, tooltip: 'Uyku Zamanlayıcı',
+                      iconSize: 28,
+                      icon: const Icon(Icons.bedtime_outlined, color: Colors.white70),
+                    ),
+                    const SizedBox(width: 12),
+                    // Ekran oranı
+                    IconButton(
+                      onPressed: onAspectRatio, tooltip: 'Ekran Oranı',
+                      iconSize: 28,
+                      icon: const Icon(Icons.aspect_ratio, color: Colors.white70),
+                    ),
+                    const SizedBox(width: 12),
+                    // Sonraki kanal
+                    IconButton(
+                      onPressed: onChannelUp, tooltip: 'Sonraki kanal',
+                      iconSize: 36,
+                      icon: const Icon(Icons.skip_next, color: Colors.white),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
