@@ -600,7 +600,7 @@ class _TiviMateChannelListState extends State<_TiviMateChannelList> {
     final channels = widget.channels;
 
     return Container(
-      color: const Color(0xFF1A1A2E),
+      color: Colors.black.withValues(alpha: 0.85),
       child: Column(
         children: [
           // Üst bar: Playlist başlığı

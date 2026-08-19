@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:iptv_player/services/alternative_subtitles_service.dart';
 import 'package:iptv_player/services/open_subtitles_service.dart';
 
-/// OpenSubtitles altyazı arama sayfası.
+/// Birleşik altyazı arama sayfası.
 ///
-/// Film/dizi adına göre arama yapar, sonuçları listeler ve kullanıcının
-/// seçtiği altyazıyı SRT olarak indirir.
+/// OpenSubtitles, YIFY Subtitles ve Subdl.com'u aynı anda sorgular,
+/// sonuçları tek listede gösterir.
 class SubtitleSearchScreen extends StatefulWidget {
   const SubtitleSearchScreen({
     super.key,
@@ -21,15 +22,44 @@ class SubtitleSearchScreen extends StatefulWidget {
   State<SubtitleSearchScreen> createState() => _SubtitleSearchScreenState();
 }
 
+/// Tüm kaynaklardan gelen sonuçları tek tipte birleştirir.
+class _UnifiedResult {
+  final String id;
+  final String fileName;
+  final String language;
+  final String languageName;
+  final String source;
+  final int? rating;
+  final String? format;
+  final String? movieName;
+  final bool isOpenSubtitles;
+  final AltSubtitleResult? altResult;
+  final SubtitleResult? osResult;
+
+  const _UnifiedResult({
+    required this.id,
+    required this.fileName,
+    required this.language,
+    required this.languageName,
+    required this.source,
+    this.rating,
+    this.format,
+    this.movieName,
+    this.isOpenSubtitles = false,
+    this.altResult,
+    this.osResult,
+  });
+}
+
 class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
   final _searchController = TextEditingController();
   String _selectedLanguage = 'tr,en';
-  List<SubtitleResult> _results = [];
+  List<_UnifiedResult> _results = [];
   bool _loading = false;
   bool _searched = false;
   String? _downloadingId;
+  final Map<String, String> _sourceStatus = {};
 
-  // Popüler diller
   static const _languages = [
     {'code': 'tr,en', 'label': '🇹🇷 Türkçe + 🇬🇧 İngilizce'},
     {'code': 'tr', 'label': '🇹🇷 Sadece Türkçe'},
@@ -45,7 +75,6 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
   void initState() {
     super.initState();
     _searchController.text = widget.movieName;
-    // Otomatik ara
     Future.microtask(_search);
   }
 
@@ -63,32 +92,96 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
       _loading = true;
       _results = [];
       _searched = true;
+      _sourceStatus.clear();
     });
 
-    final results = await OpenSubtitlesService.search(
+    final allResults = <_UnifiedResult>[];
+
+    // 1. OpenSubtitles
+    setState(() => _sourceStatus['OpenSubtitles'] = 'Aranıyor...');
+    final osFutures = [
+      OpenSubtitlesService.search(
+        query: query,
+        imdbId: widget.imdbId,
+        languages: _selectedLanguage,
+        limit: 10,
+      ),
+    ];
+
+    // 2. YIFY + Subdl paralel
+    setState(() => _sourceStatus['YIFY'] = 'Aranıyor...');
+    setState(() => _sourceStatus['Subdl'] = 'Aranıyor...');
+
+    final altFutures = AlternativeSubtitlesService.searchAll(
       query: query,
-      imdbId: widget.imdbId,
       languages: _selectedLanguage,
-      limit: 15,
+      limit: 10,
     );
 
-    if (mounted) {
-      setState(() {
-        _results = results;
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _downloadAndUse(SubtitleResult sub) async {
-    setState(() => _downloadingId = sub.id.toString());
-
-    final content = await OpenSubtitlesService.downloadSubtitleContent(
-      fileId: sub.id.toString(),
-    );
+    // Tüm sonuçları bekle
+    final osResults = await Future.wait(osFutures, eagerError: false);
+    final altResults = await altFutures;
 
     if (!mounted) return;
 
+    // OpenSubtitles sonuçlarını dönüştür
+    for (final sub in osResults.first) {
+      allResults.add(_UnifiedResult(
+        id: 'os_${sub.id}',
+        fileName: sub.fileName,
+        language: sub.language,
+        languageName: sub.languageName,
+        source: 'OpenSubtitles',
+        rating: sub.rating,
+        format: sub.subtitleFormat,
+        movieName: sub.movieName,
+        isOpenSubtitles: true,
+        osResult: sub,
+      ));
+    }
+
+    // YIFY ve Subdl sonuçlarını dönüştür
+    for (final sub in altResults) {
+      allResults.add(_UnifiedResult(
+        id: sub.id,
+        fileName: sub.fileName,
+        language: sub.language,
+        languageName: sub.languageName,
+        source: sub.source,
+        format: sub.subtitleFormat,
+        altResult: sub,
+      ));
+    }
+
+    setState(() {
+      _results = allResults;
+      _loading = false;
+      _sourceStatus['OpenSubtitles'] = '${osResults.first.length} sonuç';
+      _sourceStatus['YIFY'] = altResults
+          .where((r) => r.source == 'YIFY')
+          .length
+          .toString();
+      _sourceStatus['Subdl'] = altResults
+          .where((r) => r.source == 'Subdl')
+          .length
+          .toString();
+    });
+  }
+
+  Future<void> _downloadAndUse(_UnifiedResult result) async {
+    setState(() => _downloadingId = result.id);
+
+    String? content;
+
+    if (result.isOpenSubtitles && result.osResult != null) {
+      content = await OpenSubtitlesService.downloadSubtitleContent(
+        fileId: result.osResult!.id.toString(),
+      );
+    } else if (result.altResult != null) {
+      content = await result.altResult!.download();
+    }
+
+    if (!mounted) return;
     setState(() => _downloadingId = null);
 
     if (content == null || content.isEmpty) {
@@ -98,11 +191,10 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
       return;
     }
 
-    // Altyazı içeriğini geri döndür (VOD oynatıcı yükleyecek)
     Navigator.of(context).pop(SubtitleDownloadResult(
       content: content,
-      fileName: sub.fileName,
-      format: sub.subtitleFormat,
+      fileName: result.fileName,
+      format: result.format ?? 'SRT',
     ));
   }
 
@@ -117,7 +209,6 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
         title: const Text('Altyazı Ara', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // Dil seçici
           PopupMenuButton<String>(
             icon: const Icon(Icons.language, color: Colors.white70),
             onSelected: (lang) {
@@ -179,17 +270,30 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
             ),
           ),
 
-          // Dil rozeti
+          // Kaynak durumları
           if (_searched && !_loading)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  Icon(Icons.language, color: Colors.white54, size: 14),
-                  const SizedBox(width: 4),
+                  for (final entry in _sourceStatus.entries) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${entry.key}: ${entry.value}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 10),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  const Spacer(),
                   Text(
-                    'Dil: ${_selectedLanguage.replaceAll(',', ', ')}  •  ${_results.length} sonuç',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    '${_results.length} toplam',
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
                   ),
                 ],
               ),
@@ -210,9 +314,7 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
                                 color: Colors.white24, size: 48),
                             const SizedBox(height: 12),
                             Text(
-                              _searched
-                                  ? 'Altyazı bulunamadı'
-                                  : 'Film/dizi adı ile arama yapın',
+                              _searched ? 'Altyazı bulunamadı' : 'Film/dizi adı ile arama yapın',
                               style: const TextStyle(color: Colors.white38, fontSize: 16),
                             ),
                             if (_searched) ...[
@@ -222,8 +324,7 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
                                   setState(() => _selectedLanguage = 'tr,en,de,fr,es');
                                   _search();
                                 },
-                                child: const Text('Tüm dillerde ara',
-                                    style: TextStyle(color: Colors.amber)),
+                                child: const Text('Tüm dillerde ara', style: TextStyle(color: Colors.amber)),
                               ),
                             ],
                           ],
@@ -234,7 +335,7 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
                         itemCount: _results.length,
                         itemBuilder: (context, i) {
                           final sub = _results[i];
-                          final isDownloading = _downloadingId == sub.id.toString();
+                          final isDownloading = _downloadingId == sub.id;
 
                           return Card(
                             color: Colors.white.withValues(alpha: 0.06),
@@ -253,45 +354,47 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
                               ),
                               subtitle: Row(
                                 children: [
+                                  // Kaynak rozeti
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: _sourceColor(sub.source).withValues(alpha: 0.3),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                    child: Text(
+                                      sub.source,
+                                      style: TextStyle(
+                                        color: _sourceColor(sub.source),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
                                   Text(
                                     sub.languageName,
                                     style: const TextStyle(color: Colors.amber, fontSize: 11),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    sub.subtitleFormat,
-                                    style: TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 11),
+                                    sub.format ?? 'SRT',
+                                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                                   ),
                                   if (sub.rating != null) ...[
-                                    const SizedBox(width: 8),
-                                    Icon(Icons.star, color: Colors.amber, size: 12),
-                                    Text(
-                                      '${sub.rating}',
-                                      style: const TextStyle(
-                                          color: Colors.white54, fontSize: 11),
-                                    ),
-                                  ],
-                                  if (sub.season != null) ...[
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'S${sub.season}E${sub.episode ?? '?'}',
-                                      style: const TextStyle(
-                                          color: Colors.white38, fontSize: 11),
-                                    ),
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.star, color: Colors.amber, size: 12),
+                                    Text('${sub.rating}',
+                                        style: const TextStyle(color: Colors.white54, fontSize: 11)),
                                   ],
                                 ],
                               ),
                               trailing: isDownloading
                                   ? const SizedBox(
                                       width: 20, height: 20,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Colors.amber))
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber))
                                   : IconButton(
                                       onPressed: () => _downloadAndUse(sub),
-                                      icon: const Icon(Icons.download,
-                                          color: Colors.amber, size: 22),
+                                      icon: const Icon(Icons.download, color: Colors.amber, size: 22),
                                       tooltip: 'İndir ve kullan',
                                     ),
                             ),
@@ -304,24 +407,27 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
     );
   }
 
+  Color _sourceColor(String source) {
+    switch (source) {
+      case 'OpenSubtitles':
+        return Colors.green;
+      case 'YIFY':
+        return Colors.orange;
+      case 'Subdl':
+        return Colors.cyan;
+      default:
+        return Colors.white54;
+    }
+  }
+
   Widget _langFlag(String code) {
     const flags = {
-      'tr': '🇹🇷',
-      'en': '🇬🇧',
-      'de': '🇩🇪',
-      'fr': '🇫🇷',
-      'es': '🇪🇸',
-      'it': '🇮🇹',
-      'pt': '🇵🇹',
-      'ru': '🇷🇺',
-      'ar': '🇸🇦',
-      'ja': '🇯🇵',
-      'ko': '🇰🇷',
-      'zh': '🇨🇳',
+      'tr': '🇹🇷', 'en': '🇬🇧', 'de': '🇩🇪', 'fr': '🇫🇷',
+      'es': '🇪🇸', 'it': '🇮🇹', 'pt': '🇵🇹', 'ru': '🇷🇺',
+      'ar': '🇸🇦', 'ja': '🇯🇵', 'ko': '🇰🇷', 'zh': '🇨🇳',
     };
     return Container(
-      width: 36,
-      height: 36,
+      width: 36, height: 36,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
@@ -333,7 +439,6 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
   }
 }
 
-/// Altyazı indirme sonucu.
 class SubtitleDownloadResult {
   final String content;
   final String fileName;
