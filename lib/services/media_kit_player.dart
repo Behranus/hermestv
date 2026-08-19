@@ -96,7 +96,7 @@ class MediaKitStreamPlayer extends StreamPlayer {
     // altyazıyı çizmez; widget katmanı sadece basit metinleri gösterir.)
     final player = mk.Player(
       configuration: const mk.PlayerConfiguration(
-        libass: true,
+        libass: false,
       ),
     );
     _player = player;
@@ -255,34 +255,6 @@ class MediaKitStreamPlayer extends StreamPlayer {
       extras: const {
         'hwdec': 'no',
         'slang': 'tr,tur',
-        'vo': 'libmpv',
-        // Tampon
-        'cache': 'yes',
-        'cache-secs': '15',
-        'cache-pause-initial': 'yes',
-        'demuxer-max-bytes': '200MiB',
-        'demuxer-max-back-bytes': '100MiB',
-        // Görüntü kalitesi
-        'profile': 'high-quality',
-        'scale': 'spline36',
-        'dscale': 'lanczos',
-        'correct-downscaling': 'yes',
-        'linear-downscaling': 'yes',
-        'sigmoid-upscaling': 'yes',
-        // Renk / parlaklık
-        'contrast': '1.1',
-        'saturation': '1.25',
-        'brightness': '0.02',
-        'gamma': '1.05',
-        // Banding engelleme
-        'deband': 'yes',
-        'deband-iterations': '4',
-        'deband-threshold': '35',
-        'deband-range': '16',
-        // Keskinlik
-        'unsharp': 'yes',
-        'unsharp-luminance': '5x5',
-        'unsharp-luminance-amount': '0.8',
       },
     );
 
