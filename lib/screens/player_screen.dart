@@ -29,6 +29,7 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   late final StreamPlayer _player;
   late int _index;
+  int _panelIndex = 0; // Panelde seçim indeksi (ok tuşları)
   bool _showPanel = false;
 
   bool _buffering = true;
@@ -101,6 +102,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _panelFilterGroup = _panelGroups.first;
     } else {
       _panelFilterGroup = _panelGroups[currentIdx + 1];
+    }
+    _updatePanelChannels();
+    setState(() {});
+  }
+
+  void _panelLeftArrow() {
+    if (_panelGroups.length <= 2) return;
+    final currentIdx = _panelGroups.indexOf(_panelFilterGroup);
+    if (currentIdx <= 0) {
+      _panelFilterGroup = _panelGroups.last;
+    } else {
+      _panelFilterGroup = _panelGroups[currentIdx - 1];
     }
     _updatePanelChannels();
     setState(() {});
@@ -236,6 +249,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     setState(() {
       _showPanel = !_showPanel;
       if (_showPanel) {
+        _panelIndex = _index; // Panel açılırken mevcut kanalı seç
         _panelFilterGroup = _channel.displayGroup;
         if (!_panelGroups.contains(_panelFilterGroup)) {
           _panelFilterGroup = 'all';
@@ -290,32 +304,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     if (_showPanel) {
       if (key == LogicalKeyboardKey.arrowUp) {
-        _switchChannel(-1);
+        // Paneldeyken ok: sadece seçimi değiştir, kanalı açma
+        setState(() => _panelIndex = (_panelIndex - 1).clamp(0, widget.channels.length - 1));
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowDown) {
-        _switchChannel(1);
+        setState(() => _panelIndex = (_panelIndex + 1).clamp(0, widget.channels.length - 1));
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowRight) {
-        // Sağ tuş: EPG panelini aç/kapat veya kategori değiştir
-        if (!_showEpgPanel) {
-          setState(() => _showEpgPanel = true);
-        } else {
-          _panelRightArrow();
-        }
+        // Sağ ok: kategori değiştir (sol ok ile geri dön)
+        _panelRightArrow();
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowLeft) {
-        if (_showEpgPanel) {
-          setState(() => _showEpgPanel = false);
-        } else {
-          _closePanel();
-        }
+        // Sol ok: bir önceki kategoriye dön
+        _panelLeftArrow();
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
-        // Paneldeyken OK: kanalı seç ve paneli kapat
+        // Paneldeyken OK: seçili kanalı aç ve paneli kapat
+        _selectChannel(_panelIndex);
         _closePanel();
         return KeyEventResult.handled;
       }
@@ -430,10 +439,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   left: 0, top: 0, bottom: 0, width: 280,
                   child: _TiviMateChannelList(
                     channels: widget.channels,
-                    selectedIndex: _index,
+                    selectedIndex: _panelIndex,
                     filterGroup: _panelFilterGroup,
                     groups: _panelGroups,
-                    onSelect: _selectChannel,
+                    onSelect: (i) {
+                      if (_panelIndex == i) {
+                        // Aynı kanala tekrar tıklandı → aç
+                        _selectChannel(i);
+                        _closePanel();
+                      } else {
+                        // Farklı kanala tıklandı → sadece seç
+                        setState(() => _panelIndex = i);
+                      }
+                    },
                     filterGroupChanged: (g) {
                       setState(() {
                         _panelFilterGroup = g;

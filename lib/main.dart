@@ -12,9 +12,11 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ---- fvp (libmdk/FFmpeg) video oynatıcı motoru ----
-  // Tüm platformlarda video_player'ın resmi eklentisi olarak çalışır.
-  // Android'de FFmpeg ile ExoPlayer yerine daha geniş kodek desteği sağlar.
-  fvp.registerWith();
+  // Sadece Linux/Windows/macOS'ta kullanılır.
+  // Android'de fvp ExoPlayer performansını düşürür, o yüzden aktif değil.
+  if (!Platform.isAndroid) {
+    fvp.registerWith();
+  }
 
   // ---- 2GB RAM'li giriş seviyesi Box'lar için bellek yönetimi ----
   PaintingBinding.instance.imageCache.maximumSize = 240;
