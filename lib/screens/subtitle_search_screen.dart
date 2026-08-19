@@ -174,8 +174,11 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
     String? content;
 
     if (result.isOpenSubtitles && result.osResult != null) {
+      final os = result.osResult!;
       content = await OpenSubtitlesService.downloadSubtitleContent(
-        fileId: result.osResult!.id.toString(),
+        fileId: os.id.toString(),
+        isRestApi: os.isRestApi,
+        restDownloadUrl: os.isRestApi ? os.downloadUrl : null,
       );
     } else if (result.altResult != null) {
       content = await result.altResult!.download();

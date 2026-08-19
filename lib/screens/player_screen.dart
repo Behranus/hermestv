@@ -419,8 +419,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Ana içerik: her zaman tam ekran video
-              _player.buildVideo(fit: BoxFit.contain),
+              // Ana içerik: her zaman tam ekran video (RepaintBoundary ile sarılı)
+              RepaintBoundary(
+                child: _player.buildVideo(fit: BoxFit.contain),
+              ),
 
               // Sol overlay: kanal listesi
               if (_showPanel)
