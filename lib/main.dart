@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:iptv_player/screens/home_shell.dart';
-import 'package:media_kit/media_kit.dart';
+import 'package:fvp/fvp.dart' as fvp;
 import 'package:iptv_player/state/app_state.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -11,22 +11,16 @@ import 'package:provider/provider.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ---- media_kit Linux oynatıcı motoru ----
-  // MediaKit.ensureInitialized() Linux'ta media_kit (libmpv) kullanmadan
-  // ÖNCE çağrılmalıdır. Çağrılmazsa 'ensureInitialized must be called'
-  // hatası verir ve tüm oynatıcı çöker.
-  MediaKit.ensureInitialized();
+  // ---- fvp (libmdk/FFmpeg) video oynatıcı motoru ----
+  // Linux, Windows, macOS'ta video_player'ın resmi eklentisi olarak çalışır.
+  // Android ve iOS'ta resmi video_player (ExoPlayer/AVPlayer) kullanılır.
+  fvp.registerWith();
 
   // ---- 2GB RAM'li giriş seviyesi Box'lar için bellek yönetimi ----
-  // Test sunucusu gibi binlerce kanallı listelerde logolar belleği şişirip
-  // (OOM/GC baskısı) tüm uygulamayı — video dahil — kasabilir. Görsel
-  // önbelleğini sıkı tutarız: en fazla 240 görsel / 48 MB.
   PaintingBinding.instance.imageCache.maximumSize = 240;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 48 << 20;
 
   // Güvenlik ağı: yakalanmamış hatalar uygulamayı kapatmasın.
-  // Hatalar ayrıca bir çökme günlüğüne yazılır (açılış çökmesini teşhis
-  // edebilmek için — cihazdan alınıp incelenebilir).
   _initCrashLog();
   PlatformDispatcher.instance.onError = (error, stack) {
     _logCrash('Platform: $error\n$stack');
@@ -76,8 +70,6 @@ class IptvApp extends StatelessWidget {
         themeMode: ThemeMode.dark,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
-        // Şifre kilit ekranı kaldırıldı (kullanıcı isteği): uygulama doğrudan
-        // ana ekrana açılır. Açılışta çalışan tek ekran HomeShell'dir.
         home: const HomeShell(),
       ),
     );
@@ -101,7 +93,6 @@ class IptvApp extends StatelessWidget {
       colorScheme: scheme,
       useMaterial3: true,
       scaffoldBackgroundColor: isDark ? _zorinDarkBg : scheme.surface,
-      // Zorin tarzı: köşeler yumuşak, vurgu mavi, yüzeyler hafif katmanlı.
       cardTheme: CardThemeData(
         elevation: isDark ? 1 : 2,
         color: isDark ? _zorinDarkSurface : scheme.surface,
@@ -169,4 +160,3 @@ class IptvApp extends StatelessWidget {
     );
   }
 }
-
