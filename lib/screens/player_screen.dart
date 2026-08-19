@@ -419,11 +419,40 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Ana içerik: panel açıksa 3 kolon, değilse tam ekran video
+              // Ana içerik: her zaman tam ekran video
+              _player.buildVideo(fit: BoxFit.contain),
+
+              // Sol overlay: kanal listesi
               if (_showPanel)
-                _build3ColumnLayout(state, nowProgram, nextProgram, isLive)
-              else
-                _player.buildVideo(fit: BoxFit.contain),
+                Positioned(
+                  left: 0, top: 0, bottom: 0, width: 280,
+                  child: _TiviMateChannelList(
+                    channels: widget.channels,
+                    selectedIndex: _index,
+                    filterGroup: _panelFilterGroup,
+                    groups: _panelGroups,
+                    onSelect: _selectChannel,
+                    filterGroupChanged: (g) {
+                      setState(() {
+                        _panelFilterGroup = g;
+                        _updatePanelChannels();
+                      });
+                    },
+                    onClose: _closePanel,
+                  ),
+                ),
+
+              // Sağ overlay: EPG zaman çizelgesi
+              if (_showPanel && _showEpgPanel)
+                Positioned(
+                  right: 0, top: 0, bottom: 0, width: 320,
+                  child: _EpgTimeline(
+                    channel: _channel,
+                    state: state,
+                    nowProgram: nowProgram,
+                    nextProgram: nextProgram,
+                  ),
+                ),
 
               // Ekran üstü altyazı
               if (_subtitleText != null && _subtitleText!.isNotEmpty)
@@ -503,67 +532,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
   
-  /// TiviMate tarzı 3 kolonlu düzen
-  Widget _build3ColumnLayout(AppState state, dynamic nowProgram, dynamic nextProgram, bool isLive) {
-    return Row(
-      children: [
-        // Sol: Kanal listesi (TiviMate tarzı)
-        SizedBox(
-          width: 280,
-          child: _TiviMateChannelList(
-            channels: widget.channels,
-            selectedIndex: _index,
-            filterGroup: _panelFilterGroup,
-            groups: _panelGroups,
-            onSelect: _selectChannel,
-            filterGroupChanged: (g) {
-              setState(() {
-                _panelFilterGroup = g;
-                _updatePanelChannels();
-              });
-            },
-            onClose: _closePanel,
-          ),
-        ),
-        const VerticalDivider(width: 1, color: Colors.white24),
-
-        // Orta: Canlı yayın
-        Expanded(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _player.buildVideo(fit: BoxFit.contain),
-              // Alt bilgi çubuğu
-              Positioned(
-                left: 0, right: 0, bottom: 0,
-                child: _ChannelInfoBar(
-                  channel: _channel,
-                  index: _index,
-                  total: widget.channels.length,
-                  nowProgram: nowProgram?.title,
-                  nextProgram: nextProgram?.title,
-                  isLive: isLive,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const VerticalDivider(width: 1, color: Colors.white24),
-
-        // Sağ: EPG zaman çizelgesi
-        SizedBox(
-          width: 320,
-          child: _EpgTimeline(
-            channel: _channel,
-            state: state,
-            nowProgram: nowProgram,
-            nextProgram: nextProgram,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // ==================== TiviMate Kanal Listesi ====================

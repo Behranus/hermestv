@@ -79,16 +79,22 @@ class _VodScreenState extends State<VodScreen>
                 _NetflixTab(
                   isMovies: true,
                   state: state,
-                  onItemTap: (m) => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)),
-                  ),
+                  onItemTap: (item) {
+                    final movie = state.filteredVodMovies.where((m) => m.id == item.id).firstOrNull;
+                    if (movie != null) Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: movie)),
+                    );
+                  },
                 ),
                 _NetflixTab(
                   isMovies: false,
                   state: state,
-                  onItemTap: (s) => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)),
-                  ),
+                  onItemTap: (item) {
+                    final series = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
+                    if (series != null) Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: series)),
+                    );
+                  },
                 ),
               ],
             ),
