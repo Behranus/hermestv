@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iptv_player/screens/movie_detail_screen.dart';
@@ -8,11 +10,11 @@ import 'package:iptv_player/state/app_state.dart';
 import 'package:iptv_player/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
 
-/// VOD ana ekranı — Film ve Dizi bağımsız sekmeler.
-///
-/// Her sekme kendi Netflix tarzı listesine sahip: hero kart +
-/// yatay kategori satırları. Kumanda ile sekmeler arası geçiş
-/// TabController ile sağlanır.
+/// VOD ana ekranı — Netflix/Prime Video tarzı:
+/// - Üstte büyük hero banner
+/// - Gezinme ikonları
+/// - Büyük poster ızgarası
+/// - Odaklanınca film bilgisi paneli
 class VodScreen extends StatefulWidget {
   const VodScreen({super.key, this.onGoToSetup});
 
@@ -59,51 +61,36 @@ class _VodScreenState extends State<VodScreen>
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('VOD'),
-        actions: [
-          if (state.vodLoading)
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          IconButton(
-            tooltip: 'Kataloğu yenile',
-            icon: const Icon(Icons.refresh),
-            onPressed: state.loadVod,
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.movie, size: 18), text: 'Filmler'),
-            Tab(icon: Icon(Icons.tv, size: 18), text: 'Diziler'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
+      backgroundColor: const Color(0xFF0D0D1A),
+      body: Column(
         children: [
-          // ---- Film sekmesi ----
-          _VodTab(
-            isMovies: true,
-            state: state,
-            onItemTap: (m) => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => MovieDetailScreen(movie: m)),
-            ),
+          // Üst bar: Film/Dizi sekmeleri + yenile
+          _NetflixTopBar(
+            tabController: _tabController,
+            onRefresh: state.loadVod,
+            isLoading: state.vodLoading,
           ),
-          // ---- Dizi sekmesi ----
-          _VodTab(
-            isMovies: false,
-            state: state,
-            onItemTap: (s) => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => SeriesDetailScreen(series: s)),
+
+          // Sekme içeriği
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _NetflixTab(
+                  isMovies: true,
+                  state: state,
+                  onItemTap: (m) => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)),
+                  ),
+                ),
+                _NetflixTab(
+                  isMovies: false,
+                  state: state,
+                  onItemTap: (s) => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: s)),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -112,10 +99,88 @@ class _VodScreenState extends State<VodScreen>
   }
 }
 
-// ==================== Tek sekme (Film veya Dizi) ====================
+// ==================== Netflix Üst Bar ====================
 
-class _VodTab extends StatefulWidget {
-  const _VodTab({
+class _NetflixTopBar extends StatelessWidget {
+  const _NetflixTopBar({
+    required this.tabController,
+    required this.onRefresh,
+    required this.isLoading,
+  });
+
+  final TabController tabController;
+  final VoidCallback onRefresh;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF0D0D1A),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Üst satır: Logo + arama + yenile
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  // Logo
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'BBTV',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (isLoading)
+                    const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
+                    ),
+                  IconButton(
+                    onPressed: onRefresh,
+                    icon: const Icon(Icons.refresh, color: Colors.white54, size: 22),
+                  ),
+                ],
+              ),
+            ),
+
+            // Film/Dizi sekmeleri
+            TabBar(
+              controller: tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white54,
+              indicatorColor: Colors.red,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              unselectedLabelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
+              tabs: const [
+                Tab(text: 'Filmler'),
+                Tab(text: 'Diziler'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== Netflix Sekme İçeriği ====================
+
+class _NetflixTab extends StatefulWidget {
+  const _NetflixTab({
     required this.isMovies,
     required this.state,
     required this.onItemTap,
@@ -126,10 +191,10 @@ class _VodTab extends StatefulWidget {
   final void Function(dynamic) onItemTap;
 
   @override
-  State<_VodTab> createState() => _VodTabState();
+  State<_NetflixTab> createState() => _NetflixTabState();
 }
 
-class _VodTabState extends State<_VodTab>
+class _NetflixTabState extends State<_NetflixTab>
     with AutomaticKeepAliveClientMixin {
   List<ResumeRecord> _resumeRecords = [];
 
@@ -154,26 +219,29 @@ class _VodTabState extends State<_VodTab>
     final state = widget.state;
     final isMovies = widget.isMovies;
 
-    final all = <_RowItem>[
-      if (isMovies)
-        for (final m in state.filteredVodMovies) ...[
-          () {
-            final d = state.movieDetailsCached(m.id);
-            return _RowItem(m.id, m.name, m.poster, m.rating, m.categoryId,
-                d?.plot, d?.genre);
-          }(),
-        ]
-      else
-        for (final s in state.filteredVodSeries) ...[
-          () {
-            final d = state.seriesInfoCached(s.id);
-            return _RowItem(s.id, s.name, s.cover, s.rating, s.categoryId,
-                d?.plot ?? s.plot, d?.genre);
-          }(),
-        ],
-    ];
+    // Tüm içerikleri topla
+    final all = <_VodItem>[];
+    if (isMovies) {
+      for (final m in state.filteredVodMovies) {
+        final d = state.movieDetailsCached(m.id);
+        all.add(_VodItem(
+          id: m.id, name: m.name, poster: m.poster,
+          rating: m.rating, categoryId: m.categoryId,
+          plot: d?.plot, genre: d?.genre, isMovie: true,
+        ));
+      }
+    } else {
+      for (final s in state.filteredVodSeries) {
+        final d = state.seriesInfoCached(s.id);
+        all.add(_VodItem(
+          id: s.id, name: s.name, poster: s.cover,
+          rating: s.rating, categoryId: s.categoryId,
+          plot: d?.plot ?? s.plot, genre: d?.genre, isMovie: false,
+        ));
+      }
+    }
 
-    // Devam ettirme kayıtları (film/dizi ayrımı)
+    // Devam ettirme kayıtları
     final relevantResume = _resumeRecords
         .where((r) => r.isMovie == isMovies && !r.isCompleted)
         .toList()
@@ -187,6 +255,12 @@ class _VodTabState extends State<_VodTab>
       );
     }
 
+    // Kategorilere göre grupla
+    final byCategory = <String?, List<_VodItem>>{};
+    for (final item in all) {
+      byCategory.putIfAbsent(item.categoryId, () => []).add(item);
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
         await state.loadVod();
@@ -194,110 +268,523 @@ class _VodTabState extends State<_VodTab>
       },
       child: CustomScrollView(
         slivers: [
-          SliverList(
-            delegate: SliverChildListDelegate([
-              // Kaldığın Yerden Devam (varsa)
-              if (relevantResume.isNotEmpty) ...[
-                _ResumeSection(
-                  records: relevantResume,
-                  isMovie: isMovies,
-                  state: state,
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (all.isNotEmpty) ...[
-                _HeroCard(
-                  item: all.first,
-                  isMovie: isMovies,
-                  onTap: () => _openItem(all.first),
-                ),
-                const SizedBox(height: 20),
-                _RowSection(
-                  title: isMovies ? 'Tüm Filmler' : 'Tüm Diziler',
-                  items: all,
-                  isMovie: isMovies,
-                  onTap: _openItem,
-                ),
-                ..._buildCategoryRows(all),
-              ],
-              const SizedBox(height: 24),
-            ]),
+          // Hero Banner
+          if (all.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _NetflixHeroBanner(item: all.first, onTap: () => widget.onItemTap(all.first)),
+            ),
+
+          // Gezinme İkonları
+          SliverToBoxAdapter(
+            child: _NetflixNavIcons(),
           ),
+
+          // Kaldığın Yerden Devam
+          if (relevantResume.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _ResumeRow(records: relevantResume, state: state),
+            ),
+
+          // Tümü Izgarası
+          if (all.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _NetflixSection(
+                title: isMovies ? 'Tüm Filmler' : 'Tüm Diziler',
+                items: all,
+                onItemTap: widget.onItemTap,
+              ),
+            ),
+
+          // Kategorilere göre satırlar
+          for (final (id, name) in state.vodCategories)
+            if (id != 'all' && byCategory[id] != null && byCategory[id]!.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _NetflixSection(
+                  title: name,
+                  items: byCategory[id]!,
+                  onItemTap: widget.onItemTap,
+                ),
+              ),
+
+          const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
         ],
       ),
     );
   }
-
-  List<Widget> _buildCategoryRows(List<_RowItem> all) {
-    final state = widget.state;
-    final isMovies = widget.isMovies;
-
-    // Kategorilere göre grupla (ilk eleman hariç — hero olarak kullanıldı)
-    final byCategory = <String?, List<_RowItem>>{};
-    for (final item in all.skip(1)) {
-      byCategory.putIfAbsent(item.categoryId, () => []).add(item);
-    }
-
-    final rows = <Widget>[];
-    for (final (id, name) in state.vodCategories) {
-      if (id == 'all') continue;
-      final items = byCategory[id];
-      if (items == null || items.isEmpty) continue;
-      rows.add(const SizedBox(height: 20));
-      rows.add(_RowSection(
-        title: name,
-        items: items,
-        isMovie: isMovies,
-        onTap: _openItem,
-      ));
-    }
-    return rows;
-  }
-
-  void _openItem(_RowItem item) {
-    final state = widget.state;
-    if (widget.isMovies) {
-      final m = state.filteredVodMovies.where((m) => m.id == item.id).firstOrNull;
-      if (m != null) widget.onItemTap(m);
-    } else {
-      final s = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
-      if (s != null) widget.onItemTap(s);
-    }
-  }
 }
 
-// ==================== Kaldığın Yerden Devam Bölümü ====================
+// ==================== Netflix Hero Banner ====================
 
-class _ResumeSection extends StatelessWidget {
-  const _ResumeSection({
-    required this.records,
-    required this.isMovie,
-    required this.state,
-  });
+class _NetflixHeroBanner extends StatefulWidget {
+  const _NetflixHeroBanner({required this.item, required this.onTap});
+  final _VodItem item;
+  final VoidCallback onTap;
 
-  final List<ResumeRecord> records;
-  final bool isMovie;
-  final AppState state;
+  @override
+  State<_NetflixHeroBanner> createState() => _NetflixHeroBannerState();
+}
+
+class _NetflixHeroBannerState extends State<_NetflixHeroBanner> {
+  final _focus = FocusNode(debugLabel: 'hero');
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final item = widget.item;
+    final focused = _focus.hasFocus;
+    final width = MediaQuery.of(context).size.width;
+
+    return Focus(
+      focusNode: _focus,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.enter ||
+             event.logicalKey == LogicalKeyboardKey.select)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: focused ? 280 : 260,
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: focused ? [
+              BoxShadow(color: Colors.black54, blurRadius: 20, spreadRadius: 2),
+            ] : [],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Arka plan poster
+                if (item.poster != null && item.poster!.isNotEmpty)
+                  Image.network(
+                    item.poster!,
+                    fit: BoxFit.cover,
+                    cacheWidth: width.round(),
+                    errorBuilder: (_, _, _) => _heroPlaceholder(),
+                    loadingBuilder: (_, child, p) => p == null ? child : _heroPlaceholder(),
+                  )
+                else
+                  _heroPlaceholder(),
+
+                // Gradient overlay
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.transparent,
+                        Colors.black87,
+                        Colors.black,
+                      ],
+                      stops: [0.0, 0.4, 0.7, 1.0],
+                    ),
+                  ),
+                ),
+
+                // Film/Dizi rozeti
+                Positioned(
+                  top: 16, left: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: item.isMovie ? Colors.blue : Colors.purple,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      item.isMovie ? 'FİLM' : 'DİİZ',
+                      style: const TextStyle(
+                        color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Alt bilgi
+                Positioned(
+                  left: 16, right: 16, bottom: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold,
+                          shadows: [Shadow(blurRadius: 8, color: Colors.black)],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          if (item.rating != null && item.rating!.isNotEmpty) ...[
+                            const Icon(Icons.star, color: Colors.amber, size: 16),
+                            const SizedBox(width: 4),
+                            Text(item.rating!, style: const TextStyle(
+                              color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold,
+                            )),
+                            const SizedBox(width: 12),
+                          ],
+                          if (item.genre != null && item.genre!.isNotEmpty)
+                            Expanded(
+                              child: Text(
+                                item.genre!,
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (item.plot != null && item.plot!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          item.plot!,
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.3),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      // Butonlar
+                      Row(
+                        children: [
+                          _NetflixButton(
+                            icon: Icons.play_arrow,
+                            label: 'İzle',
+                            primary: true,
+                            onTap: widget.onTap,
+                          ),
+                          const SizedBox(width: 10),
+                          _NetflixButton(
+                            icon: Icons.info_outline,
+                            label: 'Bilgi',
+                            primary: false,
+                            onTap: widget.onTap,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _heroPlaceholder() {
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: const Center(
+        child: Icon(Icons.movie_creation_outlined, color: Colors.white12, size: 80),
+      ),
+    );
+  }
+}
+
+// ==================== Netflix Navigasyon İkonları ====================
+
+class _NetflixNavIcons extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _NavIconData(Icons.home, 'Ana Sayfa'),
+      _NavIconData(Icons.add, 'Listem'),
+      _NavIconData(Icons.search, 'Ara'),
+      _NavIconData(Icons.download, 'İndirilenler'),
+      _NavIconData(Icons.explore, 'Keşfet'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: items.map((item) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(item.icon, color: Colors.white70, size: 24),
+            const SizedBox(height: 4),
+            Text(item.label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+          ],
+        )).toList(),
+      ),
+    );
+  }
+}
+
+class _NavIconData {
+  final IconData icon;
+  final String label;
+  _NavIconData(this.icon, this.label);
+}
+
+// ==================== Netflix Bölüm ====================
+
+class _NetflixSection extends StatefulWidget {
+  const _NetflixSection({
+    required this.title,
+    required this.items,
+    required this.onItemTap,
+  });
+
+  final String title;
+  final List<_VodItem> items;
+  final void Function(dynamic) onItemTap;
+
+  @override
+  State<_NetflixSection> createState() => _NetflixSectionState();
+}
+
+class _NetflixSectionState extends State<_NetflixSection> {
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            widget.title,
+            style: const TextStyle(
+              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 200,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: widget.items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, i) => _NetflixPoster(
+              item: widget.items[i],
+              onTap: () => widget.onItemTap(widget.items[i]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ==================== Netflix Poster ====================
+
+class _NetflixPoster extends StatefulWidget {
+  const _NetflixPoster({required this.item, required this.onTap});
+  final _VodItem item;
+  final VoidCallback onTap;
+
+  @override
+  State<_NetflixPoster> createState() => _NetflixPosterState();
+}
+
+class _NetflixPosterState extends State<_NetflixPoster> {
+  final _focus = FocusNode();
+  bool _showInfo = false;
+  Timer? _infoTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (_focus.hasFocus) {
+        // 500ms sonra bilgi göster (5 saniye değil, daha hızlı tepki)
+        _infoTimer = Timer(const Duration(milliseconds: 500), () {
+          if (mounted && _focus.hasFocus) setState(() => _showInfo = true);
+        });
+      } else {
+        _infoTimer?.cancel();
+        if (_showInfo) setState(() => _showInfo = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _infoTimer?.cancel();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final focused = _focus.hasFocus;
+
+    return Focus(
+      focusNode: _focus,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.enter ||
+             event.logicalKey == LogicalKeyboardKey.select)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: focused ? 140 : 130,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.history, size: 20, color: Colors.amber),
-              const SizedBox(width: 8),
-              Text(
-                isMovie ? 'Filmlerde Devam Et' : 'Dizilerde Devam Et',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.amber,
+              // Poster
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: focused ? [
+                      BoxShadow(
+                        color: Colors.black54,
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                      ),
+                    ] : [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 6,
+                      ),
+                    ],
+                    border: focused
+                        ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2)
+                        : null,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (item.poster != null && item.poster!.isNotEmpty)
+                          Image.network(
+                            item.poster!,
+                            fit: BoxFit.cover,
+                            cacheWidth: 280,
+                            errorBuilder: (_, _, _) => _posterPlaceholder(),
+                            loadingBuilder: (_, child, p) => p == null ? child : _posterPlaceholder(),
+                          )
+                        else
+                          _posterPlaceholder(),
+
+                        // IMDb puanı rozeti
+                        if (item.rating != null && item.rating!.isNotEmpty)
+                          Positioned(
+                            top: 4, right: 4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.star, color: Colors.amber, size: 10),
+                                  const SizedBox(width: 2),
+                                  Text(item.rating!, style: const TextStyle(
+                                    color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold,
+                                  )),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        // Film/Dizi rozeti
+                        Positioned(
+                          top: 4, left: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: item.isMovie ? Colors.blue.withValues(alpha: 0.8) : Colors.purple.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              item.isMovie ? 'FİLM' : 'DİZİ',
+                              style: const TextStyle(
+                                color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
+
+              // Başlık
+              const SizedBox(height: 6),
+              Text(
+                item.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: focused ? FontWeight.bold : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _posterPlaceholder() {
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: const Center(child: Icon(Icons.movie, color: Colors.white12, size: 32)),
+    );
+  }
+}
+
+// ==================== Devam Et Satırı ====================
+
+class _ResumeRow extends StatelessWidget {
+  const _ResumeRow({required this.records, required this.state});
+  final List<ResumeRecord> records;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Row(
+            children: [
+              Icon(Icons.history, color: Colors.amber, size: 20),
+              SizedBox(width: 8),
+              Text('Devam Et', style: TextStyle(
+                color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold,
+              )),
             ],
           ),
         ),
@@ -310,405 +797,58 @@ class _ResumeSection extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, i) {
               final r = records[i];
-              return _ResumeCard(record: r, state: state);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ResumeCard extends StatelessWidget {
-  const _ResumeCard({required this.record, required this.state});
-  final ResumeRecord record;
-  final AppState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        // VOD oynatıcıyı aç, kaldığın yerden devam et
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => VodPlayerScreen(
-              url: record.url,
-              title: record.title,
-              mediaId: record.id,
-              poster: record.poster,
-              isMovie: record.isMovie,
-              resumePosition: record.position,
-            ),
-          ),
-        );
-      },
-      child: SizedBox(
-        width: 120,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (record.poster != null && record.poster!.isNotEmpty)
-                      Image.network(
-                        record.poster!,
-                        fit: BoxFit.cover,
-                        cacheWidth: 240,
-                        errorBuilder: (_, _, _) => _placeholder(),
-                        loadingBuilder: (_, child, p) => p == null ? child : _placeholder(),
-                      )
-                    else
-                      _placeholder(),
-                    // İlerleme çubuğu
-                    Positioned(
-                      left: 0, right: 0, bottom: 0,
-                      child: Container(
-                        height: 4,
-                        color: Colors.black.withValues(alpha: 0.5),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: record.progress,
-                          child: Container(color: Colors.amber),
-                        ),
-                      ),
-                    ),
-                    // Oynat ikonu
-                    const Center(
-                      child: Icon(Icons.play_circle_fill, color: Colors.white70, size: 36),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              record.title,
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            Text(
-              record.remainingText,
-              maxLines: 1,
-              style: const TextStyle(fontSize: 10, color: Colors.white54),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _placeholder() {
-    return Container(
-      color: Colors.white12,
-      child: const Center(child: Icon(Icons.movie, color: Colors.white38, size: 32)),
-    );
-  }
-}
-
-// ==================== Yardımcı Sınıflar ====================
-
-class _RowItem {
-  const _RowItem(this.id, this.name, this.poster, this.rating, this.categoryId, [this.plot, this.genre]);
-
-  final int id;
-  final String name;
-  final String? poster;
-  final String? rating;
-  final String? categoryId;
-  final String? plot;   // Konu/açıklama
-  final String? genre;  // Tür
-}
-
-// ==================== Hero Card ====================
-
-class _HeroCard extends StatefulWidget {
-  const _HeroCard(
-      {required this.item, required this.isMovie, required this.onTap});
-
-  final _RowItem item;
-  final bool isMovie;
-  final VoidCallback onTap;
-
-  @override
-  State<_HeroCard> createState() => _HeroCardState();
-}
-
-class _HeroCardState extends State<_HeroCard> {
-  final _focus = FocusNode(debugLabel: 'vod-hero');
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.space) {
-      widget.onTap();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final item = widget.item;
-    final focused = _focus.hasFocus;
-    final height = MediaQuery.of(context).size.height * 0.38;
-
-    return Focus(
-      focusNode: _focus,
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            onTap: widget.onTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: focused ? height + 8 : height,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _HeroImage(url: item.poster, name: item.name),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.transparent,
-                          Colors.black87,
-                        ],
-                      ),
+              return GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => VodPlayerScreen(
+                      url: r.url, title: r.title, mediaId: r.id,
+                      poster: r.poster, isMovie: r.isMovie, resumePosition: r.position,
                     ),
                   ),
-                  if (focused)
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: theme.colorScheme.primary,
-                          width: 3,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 14,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            if (item.rating != null &&
-                                item.rating!.isNotEmpty) ...[
-                              const Icon(Icons.star,
-                                  color: Colors.amber, size: 18),
-                              const SizedBox(width: 4),
-                              Text(
-                                item.rating!,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
+                ),
+                child: SizedBox(
+                  width: 120,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (r.poster != null && r.poster!.isNotEmpty)
+                                Image.network(r.poster!, fit: BoxFit.cover, cacheWidth: 240,
+                                  errorBuilder: (_, _, _) => _placeholder())
+                              else
+                                _placeholder(),
+                              Positioned(
+                                left: 0, right: 0, bottom: 0,
+                                child: Container(
+                                  height: 4,
+                                  color: Colors.black.withValues(alpha: 0.5),
+                                  child: FractionallySizedBox(
+                                    alignment: Alignment.centerLeft,
+                                    widthFactor: r.progress,
+                                    child: Container(color: Colors.amber),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const Center(
+                                child: Icon(Icons.play_circle_fill, color: Colors.white70, size: 36),
+                              ),
                             ],
-                            _Pill(
-                                label: widget.isMovie ? 'Film' : 'Dizi'),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          item.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            _HeroButton(
-                              icon: Icons.play_arrow,
-                              label: 'İzle',
-                              filled: true,
-                              onTap: widget.onTap,
-                            ),
-                            const SizedBox(width: 10),
-                            _HeroButton(
-                              icon: Icons.info_outline,
-                              label: 'Detay',
-                              filled: false,
-                              onTap: widget.onTap,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                      Text(r.remainingText, maxLines: 1,
+                        style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.white24,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label,
-          style: const TextStyle(color: Colors.white, fontSize: 12)),
-    );
-  }
-}
-
-class _HeroButton extends StatelessWidget {
-  const _HeroButton({
-    required this.icon,
-    required this.label,
-    required this.filled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: filled ? Colors.white : Colors.white12,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon,
-                  color: filled ? Colors.black : Colors.white, size: 20),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: filled ? Colors.black : Colors.white,
-                  fontWeight: FontWeight.w600,
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroImage extends StatelessWidget {
-  const _HeroImage({required this.url, required this.name});
-  final String? url;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    if (url == null || url!.isEmpty) {
-      return ColoredBox(color: colors.surfaceContainerHighest);
-    }
-    return Image.network(
-      url!,
-      fit: BoxFit.cover,
-      cacheWidth: 720,
-      errorBuilder: (_, _, _) =>
-          ColoredBox(color: colors.surfaceContainerHighest),
-      loadingBuilder: (_, child, progress) => progress == null
-          ? child
-          : ColoredBox(color: colors.surfaceContainerHighest),
-    );
-  }
-}
-
-// ==================== Row Section ====================
-
-class _RowSection extends StatelessWidget {
-  const _RowSection({
-    required this.title,
-    required this.items,
-    required this.isMovie,
-    required this.onTap,
-  });
-
-  final String title;
-  final List<_RowItem> items;
-  final bool isMovie;
-  final void Function(_RowItem) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-        SizedBox(
-          height: 170,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, i) {
-              final item = items[i];
-              return _RowCard(
-                item: item,
-                isMovie: isMovie,
-                onTap: () => onTap(item),
               );
             },
           ),
@@ -716,278 +856,67 @@ class _RowSection extends StatelessWidget {
       ],
     );
   }
+
+  Widget _placeholder() {
+    return Container(color: Colors.white12,
+      child: const Center(child: Icon(Icons.movie, color: Colors.white38, size: 32)));
+  }
 }
 
-class _RowCard extends StatefulWidget {
-  const _RowCard({
-    required this.item,
+// ==================== Yardımcı Sınıflar ====================
+
+class _VodItem {
+  const _VodItem({
+    required this.id, required this.name, this.poster,
+    this.rating, this.categoryId, this.plot, this.genre,
     required this.isMovie,
+  });
+
+  final int id;
+  final String name;
+  final String? poster;
+  final String? rating;
+  final String? categoryId;
+  final String? plot;
+  final String? genre;
+  final bool isMovie;
+}
+
+// ==================== Netflix Buton ====================
+
+class _NetflixButton extends StatelessWidget {
+  const _NetflixButton({
+    required this.icon,
+    required this.label,
+    required this.primary,
     required this.onTap,
   });
 
-  final _RowItem item;
-  final bool isMovie;
+  final IconData icon;
+  final String label;
+  final bool primary;
   final VoidCallback onTap;
 
   @override
-  State<_RowCard> createState() => _RowCardState();
-}
-
-class _RowCardState extends State<_RowCard> {
-  final _focus = FocusNode(debugLabel: 'vod-row-card');
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.space) {
-      widget.onTap();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final item = widget.item;
-    final focused = _focus.hasFocus;
-    const w = 110.0;
-
-    return Focus(
-      focusNode: _focus,
-      onKeyEvent: _onKey,
-      child: SizedBox(
-        width: w,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Ana kart
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
-                onTap: widget.onTap,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: focused ? colors.primary : Colors.transparent,
-                      width: focused ? 3 : 0,
-                    ),
-                    boxShadow: focused
-                        ? [BoxShadow(color: colors.primary.withValues(alpha: 0.4), blurRadius: 12)]
-                        : null,
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _poster(colors),
-                      const DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.center, end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Colors.black87],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 6, right: 6, bottom: 6,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontSize: 11,
-                                fontWeight: FontWeight.w600, height: 1.2)),
-                            if (item.rating != null && item.rating!.isNotEmpty)
-                              Row(children: [
-                                const Icon(Icons.star, color: Colors.amber, size: 11),
-                                const SizedBox(width: 2),
-                                Text(item.rating!,
-                                  style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                              ]),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // TiviMate tarzı künye bilgi kartı (odaklanınca üstte çıkar)
-            if (focused)
-              Positioned(
-                bottom: w * 1.35,
-                left: 0, right: 0,
-                child: _InfoCard(item: item, isMovie: widget.isMovie),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _poster(ColorScheme colors) {
-    final url = widget.item.poster;
-    if (url == null || url.isEmpty) {
-      return ColoredBox(color: colors.surfaceContainerHighest);
-    }
-    return Image.network(url, fit: BoxFit.cover, cacheWidth: 220,
-      errorBuilder: (_, _, _) => ColoredBox(color: colors.surfaceContainerHighest),
-      loadingBuilder: (_, child, progress) => progress == null
-          ? child : ColoredBox(color: colors.surfaceContainerHighest));
-  }
-}
-
-// ==================== Netflix Tarzı Bilgi Paneli ====================
-
-/// Odaklanınca kartın üstünde görünen geniş bilgi paneli.
-/// Büyük poster + film/dizi bilgileri: puan, tür, konu.
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.item, required this.isMovie});
-  final _RowItem item;
-  final bool isMovie;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.95),
-      borderRadius: BorderRadius.circular(12),
-      elevation: 12,
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
-        width: 340,
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white12, width: 1),
+          color: primary ? Colors.white : Colors.white.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Büyük poster
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 100, height: 140,
-                child: item.poster != null && item.poster!.isNotEmpty
-                    ? Image.network(
-                        item.poster!,
-                        fit: BoxFit.cover,
-                        cacheWidth: 200,
-                        errorBuilder: (_, _, _) => _posterFallback(),
-                        loadingBuilder: (_, child, p) => p == null ? child : _posterFallback(),
-                      )
-                    : _posterFallback(),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Bilgi paneli
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Film/Dizi rozeti
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isMovie ? Colors.blue.withValues(alpha: 0.3) : Colors.purple.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      isMovie ? 'FILM' : 'DIZI',
-                      style: TextStyle(
-                        color: isMovie ? Colors.blue[200] : Colors.purple[200],
-                        fontSize: 10, fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  // Başlık
-                  Text(
-                    item.name,
-                    maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  // Puan + tür
-                  Row(
-                    children: [
-                      if (item.rating != null && item.rating!.isNotEmpty) ...[
-                        const Icon(Icons.star, color: Colors.amber, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          item.rating!,
-                          style: const TextStyle(
-                            color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      if (item.genre != null && item.genre!.isNotEmpty)
-                        Expanded(
-                          child: Text(
-                            item.genre!,
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white60, fontSize: 11),
-                          ),
-                        ),
-                    ],
-                  ),
-                  // Konu (varsa)
-                  if (item.plot != null && item.plot!.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      item.plot!,
-                      maxLines: 3, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white70, fontSize: 11, height: 1.3,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 6),
-                  // İpucu
-                  Row(
-                    children: const [
-                      Icon(Icons.play_circle_outline, color: Colors.white38, size: 14),
-                      SizedBox(width: 4),
-                      Text(
-                        'OK ile izle',
-                        style: TextStyle(color: Colors.white38, fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            Icon(icon, color: primary ? Colors.black : Colors.white, size: 18),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(
+              color: primary ? Colors.black : Colors.white,
+              fontSize: 13, fontWeight: FontWeight.w600,
+            )),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _posterFallback() {
-    return Container(
-      color: Colors.white12,
-      child: Center(
-        child: Icon(
-          isMovie ? Icons.movie : Icons.tv,
-          color: Colors.white38, size: 32,
         ),
       ),
     );

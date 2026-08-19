@@ -10,7 +10,8 @@ import 'package:iptv_player/state/app_state.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-/// Tam ekran IPTV oynatıcısı — TiviMate tarzı anlık EPG + TVMate kategorili liste.
+/// TiviMate tarzı 3 kolonlu IPTV oynatıcısı:
+/// Sol: Kanal listesi | Orta: Canlı yayın | Sağ: EPG zaman çizelgesi
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
     super.key,
@@ -28,8 +29,7 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   late final StreamPlayer _player;
   late int _index;
-  int _listIndex = 0;
-  bool _showList = false;
+  bool _showPanel = false;
 
   bool _buffering = true;
   String? _error;
@@ -51,17 +51,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _subtitleText;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  // TiviMate tarzı kanal değiştirme EPG bilgi çubuğu
-  bool _showEpgBanner = false;
-  String? _epgBannerTitle;
-  String? _epgBannerNext;
-  String? _epgBannerCategory;
-  Timer? _epgBannerTimer;
+  // Panel modu: false = sol kanal listesi, true = sağ EPG
+  bool _showEpgPanel = false;
 
-  // TVMate tarzı kategori navigasyonu
+  // Panel filtresi
   String _panelFilterGroup = 'all';
   List<String> _panelGroups = [];
-  List<Channel> _panelChannels = [];
+
+
 
   Channel get _channel => widget.channels[_index];
 
@@ -69,7 +66,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     _index = widget.initialIndex;
-    _listIndex = _index;
     _player = createStreamPlayer(bufferSecs: _bufferSecs);
     _subscribe();
     WakelockPlus.enable();
@@ -96,15 +92,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         l.startsWith('tr ') || l.startsWith('tr|') || l == 'tr' || l.contains('türkiye');
   }
 
-  void _updatePanelChannels() {
-    if (_panelFilterGroup == 'all') {
-      _panelChannels = List.from(widget.channels);
-    } else {
-      _panelChannels = widget.channels
-          .where((c) => c.displayGroup == _panelFilterGroup)
-          .toList();
-    }
-  }
+  void _updatePanelChannels() {}
 
   void _panelRightArrow() {
     if (_panelGroups.length <= 2) return;
@@ -115,22 +103,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _panelFilterGroup = _panelGroups[currentIdx + 1];
     }
     _updatePanelChannels();
-    final currentChannel = widget.channels[_index];
-    final idxInNew = _panelChannels.indexOf(currentChannel);
-    _listIndex = idxInNew >= 0 ? idxInNew : 0;
     setState(() {});
   }
 
-  void _panelLeftArrow() {
-    if (_panelFilterGroup != 'all') {
-      _panelFilterGroup = 'all';
-      _updatePanelChannels();
-      final currentChannel = widget.channels[_index];
-      final idxInNew = _panelChannels.indexOf(currentChannel);
-      _listIndex = idxInNew >= 0 ? idxInNew : 0;
-      setState(() {});
-    }
-  }
+
 
   Future<void> _loadSettings() async {
     final speed = await SettingsService.loadSpeed();
@@ -146,7 +122,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _overlayTimer?.cancel();
     _volumeHudTimer?.cancel();
     _retryTimer?.cancel();
-    _epgBannerTimer?.cancel();
     WakelockPlus.disable();
     unawaited(_player.dispose());
     super.dispose();
@@ -181,8 +156,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     _player.position.listen((p) {
       if (!mounted) return;
-      if (_duration == Duration.zero) return;
-      if (!_overlayVisible && !_showEpgBanner) return;
       final now = DateTime.now();
       if (now.difference(_lastPositionAt) < const Duration(milliseconds: 500)) return;
       _lastPositionAt = now;
@@ -227,7 +200,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _scheduleOverlayHide() {
     _overlayTimer?.cancel();
     _overlayTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && _overlayVisible && !_buffering && _error == null && !_showList) {
+      if (mounted && _overlayVisible && !_buffering && _error == null && !_showPanel) {
         setState(() => _overlayVisible = false);
       }
     });
@@ -253,78 +226,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
-  // ==================== TiviMate EPG Banner ====================
-
-  /// Kanal değiştirildiğinde TiviMate tarzı anlık EPG bilgi çubuğunu göster.
   void _showEpgInfo(AppState state) {
-    _epgBannerTimer?.cancel();
-    final nowProgram = state.nowPlaying(_channel);
-    final nextProgram = state.nextProgram(_channel);
-    setState(() {
-      _showEpgBanner = true;
-      _epgBannerTitle = nowProgram?.title;
-      _epgBannerNext = nextProgram?.title;
-      _epgBannerCategory = _channel.displayGroup;
-    });
-    // 5 saniye sonra kaybol
-    _epgBannerTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) setState(() => _showEpgBanner = false);
-    });
+
   }
 
-  // ==================== Kanal listesi ====================
+  // ==================== Panel Kontrolleri ====================
 
-  void _toggleChannelList() {
+  void _togglePanel() {
     setState(() {
-      _showList = !_showList;
-      if (_showList) {
+      _showPanel = !_showPanel;
+      if (_showPanel) {
         _panelFilterGroup = _channel.displayGroup;
         if (!_panelGroups.contains(_panelFilterGroup)) {
           _panelFilterGroup = 'all';
         }
         _updatePanelChannels();
-        final idxInNew = _panelChannels.indexOf(_channel);
-        _listIndex = idxInNew >= 0 ? idxInNew : 0;
         _overlayVisible = true;
         _overlayTimer?.cancel();
       } else {
-        _panelFilterGroup = 'all';
-        _updatePanelChannels();
+        _showEpgPanel = false;
         _scheduleOverlayHide();
       }
     });
   }
 
-  void _closeList() {
-    if (!_showList) return;
+  void _closePanel() {
+    if (!_showPanel) return;
     setState(() {
-      _showList = false;
-      _panelFilterGroup = 'all';
-      _updatePanelChannels();
+      _showPanel = false;
+      _showEpgPanel = false;
     });
     _scheduleOverlayHide();
-  }
-
-  void _moveList(int delta) {
-    final next = _listIndex + delta;
-    if (next < 0 || next >= _panelChannels.length) return;
-    setState(() => _listIndex = next);
-  }
-
-  void _selectListChannel() {
-    final panelChannel = _panelChannels[_listIndex];
-    final globalIndex = widget.channels.indexOf(panelChannel);
-    _closeList();
-    if (globalIndex == _index) return;
-    setState(() => _index = globalIndex);
-    _openUser(_channel);
-    _showEpgInfo(context.read<AppState>());
-  }
-
-  void _selectListChannelAt(int i) {
-    if (i < 0 || i >= _panelChannels.length) return;
-    _listIndex = i;
-    _selectListChannel();
   }
 
   void _switchChannel(int delta) {
@@ -335,44 +267,66 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     setState(() {
       _index = next;
-      _listIndex = next;
     });
     _openUser(_channel);
     _showEpgInfo(context.read<AppState>());
+    // Panel açıksa kanal listesini de güncelle
+    if (_showPanel) {
+      _updatePanelChannels();
+    }
+  }
+
+  void _selectChannel(int index) {
+    if (index < 0 || index >= widget.channels.length) return;
+    setState(() => _index = index);
+    _openUser(_channel);
+    _showEpgInfo(context.read<AppState>());
+    _updatePanelChannels();
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
 
-    if (_showList) {
+    if (_showPanel) {
       if (key == LogicalKeyboardKey.arrowUp) {
-        _moveList(-1);
+        _switchChannel(-1);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowDown) {
-        _moveList(1);
+        _switchChannel(1);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowRight) {
-        _panelRightArrow();
+        // Sağ tuş: EPG panelini aç/kapat veya kategori değiştir
+        if (!_showEpgPanel) {
+          setState(() => _showEpgPanel = true);
+        } else {
+          _panelRightArrow();
+        }
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowLeft) {
-        _panelLeftArrow();
+        if (_showEpgPanel) {
+          setState(() => _showEpgPanel = false);
+        } else {
+          _closePanel();
+        }
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
-        _selectListChannel();
+        // Paneldeyken OK: kanalı seç ve paneli kapat
+        _closePanel();
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
-        _closeList();
+        _closePanel();
         return KeyEventResult.handled;
       }
       return KeyEventResult.handled;
     }
 
+    // Ana mod
     if (key == LogicalKeyboardKey.arrowUp) {
       _switchChannel(-1);
       return KeyEventResult.handled;
@@ -390,11 +344,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
-      _toggleChannelList();
+      _togglePanel();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.space) {
       _toggleOverlay();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
+      if (_showPanel) {
+        _closePanel();
+        return KeyEventResult.handled;
+      }
+      Navigator.of(context).pop();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -448,7 +410,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _player.buildVideo(fit: BoxFit.contain),
+              // Ana içerik: panel açıksa 3 kolon, değilse tam ekran video
+              if (_showPanel)
+                _build3ColumnLayout(state, nowProgram, nextProgram, isLive)
+              else
+                _player.buildVideo(fit: BoxFit.contain),
+
               // Ekran üstü altyazı
               if (_subtitleText != null && _subtitleText!.isNotEmpty)
                 Positioned(
@@ -473,6 +440,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                 ),
+
               // Yükleme / hata
               if (_buffering && !_hasPlayed && _error == null)
                 const _BufferingIndicator()
@@ -482,18 +450,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   onRetry: () => _openUser(_channel),
                   onBack: () => Navigator.of(context).pop(),
                 ),
-              // TiviMate tarzı EPG bilgi çubuğu (kanal değiştirmede anlık görünür)
-              if (_showEpgBanner && _error == null && !_showList)
-                _EpgInfoBanner(
-                  channelName: _channel.name,
-                  groupName: _epgBannerCategory ?? _channel.displayGroup,
-                  nowTitle: _epgBannerTitle,
-                  nextTitle: _epgBannerNext,
-                  index: _index,
-                  total: widget.channels.length,
-                ),
+
+
+
               // Üst/alt kontrol paneli
-              if (_overlayVisible && _error == null)
+              if (_overlayVisible && _error == null && !_showPanel)
                 _ControlsOverlay(
                   channel: _channel,
                   index: _index,
@@ -510,7 +471,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   onChannelDown: () => _switchChannel(-1),
                   onSubtitles: _showSubtitlesMenu,
                 ),
-              if (_overlayVisible && _error == null)
+
+              if (_overlayVisible && _error == null && !_showPanel)
                 const IgnorePointer(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -521,19 +483,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     ),
                   ),
                 ),
-              // Kanal listesi paneli
-              if (_showList && _error == null)
-                _ChannelListPanel(
-                  channels: widget.channels,
-                  panelChannels: _panelChannels,
-                  selectedIndex: _listIndex,
-                  currentIndex: _index,
-                  filterGroup: _panelFilterGroup,
-                  groups: _panelGroups,
-                  onSelectIndex: _selectListChannelAt,
-                  onClose: _closeList,
-                  onRightArrow: _panelRightArrow,
-                ),
+
               if (_showVolumeHud)
                 _VolumeHud(volume: _volume),
             ],
@@ -542,160 +492,599 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
     );
   }
+
+  /// TiviMate tarzı 3 kolonlu düzen
+  Widget _build3ColumnLayout(AppState state, dynamic nowProgram, dynamic nextProgram, bool isLive) {
+    return Row(
+      children: [
+        // Sol: Kanal listesi (TiviMate tarzı)
+        SizedBox(
+          width: 280,
+          child: _TiviMateChannelList(
+            channels: widget.channels,
+            selectedIndex: _index,
+            filterGroup: _panelFilterGroup,
+            groups: _panelGroups,
+            onSelect: _selectChannel,
+            filterGroupChanged: (g) {
+              setState(() {
+                _panelFilterGroup = g;
+                _updatePanelChannels();
+              });
+            },
+            onClose: _closePanel,
+          ),
+        ),
+        const VerticalDivider(width: 1, color: Colors.white24),
+
+        // Orta: Canlı yayın
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _player.buildVideo(fit: BoxFit.contain),
+              // Alt bilgi çubuğu
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: _ChannelInfoBar(
+                  channel: _channel,
+                  index: _index,
+                  total: widget.channels.length,
+                  nowProgram: nowProgram?.title,
+                  nextProgram: nextProgram?.title,
+                  isLive: isLive,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const VerticalDivider(width: 1, color: Colors.white24),
+
+        // Sağ: EPG zaman çizelgesi
+        SizedBox(
+          width: 320,
+          child: _EpgTimeline(
+            channel: _channel,
+            state: state,
+            nowProgram: nowProgram,
+            nextProgram: nextProgram,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// ==================== TiviMate EPG Banner ====================
+// ==================== TiviMate Kanal Listesi ====================
 
-/// Kanal değiştirildiğinde üstte kısa süreliğine görünen EPG bilgi çubuğu.
-/// TiviMate'in kanal değiştirmedeki "şimdi ne var" bilgisi gibi.
-class _EpgInfoBanner extends StatefulWidget {
-  const _EpgInfoBanner({
-    required this.channelName,
-    required this.groupName,
-    this.nowTitle,
-    this.nextTitle,
-    required this.index,
-    required this.total,
+class _TiviMateChannelList extends StatefulWidget {
+  const _TiviMateChannelList({
+    required this.channels,
+    required this.selectedIndex,
+    required this.filterGroup,
+    required this.groups,
+    required this.onSelect,
+    required this.filterGroupChanged,
+    required this.onClose,
   });
 
-  final String channelName;
-  final String groupName;
-  final String? nowTitle;
-  final String? nextTitle;
-  final int index;
-  final int total;
+  final List<Channel> channels;
+  final int selectedIndex;
+  final String filterGroup;
+  final List<String> groups;
+  final ValueChanged<int> onSelect;
+  final ValueChanged<String> filterGroupChanged;
+  final VoidCallback onClose;
 
   @override
-  State<_EpgInfoBanner> createState() => _EpgInfoBannerState();
+  State<_TiviMateChannelList> createState() => _TiviMateChannelListState();
 }
 
-class _EpgInfoBannerState extends State<_EpgInfoBanner>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _anim;
-  late final Animation<double> _fade;
+class _TiviMateChannelListState extends State<_TiviMateChannelList> {
+  late final ScrollController _scroll;
 
   @override
   void initState() {
     super.initState();
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _fade = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
-    _anim.forward();
+    _scroll = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+  }
+
+  @override
+  void didUpdateWidget(covariant _TiviMateChannelList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+    }
   }
 
   @override
   void dispose() {
-    _anim.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  void _scrollToSelected() {
+    if (!_scroll.hasClients) return;
+    const itemExtent = 56.0;
+    final target = widget.selectedIndex * itemExtent;
+    final viewport = _scroll.position.viewportDimension;
+    if (target < _scroll.offset) {
+      _scroll.jumpTo(target);
+    } else if (target + itemExtent > _scroll.offset + viewport) {
+      _scroll.jumpTo(target - viewport + itemExtent);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      left: 16, bottom: 100, right: 16,
-      child: FadeTransition(
-        opacity: _fade,
-        child: Material(
-          color: Colors.black.withValues(alpha: 0.82),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white12, width: 1),
+    final channels = widget.channels;
+
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: Column(
+        children: [
+          // Üst bar: Playlist başlığı
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0F0F23),
+              border: Border(bottom: BorderSide(color: Colors.white12)),
             ),
             child: Row(
               children: [
-                // Kanal numarası
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
+                const Icon(Icons.queue_music, color: Colors.white70, size: 18),
+                const SizedBox(width: 8),
+                const Expanded(
                   child: Text(
-                    '${widget.index + 1}',
-                    style: const TextStyle(
-                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold,
-                    ),
+                    'Playlist 1 • Tüm Kanallar',
+                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ),
-                const SizedBox(width: 12),
+                IconButton(
+                  onPressed: widget.onClose,
+                  icon: const Icon(Icons.close, color: Colors.white54, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+
+          // Kategori seçici
+          SizedBox(
+            height: 36,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: widget.groups.length,
+              itemBuilder: (context, i) {
+                final g = widget.groups[i];
+                final selected = widget.filterGroup == g;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: ChoiceChip(
+                    label: Text(
+                      i == 0 ? 'Tümü' : g,
+                      style: TextStyle(fontSize: 11, color: selected ? Colors.white : Colors.white70),
+                    ),
+                    selected: selected,
+                    onSelected: (_) => widget.filterGroupChanged(g),
+                    selectedColor: Colors.blue.withValues(alpha: 0.5),
+                    backgroundColor: Colors.white10,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const Divider(height: 1, color: Colors.white12),
+
+          // Kanal listesi
+          Expanded(
+            child: ListView.builder(
+              controller: _scroll,
+              itemCount: channels.length,
+              itemExtent: 56,
+              itemBuilder: (context, i) {
+                final c = channels[i];
+                final selected = i == widget.selectedIndex;
+                return InkWell(
+                  onTap: () => widget.onSelect(i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    color: selected
+                        ? Colors.blue.withValues(alpha: 0.3)
+                        : i.isEven
+                            ? Colors.white.withValues(alpha: 0.02)
+                            : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      children: [
+                        // Kanal numarası
+                        SizedBox(
+                          width: 32,
+                          child: Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              color: selected ? Colors.amber : Colors.white54,
+                              fontSize: 13,
+                              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        // Kanal logosu
+                        _TiviMateLogo(channel: c, size: 36),
+                        const SizedBox(width: 8),
+                        // Kanal adı ve grup
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                c.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: selected ? Colors.white : Colors.white70,
+                                  fontSize: 13,
+                                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                              Text(
+                                c.displayGroup,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white38, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Seçili kanal göstergesi
+                        if (selected)
+                          Container(
+                            width: 3,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: Colors.amber,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TiviMateLogo extends StatelessWidget {
+  const _TiviMateLogo({required this.channel, required this.size});
+  final Channel channel;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = channel.logo;
+    if (logo != null && logo.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.network(logo, width: size, height: size, fit: BoxFit.cover,
+          cacheWidth: (size * 2).round(),
+          errorBuilder: (_, _, _) => _fallback(),
+          loadingBuilder: (_, child, progress) => progress == null ? child : _fallback()),
+      );
+    }
+    return _fallback();
+  }
+
+  Widget _fallback() {
+    return Container(
+      width: size, height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white12,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Icon(Icons.tv, color: Colors.white38, size: 20),
+    );
+  }
+}
+
+// ==================== Kanal Bilgi Çubuğu (alt kısım) ====================
+
+class _ChannelInfoBar extends StatelessWidget {
+  const _ChannelInfoBar({
+    required this.channel,
+    required this.index,
+    required this.total,
+    this.nowProgram,
+    this.nextProgram,
+    required this.isLive,
+  });
+
+  final Channel channel;
+  final int index, total;
+  final String? nowProgram, nextProgram;
+  final bool isLive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [Colors.black87, Colors.transparent],
+        ),
+      ),
+      child: Row(
+        children: [
+          // Kanal numarası
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${index + 1}',
+              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Kanal adı + grup
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  channel.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${channel.displayGroup} • $index/$total',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          // CANLI rozeti
+          if (isLive)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text('CANLI', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== EPG Zaman Çizelgesi (sağ panel) ====================
+
+class _EpgTimeline extends StatelessWidget {
+  const _EpgTimeline({
+    required this.channel,
+    required this.state,
+    this.nowProgram,
+    this.nextProgram,
+  });
+
+  final Channel channel;
+  final AppState state;
+  final dynamic nowProgram;
+  final dynamic nextProgram;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final programs = <_EpgEntry>[];
+
+    // Mevcut ve sonraki programları ekle
+    if (nowProgram != null) {
+      programs.add(_EpgEntry(
+        title: nowProgram.title ?? 'Bilgi yok',
+        start: nowProgram.start,
+        end: nowProgram.end,
+        isNow: true,
+      ));
+    }
+    if (nextProgram != null) {
+      programs.add(_EpgEntry(
+        title: nextProgram.title ?? 'Bilgi yok',
+        start: nextProgram.start,
+        end: nextProgram.end,
+        isNow: false,
+      ));
+    }
+
+    // Sonraki programları da ekle (simülasyon)
+    if (programs.isEmpty) {
+      for (var i = 0; i < 8; i++) {
+        final start = now.add(Duration(hours: i));
+        final end = start.add(const Duration(hours: 1));
+        programs.add(_EpgEntry(
+          title: i == 0 ? 'Program' : 'Program ${i + 1}',
+          start: start,
+          end: end,
+          isNow: i == 0,
+        ));
+      }
+    }
+
+    return Container(
+      color: const Color(0xFF0F0F23),
+      child: Column(
+        children: [
+          // Üst bilgi
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.white12)),
+            ),
+            child: Row(
+              children: [
+                _TiviMateLogo(channel: channel, size: 40),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Kanal adı + grup
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              widget.channelName,
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16, fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.white10,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              widget.groupName,
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white60, fontSize: 10),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        channel.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 4),
-                      // Şimdi yayında
-                      if (widget.nowTitle != null && widget.nowTitle!.isNotEmpty)
-                        Row(
-                          children: [
-                            Container(
-                              width: 6, height: 6,
-                              decoration: const BoxDecoration(
-                                color: Colors.red, shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Şimdi: ${widget.nowTitle}',
-                                maxLines: 1, overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.lightBlueAccent, fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      // Sıradaki
-                      if (widget.nextTitle != null && widget.nextTitle!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            'Sonra: ${widget.nextTitle}',
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
-                          ),
-                        ),
+                      Text(
+                        channel.displayGroup,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-        ),
+
+          // Program başlığı
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: const BoxDecoration(
+              color: Color(0xFF16213E),
+              border: Border(bottom: BorderSide(color: Colors.white12)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.live_tv, color: Colors.red, size: 16),
+                SizedBox(width: 6),
+                Text('Program', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+
+          // Program listesi
+          Expanded(
+            child: ListView.builder(
+              itemCount: programs.length,
+              itemBuilder: (context, i) {
+                final p = programs[i];
+                return _EpgEntryTile(entry: p);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EpgEntry {
+  final String title;
+  final DateTime? start;
+  final DateTime? end;
+  final bool isNow;
+
+  _EpgEntry({required this.title, this.start, this.end, required this.isNow});
+
+  String _time(DateTime t) {
+    final local = t.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  String get timeRange {
+    if (start == null) return '';
+    if (end != null) return '${_time(start!)} - ${_time(end!)}';
+    return _time(start!);
+  }
+
+  String get durationText {
+    if (start == null || end == null) return '';
+    final diff = end!.difference(start!);
+    return '${diff.inMinutes} min';
+  }
+}
+
+class _EpgEntryTile extends StatelessWidget {
+  const _EpgEntryTile({required this.entry});
+  final _EpgEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: entry.isNow ? Colors.blue.withValues(alpha: 0.15) : Colors.transparent,
+        border: const Border(bottom: BorderSide(color: Colors.white12, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          // Saat
+          SizedBox(
+            width: 60,
+            child: Text(
+              entry.timeRange,
+              style: TextStyle(
+                color: entry.isNow ? Colors.amber : Colors.white54,
+                fontSize: 12,
+                fontWeight: entry.isNow ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Program bilgisi
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: entry.isNow ? Colors.white : Colors.white70,
+                    fontSize: 13,
+                    fontWeight: entry.isNow ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                if (entry.durationText.isNotEmpty)
+                  Text(
+                    entry.durationText,
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                  ),
+              ],
+            ),
+          ),
+          // Şimdi yayınlandı göstergesi
+          if (entry.isNow)
+            Container(
+              width: 8, height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -805,11 +1194,6 @@ class _ControlsOverlay extends StatelessWidget {
     return '$m:$s';
   }
 
-  String _time(DateTime t) {
-    final local = t.toLocal();
-    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -833,20 +1217,6 @@ class _ControlsOverlay extends StatelessWidget {
                         style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       if (streamInfo != null && streamInfo!.isNotEmpty)
                         Text(streamInfo!, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                      if (nowProgram != null && nowProgram!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Row(children: [
-                          const Icon(Icons.play_arrow, size: 14, color: Colors.lightBlueAccent),
-                          const SizedBox(width: 4),
-                          Expanded(child: Text('Şimdi: $nowProgram', maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 13))),
-                        ]),
-                      ],
-                      if (nextProgram != null && nextProgram!.isNotEmpty)
-                        Text('Sonra: $nextProgram (${nextStart != null ? _time(nextStart!) : ''})',
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white54, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -881,238 +1251,6 @@ class _ControlsOverlay extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ==================== TVMate Kanal Listesi Paneli ====================
-
-class _ChannelListPanel extends StatefulWidget {
-  const _ChannelListPanel({
-    required this.channels,
-    required this.panelChannels,
-    required this.selectedIndex,
-    required this.currentIndex,
-    required this.filterGroup,
-    required this.groups,
-    required this.onSelectIndex,
-    required this.onClose,
-    required this.onRightArrow,
-  });
-
-  final List<Channel> channels;
-  final List<Channel> panelChannels;
-  final int selectedIndex;
-  final int currentIndex;
-  final String filterGroup;
-  final List<String> groups;
-  final ValueChanged<int> onSelectIndex;
-  final VoidCallback onClose;
-  final VoidCallback onRightArrow;
-
-  @override
-  State<_ChannelListPanel> createState() => _ChannelListPanelState();
-}
-
-class _ChannelListPanelState extends State<_ChannelListPanel> {
-  late final ScrollController _scroll;
-
-  @override
-  void initState() {
-    super.initState();
-    _scroll = ScrollController();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
-  }
-
-  @override
-  void didUpdateWidget(covariant _ChannelListPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedIndex != widget.selectedIndex ||
-        oldWidget.filterGroup != widget.filterGroup) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
-    }
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  void _scrollToSelected() {
-    if (!_scroll.hasClients) return;
-    const itemExtent = 48.0;
-    final target = widget.selectedIndex * itemExtent;
-    final viewport = _scroll.position.viewportDimension;
-    if (target < _scroll.offset) {
-      _scroll.jumpTo(target);
-    } else if (target + itemExtent > _scroll.offset + viewport) {
-      _scroll.jumpTo(target - viewport + itemExtent);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final channels = widget.panelChannels;
-    final selectedIndex = widget.selectedIndex;
-    final currentIndex = widget.currentIndex;
-    final width = (MediaQuery.of(context).size.width * 0.28).clamp(260.0, 420.0).toDouble();
-
-    final groupIdx = widget.groups.indexOf(widget.filterGroup);
-    final groupCount = widget.groups.length;
-    final groupLabel = widget.filterGroup == 'all' ? 'TÜMÜ' : widget.filterGroup;
-
-    return Positioned(
-      right: 0, top: 0, bottom: 0, width: width,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.folder, color: Colors.white70, size: 16),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(groupLabel, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.amber, fontSize: 15, fontWeight: FontWeight.bold)),
-                        ),
-                        if (groupCount > 1)
-                          Text('${groupIdx + 1}/$groupCount',
-                            style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                        const SizedBox(width: 4),
-                        IconButton(onPressed: widget.onClose, tooltip: 'Kapat',
-                          icon: const Icon(Icons.close, color: Colors.white54, size: 18)),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: const [
-                        Icon(Icons.arrow_right, color: Colors.white38, size: 14),
-                        Text('Kategori', style: TextStyle(color: Colors.white38, fontSize: 10)),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_drop_down, color: Colors.white38, size: 14),
-                        Text('Kanal', style: TextStyle(color: Colors.white38, fontSize: 10)),
-                        SizedBox(width: 8),
-                        Icon(Icons.check_circle, color: Colors.white38, size: 14),
-                        Text('Seç', style: TextStyle(color: Colors.white38, fontSize: 10)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(color: Colors.white24, height: 1),
-            Expanded(
-              child: ListView.builder(
-                controller: _scroll,
-                itemCount: channels.length,
-                itemExtent: 48,
-                itemBuilder: (context, i) {
-                  final c = channels[i];
-                  final selected = i == selectedIndex;
-                  final isCurrent = widget.channels.indexOf(c) == currentIndex;
-                  return InkWell(
-                    onTap: () => widget.onSelectIndex(i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      color: selected
-                          ? Colors.lightBlue.withValues(alpha: 0.35)
-                          : isCurrent
-                              ? Colors.white.withValues(alpha: 0.08)
-                              : Colors.transparent,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      child: Row(
-                        children: [
-                          _ListLogo(channel: c),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: isCurrent ? Colors.amber : Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: selected ? FontWeight.bold : FontWeight.w400,
-                                  )),
-                                Text(c.displayGroup, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white38, fontSize: 10)),
-                              ],
-                            ),
-                          ),
-                          if (isCurrent)
-                            Container(width: 6, height: 6,
-                              decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                color: Colors.black.withValues(alpha: 0.4),
-                child: Row(
-                  children: const [
-                    Icon(Icons.keyboard_arrow_up, color: Colors.white54, size: 14),
-                    Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 14),
-                    SizedBox(width: 4),
-                    Expanded(child: Text('Gezin', style: TextStyle(color: Colors.white54, fontSize: 10))),
-                    Icon(Icons.arrow_right, color: Colors.white54, size: 14),
-                    SizedBox(width: 2),
-                    Text('Kategori', style: TextStyle(color: Colors.white54, fontSize: 10)),
-                    SizedBox(width: 8),
-                    Icon(Icons.check_circle, color: Colors.white54, size: 14),
-                    SizedBox(width: 2),
-                    Text('Aç', style: TextStyle(color: Colors.white54, fontSize: 10)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ListLogo extends StatelessWidget {
-  const _ListLogo({required this.channel});
-  final Channel channel;
-
-  @override
-  Widget build(BuildContext context) {
-    final logo = channel.logo;
-    if (logo != null && logo.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Image.network(logo, width: 34, height: 34, fit: BoxFit.cover,
-          cacheWidth: 68,
-          errorBuilder: (_, _, _) => _fallback(),
-          loadingBuilder: (_, child, progress) => progress == null ? child : _fallback()),
-      );
-    }
-    return _fallback();
-  }
-
-  Widget _fallback() {
-    final initial = channel.name.isNotEmpty ? channel.name[0].toUpperCase() : '?';
-    return Container(
-      width: 34, height: 34, alignment: Alignment.center,
-      decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(6)),
-      child: Text(initial, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white70)),
     );
   }
 }
