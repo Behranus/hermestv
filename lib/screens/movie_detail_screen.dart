@@ -42,6 +42,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     final playUrl = state.moviePlayUrl(movie.id);
 
     return Scaffold(
+      backgroundColor: const Color(0xFF0D0D1A),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(

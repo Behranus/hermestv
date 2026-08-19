@@ -43,6 +43,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     final year = info?.year;
 
     return Scaffold(
+      backgroundColor: const Color(0xFF0D0D1A),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
