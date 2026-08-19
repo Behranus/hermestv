@@ -54,20 +54,6 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
-  // ------------------------------------------------------------------
-  // ÇÖKME GÜVENLİĞİ (AMD Radeon/Vega + Wayland sistemlerde sistem restartı)
-  // ------------------------------------------------------------------
-  // Bu makinedeki Radeon Vega (Cezanne APU) amdgpu sürücüsü, uygulamanın
-  // OpenGL render'ıyla GPU sürücü çökmesine (ekran kararması / oturum
-  // kapanması) yol açıyor. Hem Impeller (Vulkan) hem Skia (OpenGL) sürücüyü
-  // çökertebiliyor. Garantili çözüm: uygulamanın TÜM render'ını yazılımsal
-  // yapmak (llvmpipe) — GPU sürücüsüne hiç dokunulmaz, çökme imkânsız olur.
-  // (Flutter engine + media_kit video GL bağlamları bu değişkenle yazılımsal
-  //  render kullanır. Video çözme zaten yazılımsal: MediaKitStreamPlayer'da
-  //  hwdec=no.)
-  setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
-  setenv("GALLIUM_DRIVER", "llvmpipe", 1);
-
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);

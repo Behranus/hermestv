@@ -253,7 +253,7 @@ class MediaKitStreamPlayer extends StreamPlayer {
       // unsharp-luminance=5x5: luminans için 5x5 çekirdek.
       // unsharp-luminance-amount=0.8: keskinlik miktarı (çok değil, doğal).
       extras: const {
-        'hwdec': 'auto',
+        'hwdec': 'no',
         'slang': 'tr,tur',
         'vo': 'libmpv',
         // Tampon
