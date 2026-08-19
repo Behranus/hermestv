@@ -3,12 +3,19 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:iptv_player/screens/home_shell.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:iptv_player/state/app_state.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ---- media_kit Linux oynatıcı motoru ----
+  // MediaKit.ensureInitialized() Linux'ta media_kit (libmpv) kullanmadan
+  // ÖNCE çağrılmalıdır. Çağrılmazsa 'ensureInitialized must be called'
+  // hatası verir ve tüm oynatıcı çöker.
+  MediaKit.ensureInitialized();
 
   // ---- 2GB RAM'li giriş seviyesi Box'lar için bellek yönetimi ----
   // Test sunucusu gibi binlerce kanallı listelerde logolar belleği şişirip
