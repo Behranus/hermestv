@@ -116,13 +116,11 @@ class _NetflixTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFF0D0D1A),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
+      child: Column(
           children: [
-            // Üst satır: Logo + arama + yenile
+            // Üst satır: Logo + yenile
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
               child: Row(
                 children: [
                   // Logo
@@ -171,7 +169,6 @@ class _NetflixTopBar extends StatelessWidget {
               ],
             ),
           ],
-        ),
       ),
     );
   }
@@ -274,9 +271,12 @@ class _NetflixTabState extends State<_NetflixTab>
               child: _NetflixHeroBanner(item: all.first, onTap: () => widget.onItemTap(all.first)),
             ),
 
-          // Gezinme İkonları
-          SliverToBoxAdapter(
-            child: _NetflixNavIcons(),
+          // İnce ayırıcı çizgi
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Divider(color: Colors.white24, height: 1),
+            ),
           ),
 
           // Kaldığın Yerden Devam
@@ -502,42 +502,6 @@ class _NetflixHeroBannerState extends State<_NetflixHeroBanner> {
       ),
     );
   }
-}
-
-// ==================== Netflix Navigasyon İkonları ====================
-
-class _NetflixNavIcons extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      _NavIconData(Icons.home, 'Ana Sayfa'),
-      _NavIconData(Icons.add, 'Listem'),
-      _NavIconData(Icons.search, 'Ara'),
-      _NavIconData(Icons.download, 'İndirilenler'),
-      _NavIconData(Icons.explore, 'Keşfet'),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: items.map((item) => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(item.icon, color: Colors.white70, size: 24),
-            const SizedBox(height: 4),
-            Text(item.label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
-          ],
-        )).toList(),
-      ),
-    );
-  }
-}
-
-class _NavIconData {
-  final IconData icon;
-  final String label;
-  _NavIconData(this.icon, this.label);
 }
 
 // ==================== Netflix Bölüm ====================

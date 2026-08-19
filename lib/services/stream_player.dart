@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:iptv_player/services/hls_subtitle_service.dart';
 import 'package:video_player/video_player.dart';
@@ -355,8 +355,11 @@ class ExoStreamPlayer extends StreamPlayer {
   @override
   Widget buildVideo({BoxFit fit = BoxFit.contain}) {
     final c = _controller;
-    if (c == null) return const SizedBox.shrink();
-    return VideoPlayer(c);
+    if (c == null) return const ColoredBox(color: Colors.black);
+    return ColoredBox(
+      color: Colors.black,
+      child: VideoPlayer(c),
+    );
   }
 
   @override

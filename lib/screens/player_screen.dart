@@ -404,7 +404,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
       onKeyEvent: _onKey,
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: GestureDetector(
+        body: MouseRegion(
+          onHover: (event) {
+            if (!_showPanel) {
+              final screenW = MediaQuery.of(context).size.width;
+              if (event.position.dx >= screenW - 60) {
+                _togglePanel();
+              }
+            }
+          },
+          child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _toggleOverlay,
           child: Stack(
@@ -489,10 +498,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ],
           ),
         ),
+        ),
       ),
     );
   }
-
+  
   /// TiviMate tarzı 3 kolonlu düzen
   Widget _build3ColumnLayout(AppState state, dynamic nowProgram, dynamic nextProgram, bool isLive) {
     return Row(
