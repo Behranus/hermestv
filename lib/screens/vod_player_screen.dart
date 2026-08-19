@@ -1,10 +1,14 @@
 import 'dart:async';
 
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:iptv_player/screens/subtitle_search_screen.dart';
 import 'package:iptv_player/services/resume_service.dart';
 import 'package:iptv_player/services/stream_player.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Tek bir medya (film/bölüm) için kaydırıcılı, ileri/geri sarmalı oynatıcı.
@@ -246,6 +250,27 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       if (path == null) return;
       await _player.setExternalSubtitle('file://$path');
       setState(() => _activeSubtitleId = 'file://$path');
+    } else if (selected == 'opensubtitles') {
+      // OpenSubtitles arama sayfasına git
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<SubtitleDownloadResult>(
+        MaterialPageRoute(
+          builder: (_) => SubtitleSearchScreen(movieName: widget.title),
+        ),
+      );
+      if (result != null && mounted) {
+        // SRT içediğini dosyaya yaz ve yükle
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/subtitle_open.${result.format.toLowerCase()}');
+        await file.writeAsString(result.content);
+        await _player.setExternalSubtitle('file://${file.path}');
+        setState(() => _activeSubtitleId = 'file://${file.path}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${result.fileName} yüklendi')),
+          );
+        }
+      }
     } else {
       // HLS gömülü parça seçimi.
       await _player.setSubtitleTrackById(selected);
@@ -571,6 +596,12 @@ class _VodSubtitlesSheet extends StatelessWidget {
             ),
           ],
           const Divider(),
+          ListTile(
+            leading: const Icon(Icons.language, color: Colors.amber),
+            title: const Text('OpenSubtitles\'da ara'),
+            subtitle: const Text('İnternette altyazı bul ve yükle'),
+            onTap: () => Navigator.of(context).pop('opensubtitles'),
+          ),
           ListTile(
             leading: const Icon(Icons.upload_file),
             title: const Text('Dosyadan altyazı yükle'),
