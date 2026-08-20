@@ -30,6 +30,8 @@ class _VodScreenState extends State<VodScreen>
   bool _showSearch = false;
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  int _focusSection = 0; // 0=üst bar, 1=kategoriler, 2=grid
+  final _categoryScrollKey = GlobalKey();
 
   @override
   void initState() {
@@ -69,101 +71,125 @@ class _VodScreenState extends State<VodScreen>
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D0D1A),
-      body: Column(
-        children: [
-          // Üst bar
-          _TurkcellTopBar(
-            onBack: () => Navigator.of(context).pop(),
-            onRefresh: state.loadVod,
-            isLoading: state.vodLoading,
-            onSearchToggle: () => setState(() => _showSearch = !_showSearch),
-            showSearch: _showSearch,
-          ),
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        final key = event.logicalKey;
+        // ESC: geri
+        if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
+          Navigator.of(context).pop();
+          return KeyEventResult.handled;
+        }
+        // Geri tuşu: bir önceki bölüme geç
+        if (key == LogicalKeyboardKey.arrowLeft && _focusSection > 0) {
+          setState(() => _focusSection--);
+          return KeyEventResult.handled;
+        }
+        // Sağ ok: bir sonraki bölüme geç
+        if (key == LogicalKeyboardKey.arrowRight && _focusSection < 2) {
+          setState(() => _focusSection++);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0D0D1A),
+        body: Column(
+          children: [
+            // Üst bar
+            _TurkcellTopBar(
+              onBack: () => Navigator.of(context).pop(),
+              onRefresh: state.loadVod,
+              isLoading: state.vodLoading,
+              onSearchToggle: () => setState(() => _showSearch = !_showSearch),
+              showSearch: _showSearch,
+            ),
 
-          // Arama kutusu
-          if (_showSearch)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (v) => setState(() => _searchQuery = v),
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Film veya dizi ara...',
-                  hintStyle: TextStyle(color: Colors.white38),
-                  prefixIcon: Icon(Icons.search, color: Colors.white54),
-                  filled: true,
-                  fillColor: const Color(0xFF161B22),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
+            // Arama kutusu
+            if (_showSearch)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Film veya dizi ara...',
+                    hintStyle: TextStyle(color: Colors.white38),
+                    prefixIcon: Icon(Icons.search, color: Colors.white54),
+                    filled: true,
+                    fillColor: const Color(0xFF161B22),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
+
+            // Film / Dizi sekmeleri
+            Container(
+              color: const Color(0xFF0D0D1A),
+              child: Row(
+                children: [
+                  _TabChip('Filmler', _tabController.index == 0, () {
+                    _tabController.animateTo(0);
+                    setState(() => _selectedCategoryId = null);
+                  }),
+                  _TabChip('Diziler', _tabController.index == 1, () {
+                    _tabController.animateTo(1);
+                    setState(() => _selectedCategoryId = null);
+                  }),
+                ],
+              ),
             ),
 
-          // Film / Dizi sekmeleri
-          Container(
-            color: const Color(0xFF0D0D1A),
-            child: Row(
-              children: [
-                _TabChip('Filmler', _tabController.index == 0, () {
-                  _tabController.animateTo(0);
-                  setState(() => _selectedCategoryId = null);
-                }),
-                _TabChip('Diziler', _tabController.index == 1, () {
-                  _tabController.animateTo(1);
-                  setState(() => _selectedCategoryId = null);
-                }),
-              ],
+            // Kategori filtreleri
+            _CategoryFilterBar(
+              key: _categoryScrollKey,
+              categories: state.vodCategories,
+              selectedId: _selectedCategoryId,
+              onSelect: (id) => setState(() => _selectedCategoryId = id),
+              isMovieTab: _tabController.index == 0,
+              movieCount: state.filteredVodMovies.length,
+              seriesCount: state.filteredVodSeries.length,
             ),
-          ),
 
-          // Kategori filtreleri
-          _CategoryFilterBar(
-            categories: state.vodCategories,
-            selectedId: _selectedCategoryId,
-            onSelect: (id) => setState(() => _selectedCategoryId = id),
-            isMovieTab: _tabController.index == 0,
-            movieCount: state.filteredVodMovies.length,
-            seriesCount: state.filteredVodSeries.length,
-          ),
-
-          // İçerik
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _TurkcellContentGrid(
-                  isMovies: true,
-                  state: state,
-                  selectedCategoryId: _selectedCategoryId,
-                  searchQuery: _searchQuery,
-                  onItemTap: (item) {
-                    final movie = state.filteredVodMovies.where((m) => m.id == item.id).firstOrNull;
-                    if (movie != null) Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: movie)),
-                    );
-                  },
-                ),
-                _TurkcellContentGrid(
-                  isMovies: false,
-                  state: state,
-                  selectedCategoryId: _selectedCategoryId,
-                  searchQuery: _searchQuery,
-                  onItemTap: (item) {
-                    final series = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
-                    if (series != null) Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: series)),
-                    );
-                  },
-                ),
-              ],
+            // İçerik
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _TurkcellContentGrid(
+                    isMovies: true,
+                    state: state,
+                    selectedCategoryId: _selectedCategoryId,
+                    searchQuery: _searchQuery,
+                    onItemTap: (item) {
+                      final movie = state.filteredVodMovies.where((m) => m.id == item.id).firstOrNull;
+                      if (movie != null) Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: movie)),
+                      );
+                    },
+                  ),
+                  _TurkcellContentGrid(
+                    isMovies: false,
+                    state: state,
+                    selectedCategoryId: _selectedCategoryId,
+                    searchQuery: _searchQuery,
+                    onItemTap: (item) {
+                      final series = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
+                      if (series != null) Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: series)),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -222,36 +248,56 @@ class _TurkcellTopBar extends StatelessWidget {
 }
 
 // ==================== Tab Chip ====================
-class _TabChip extends StatelessWidget {
+class _TabChip extends StatefulWidget {
   const _TabChip(this.label, this.selected, this.onTap);
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
+  State<_TabChip> createState() => _TabChipState();
+}
+
+class _TabChipState extends State<_TabChip> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFFF0050) : const Color(0xFF161B22),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              label == 'Filmler' ? Icons.movie : Icons.tv,
-              color: Colors.white, size: 14),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            )),
-          ],
+    return Focus(
+      onFocusChange: (f) => setState(() => _focused = f),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.enter ||
+             event.logicalKey == LogicalKeyboardKey.select)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          decoration: BoxDecoration(
+            color: widget.selected ? const Color(0xFFFF0050) : const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(20),
+            border: _focused ? Border.all(color: Colors.white38, width: 2) : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.label == 'Filmler' ? Icons.movie : Icons.tv,
+                color: Colors.white, size: 14),
+              const SizedBox(width: 4),
+              Text(widget.label, style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: (widget.selected || _focused) ? FontWeight.bold : FontWeight.normal,
+              )),
+            ],
+          ),
         ),
       ),
     );
@@ -261,6 +307,7 @@ class _TabChip extends StatelessWidget {
 // ==================== Kategori Filtre Barı ====================
 class _CategoryFilterBar extends StatelessWidget {
   const _CategoryFilterBar({
+    super.key,
     required this.categories,
     required this.selectedId,
     required this.onSelect,
@@ -305,7 +352,7 @@ class _CategoryFilterBar extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
+class _FilterChip extends StatefulWidget {
   const _FilterChip({
     required this.label,
     required this.selected,
@@ -319,22 +366,44 @@ class _FilterChip extends StatelessWidget {
   final Color color;
 
   @override
+  State<_FilterChip> createState() => _FilterChipState();
+}
+
+class _FilterChipState extends State<_FilterChip> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        margin: const EdgeInsets.symmetric(horizontal: 3),
-        decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.3) : const Color(0xFF161B22),
-          borderRadius: BorderRadius.circular(16),
-          border: selected ? Border.all(color: color, width: 1) : null,
+    return Focus(
+      onFocusChange: (f) => setState(() => _focused = f),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.enter ||
+             event.logicalKey == LogicalKeyboardKey.select)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            color: widget.selected ? widget.color.withValues(alpha: 0.3) : const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.selected ? widget.color : (_focused ? Colors.white38 : Colors.transparent),
+              width: _focused ? 2 : 1,
+            ),
+          ),
+          child: Text(widget.label, style: TextStyle(
+            color: widget.selected ? Colors.white : Colors.white70,
+            fontSize: 11,
+            fontWeight: (widget.selected || _focused) ? FontWeight.bold : FontWeight.normal,
+          )),
         ),
-        child: Text(label, style: TextStyle(
-          color: selected ? Colors.white : Colors.white70,
-          fontSize: 11,
-          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-        )),
       ),
     );
   }

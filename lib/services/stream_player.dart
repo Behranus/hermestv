@@ -152,38 +152,40 @@ class ExoStreamPlayer extends StreamPlayer {
   @override
   double bufferSecs;
 
-  /// Sadece EKRANDAKİ oynatıcının olaylarını işler. Bekleyen/eski oynatıcıların
-  /// olayları (özellikle hata) görmezden gelinir → hızlı kanal değişiminde
-  /// eski akışın hatası yeni akışı kesmez.
+  /// Güvenli event gönderimi — disposed veya kapatılmış stream'lere ekleme.
+  void _safeAdd<T>(StreamController<T> sc, T value) {
+    if (_disposed || sc.isClosed) return;
+    try { sc.add(value); } catch (_) {}
+  }
+
+  /// Sadece EKRANDAKİ oynatıcının olaylarını işler.
   void _onValueChanged(VideoPlayerController src) {
     final c = _controller;
     if (c == null || _disposed) return;
     if (!identical(src, c)) return;
     final v = c.value;
-    if (v.hasError &&
-        v.errorDescription != null &&
-        v.errorDescription != _lastError) {
+    if (v.hasError && v.errorDescription != null && v.errorDescription != _lastError) {
       _lastError = v.errorDescription;
-      _error.add(v.errorDescription!);
+      _safeAdd(_error, v.errorDescription!);
     }
     if (v.isPlaying && !_startedPlaying) {
       _startedPlaying = true;
-      _buffering.add(false);
+      _safeAdd(_buffering, false);
       _captureStreamInfo(c);
     }
     if (!v.isPlaying) {
-      _buffering.add(v.isBuffering);
+      _safeAdd(_buffering, v.isBuffering);
     }
-    _playing.add(v.isPlaying);
-    _volume.add(v.volume);
+    _safeAdd(_playing, v.isPlaying);
+    _safeAdd(_volume, v.volume);
     final now = DateTime.now();
     if (now.difference(_lastPositionEmit) >= const Duration(milliseconds: 250)) {
       _lastPositionEmit = now;
-      _position.add(v.position);
+      _safeAdd(_position, v.position);
       _updateSubtitleAt(v.position);
     }
-    _duration.add(v.duration);
-    if (v.isCompleted) _completed.add(true);
+    _safeAdd(_duration, v.duration);
+    if (v.isCompleted) _safeAdd(_completed, true);
   }
 
   void _captureStreamInfo(VideoPlayerController c) {
@@ -207,11 +209,11 @@ class ExoStreamPlayer extends StreamPlayer {
     _startedPlaying = false;
     _cues = const [];
     _activeSubtitle = null;
-    _subtitleText.add(null);
-    _activeSubtitleId.add(null);
-    _buffering.add(true);
-    _position.add(Duration.zero);
-    _duration.add(Duration.zero);
+    _safeAdd(_subtitleText, null);
+    _safeAdd(_activeSubtitleId, null);
+    _safeAdd(_buffering, true);
+    _safeAdd(_position, Duration.zero);
+    _safeAdd(_duration, Duration.zero);
     _headers = headers;
     _lastUrl = url;
     _hlsSubtitleRefresh?.cancel();
@@ -475,6 +477,7 @@ class ExoStreamPlayer extends StreamPlayer {
 
   @override
   Future<void> dispose() async {
+    if (_disposed) return;
     _disposed = true;
     _generation++;
     _hlsSubtitleRefresh?.cancel();
@@ -483,19 +486,14 @@ class ExoStreamPlayer extends StreamPlayer {
     _controller = null;
     if (c != null) {
       try {
+        c.removeListener(() {});
         await c.dispose();
       } catch (_) {}
     }
-    await _buffering.close();
-    await _error.close();
-    await _playing.close();
-    await _volume.close();
-    await _position.close();
-    await _duration.close();
-    await _completed.close();
-    await _subtitleTracks.close();
-    await _subtitleText.close();
-    await _activeSubtitleId.close();
+    // Stream'leri güvenli kapat — zaten kapalıysa sessizce geç
+    for (final sc in [_buffering, _error, _playing, _volume, _position, _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId]) {
+      if (!sc.isClosed) await sc.close();
+    }
   }
 }
 
