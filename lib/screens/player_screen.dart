@@ -59,8 +59,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String _panelFilterGroup = 'all';
   List<String> _panelGroups = [];
 
-  // Alt kontrol odağı: 0=Önceki, 1=Oynat, 2=Sonraki, 3=Menü
-  int _controlFocus = 1;
+  // Alt kontrol odağı: 0=Altyazı, 1=Ekran, 2=Oynat, 3=Uyku, 4=Kanal Listesi
+  int _controlFocus = 2;
 
 
 
@@ -303,16 +303,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _activateFocusedControl() {
     switch (_controlFocus) {
-      case 0: _switchChannel(-1); break; // Önceki
-      case 1: // Oynat/Duraklat
+      case 0: _showSubtitlesMenu(); break; // Altyazı
+      case 1: _showAspectRatio(context); break; // Ekran Oranı
+      case 2: // Oynat/Duraklat
         if (_player.playing.toString().contains('true')) {
           _player.pause();
         } else {
           _player.play();
         }
         break;
-      case 2: _switchChannel(1); break; // Sonraki
-      case 3: _showMainMenu(); break; // Menü
+      case 3: _showSleepTimer(context); break; // Uyku
+      case 4: _togglePanel(); break; // Kanal Listesi
     }
   }
 
@@ -401,7 +402,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
 
-    // Enter/Select: panel açıkken seç, overlay'deyken kontrolü aktifleştir, yoksa aç
+    // Enter/Select (OK): panel açıkken seç, overlay'deyken kontrolü aktifleştir, yoksa kanal listesini aç
     if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
       if (_showPanel) {
         _selectChannel(_panelIndex);
@@ -409,7 +410,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       } else if (_overlayVisible) {
         _activateFocusedControl();
       } else {
-        _toggleOverlay();
+        // Kanal listesi panelini aç (canlı yayın devam ederken)
+        _togglePanel();
       }
       return KeyEventResult.handled;
     }
@@ -422,11 +424,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // ---- Overlay'deyken D-pad: soldaki butonlarda gezin ----
     if (_overlayVisible && !_showPanel) {
       if (key == LogicalKeyboardKey.arrowLeft) {
-        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 3));
+        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 4));
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowRight) {
-        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 3));
+        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 4));
         return KeyEventResult.handled;
       }
     }
@@ -466,7 +468,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      _changeVolume(0.1);
+      // Sağ ok: menü panelini aç (altyazı, ekran oranı, uyku, ses)
+      _showMainMenu();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -772,10 +775,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _CtrlBtn(icon: Icons.skip_previous, label: 'Önceki', focused: _controlFocus == 0),
-                          _CtrlBtn(icon: Icons.play_circle_filled, label: 'Oynat', focused: _controlFocus == 1, size: 48),
-                          _CtrlBtn(icon: Icons.skip_next, label: 'Sonraki', focused: _controlFocus == 2),
-                          _CtrlBtn(icon: Icons.menu, label: 'Menü', focused: _controlFocus == 3),
+                          _CtrlBtn(icon: Icons.subtitles, label: 'Altyazı', focused: _controlFocus == 0),
+                          _CtrlBtn(icon: Icons.aspect_ratio, label: 'Ekran', focused: _controlFocus == 1),
+                          _CtrlBtn(icon: Icons.play_circle_filled, label: 'Oynat', focused: _controlFocus == 2, size: 48),
+                          _CtrlBtn(icon: Icons.bedtime_outlined, label: 'Uyku', focused: _controlFocus == 3),
+                          _CtrlBtn(icon: Icons.queue_music, label: 'Liste', focused: _controlFocus == 4),
                         ],
                       ),
                     ),
