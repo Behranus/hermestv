@@ -59,6 +59,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String _panelFilterGroup = 'all';
   List<String> _panelGroups = [];
 
+  // Alt kontrol odağı: 0=Önceki, 1=Oynat, 2=Sonraki, 3=Menü
+  int _controlFocus = 1;
+
 
 
   Channel get _channel => widget.channels[_index];
@@ -298,6 +301,95 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _updatePanelChannels();
   }
 
+  void _activateFocusedControl() {
+    switch (_controlFocus) {
+      case 0: _switchChannel(-1); break; // Önceki
+      case 1: // Oynat/Duraklat
+        if (_player.playing.toString().contains('true')) {
+          _player.pause();
+        } else {
+          _player.play();
+        }
+        break;
+      case 2: _switchChannel(1); break; // Sonraki
+      case 3: _showMainMenu(); break; // Menü
+    }
+  }
+
+  void _showMainMenu() {
+    _overlayTimer?.cancel();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF161B22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Menü', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.subtitles, color: Colors.white70),
+              title: const Text('Altyazılar', style: TextStyle(color: Colors.white)),
+              onTap: () { Navigator.pop(ctx); _showSubtitlesMenu(); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.fast_rewind, color: Colors.white70),
+              title: const Text('10 sn Geri Al', style: TextStyle(color: Colors.white)),
+              onTap: () { Navigator.pop(ctx); _seekBy(-10); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.fast_forward, color: Colors.white70),
+              title: const Text('10 sn İleri Al', style: TextStyle(color: Colors.white)),
+              onTap: () { Navigator.pop(ctx); _seekBy(10); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.aspect_ratio, color: Colors.white70),
+              title: const Text('Ekran Oranı', style: TextStyle(color: Colors.white)),
+              onTap: () { Navigator.pop(ctx); _showAspectRatio(context); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bedtime_outlined, color: Colors.white70),
+              title: const Text('Uyku Zamanlayıcı', style: TextStyle(color: Colors.white)),
+              onTap: () { Navigator.pop(ctx); _showSleepTimer(context); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.volume_up, color: Colors.white70),
+              title: Text('Ses: ${(_volume * 100).round()}%', style: const TextStyle(color: Colors.white)),
+              onTap: () { Navigator.pop(ctx); },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    ).then((_) {
+      if (mounted) _scheduleOverlayHide();
+    });
+  }
+
+  void _seekBy(int seconds) {
+    final target = _position + Duration(seconds: seconds);
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (_duration > Duration.zero && target > _duration ? _duration : target);
+    _player.seek(clamped);
+  }
+
+  String _fmt(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;      // ---- Global tuşlar (panel açık/kapalı fark etmez) ----
@@ -309,29 +401,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
 
-    // Altyazı tuşu (S) — her durumda menüyü aç
-    if (key == LogicalKeyboardKey.keyS) {
-      _showSubtitlesMenu();
-      return KeyEventResult.handled;
-    }
-    // Uyku zamanlayıcı tuşu (T)
-    if (key == LogicalKeyboardKey.keyT) {
-      _showSleepTimer(context);
-      return KeyEventResult.handled;
-    }
-    // Ekran oranı tuşu (A)
-    if (key == LogicalKeyboardKey.keyA) {
-      _showAspectRatio(context);
-      return KeyEventResult.handled;
-    }
-    // Enter/Select: panel varsa kapat, yoksa aç
+    // Enter/Select: panel açıkken seç, overlay'deyken kontrolü aktifleştir, yoksa aç
     if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
       if (_showPanel) {
-        // Paneldeyken OK: seçili kanalı aç ve paneli kapat
         _selectChannel(_panelIndex);
         _closePanel();
+      } else if (_overlayVisible) {
+        _activateFocusedControl();
       } else {
-        _togglePanel();
+        _toggleOverlay();
       }
       return KeyEventResult.handled;
     }
@@ -339,6 +417,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (key == LogicalKeyboardKey.space) {
       _toggleOverlay();
       return KeyEventResult.handled;
+    }
+
+    // ---- Overlay'deyken D-pad: soldaki butonlarda gezin ----
+    if (_overlayVisible && !_showPanel) {
+      if (key == LogicalKeyboardKey.arrowLeft) {
+        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 3));
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowRight) {
+        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 3));
+        return KeyEventResult.handled;
+      }
     }
 
     // ---- Paneldeyken ok tuşları ----
@@ -620,26 +710,76 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
 
 
-              // Üst/alt kontrol paneli — panel açıkken de görünür
-              if (_overlayVisible && _error == null)
-                _ControlsOverlay(
-                  channel: _channel,
-                  index: _index,
-                  total: widget.channels.length,
-                  position: _position,
-                  duration: _duration,
-                  isLive: isLive,
-                  streamInfo: _player.streamInfo,
-                  nowProgram: nowProgram?.title,
-                  nextProgram: nextProgram?.title,
-                  nextStart: nextProgram?.start,
-                  onBack: () => Navigator.of(context).pop(),
-                  onChannelUp: () => _switchChannel(1),
-                  onChannelDown: () => _switchChannel(-1),
-                  onSubtitles: _showSubtitlesMenu,
-                  onSleepTimer: () => _showSleepTimer(context),
-                  onAspectRatio: () => _showAspectRatio(context),
-                  onTogglePanel: _togglePanel,
+              // Üst bar (kanal bilgisi)
+              if (_overlayVisible && _error == null && !_showPanel)
+                Positioned(
+                  top: 0, left: 0, right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                        colors: [Colors.black87, Colors.transparent],
+                      ),
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_channel.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                                if (nowProgram != null && nowProgram.title != null)
+                                  Text(nowProgram.title!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.amber, fontSize: 13)),
+                                Text('${_channel.displayGroup} • ${_index + 1}/${widget.channels.length}',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          if (isLive)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                              child: const Text('CANLI', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            )
+                          else
+                            Text('${_fmt(_position)} / ${_fmt(_duration)}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Alt kontrol barı (4 buton: Önceki, Oynat, Sonraki, Menü)
+              if (_overlayVisible && _error == null && !_showPanel)
+                Positioned(
+                  bottom: 0, left: 0, right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter, end: Alignment.topCenter,
+                        colors: [Colors.black87, Colors.transparent],
+                      ),
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _CtrlBtn(icon: Icons.skip_previous, label: 'Önceki', focused: _controlFocus == 0),
+                          _CtrlBtn(icon: Icons.play_circle_filled, label: 'Oynat', focused: _controlFocus == 1, size: 48),
+                          _CtrlBtn(icon: Icons.skip_next, label: 'Sonraki', focused: _controlFocus == 2),
+                          _CtrlBtn(icon: Icons.menu, label: 'Menü', focused: _controlFocus == 3),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
 
               // Üst gradient — her zaman overlayVisible iken göster
@@ -1425,10 +1565,11 @@ class _ControlsOverlay extends StatelessWidget {
 
 /// TiviMate tarzı kontrol butonu
 class _CtrlBtn extends StatelessWidget {
-  const _CtrlBtn({required this.icon, required this.label, required this.onTap, this.size = 26});
+  const _CtrlBtn({required this.icon, required this.label, this.onTap, this.focused = false, this.size = 26});
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool focused;
   final double size;
 
   @override
@@ -1441,9 +1582,11 @@ class _CtrlBtn extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: size),
+            Icon(icon, color: focused ? Colors.amber : Colors.white, size: size),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+            Text(label, style: TextStyle(
+              color: focused ? Colors.amber : Colors.white70, fontSize: 9,
+              fontWeight: focused ? FontWeight.bold : FontWeight.normal)),
           ],
         ),
       ),
