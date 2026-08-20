@@ -57,6 +57,9 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   List<SubtitleInfo> _subtitleTracks = [];
   String? _activeSubtitleId;
 
+  // Alt kontrol odağı: 0=Altyazı, 1=Hız, 2=Oynat, 3=Geri10, 4=İleri10
+  int _controlFocus = 2;
+
   /// Denenecek adaylar: ilk aday ana URL; Xtream filmleri açılmazsa
   /// aynı kimlikle diğer uzantılar (m3u8 ↔ mp4/mkv) otomatik denenir.
   late final List<String> _candidates;
@@ -290,50 +293,145 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
-    // Geri
+
+    // ---- Geri tuşu ----
     if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
-      if (_overlayVisible) {
-        setState(() => _overlayVisible = false);
-      } else {
-        Navigator.of(context).pop();
-      }
+      if (_showControlMenu) { _closeControlMenu(); return KeyEventResult.handled; }
+      if (_overlayVisible) { setState(() => _overlayVisible = false); return KeyEventResult.handled; }
+      Navigator.of(context).pop();
       return KeyEventResult.handled;
     }
-    // Altyazı (S)
-    if (key == LogicalKeyboardKey.keyS) {
-      _showSubtitlesMenu();
-      return KeyEventResult.handled;
-    }
-    // İleri/geri sarma
-    if (key == LogicalKeyboardKey.arrowLeft) {
-      _seekBy(-10);
-      _flashSeekHud(-10);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowRight) {
-      _seekBy(10);
-      _flashSeekHud(10);
-      return KeyEventResult.handled;
-    }
-    // Oynat/Duraklat
+
+    // ---- OK/Enter/Space ----
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.select ||
         key == LogicalKeyboardKey.space) {
-      _toggleOverlay();
+      if (_showControlMenu) {
+        // Kontrol menüsünde OK → seçili butonu aktifleştir
+        _activateControlMenu();
+      } else if (_overlayVisible) {
+        // Overlay açıkken OK → odaklı kontrolü aktifleştir
+        _activateFocusedControl();
+      } else {
+        // Overlay kapalıyken OK → overlay aç
+        _toggleOverlay();
+      }
       return KeyEventResult.handled;
     }
-    // Ses
+
+    // ---- Sağ ok: menü paneli aç ----
+    if (key == LogicalKeyboardKey.arrowRight) {
+      if (_overlayVisible && !_showControlMenu) {
+        // Overlay açıkken sağ ok → menü aç
+        _openControlMenu();
+      } else if (_showControlMenu) {
+        // Menü açıkken sağ ok → sonraki buton
+        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 4));
+      } else {
+        // Overlay kapalıyken sağ ok → ileri sar 10sn
+        _seekBy(10);
+        _flashSeekHud(10);
+      }
+      return KeyEventResult.handled;
+    }
+
+    // ---- Sol ok ----
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      if (_showControlMenu) {
+        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 4));
+      } else {
+        _seekBy(-10);
+        _flashSeekHud(-10);
+      }
+      return KeyEventResult.handled;
+    }
+
+    // ---- Up/Down ----
     if (key == LogicalKeyboardKey.arrowUp) {
-      _seekBy(30);
-      _flashSeekHud(30);
+      if (_overlayVisible && !_showControlMenu) {
+        // Overlay açıkken up → ses
+      } else {
+        _seekBy(30);
+        _flashSeekHud(30);
+      }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowDown) {
-      _seekBy(-30);
-      _flashSeekHud(-30);
+      if (_overlayVisible && !_showControlMenu) {
+        // Overlay açıkken down → ses
+      } else {
+        _seekBy(-30);
+        _flashSeekHud(-30);
+      }
       return KeyEventResult.handled;
     }
+
     return KeyEventResult.ignored;
+  }
+
+  // VOD kontrol menüsü (altyazı, hız, vb.)
+  bool _showControlMenu = false;
+
+  void _openControlMenu() {
+    setState(() {
+      _showControlMenu = true;
+      _controlFocus = 0; // İlk seçenek: Altyazı
+      _overlayVisible = true;
+    });
+    _overlayTimer?.cancel();
+  }
+
+  void _closeControlMenu() {
+    setState(() => _showControlMenu = false);
+    _scheduleOverlayHide();
+  }
+
+  void _activateControlMenu() {
+    switch (_controlFocus) {
+      case 0: _closeControlMenu(); _showSubtitlesMenu(); break; // Altyazı
+      case 1: _closeControlMenu(); _showSpeedMenu(); break; // Hız
+      case 2: _closeControlMenu(); _togglePlay(); break; // Oynat/Duraklat
+      case 3: _closeControlMenu(); _seekBy(-600); _flashSeekHud(-600); break; // -10 dk
+      case 4: _closeControlMenu(); _seekBy(600); _flashSeekHud(600); break; // +10 dk
+    }
+  }
+
+  void _activateFocusedControl() {
+    _togglePlay();
+  }
+
+  double _playbackSpeed = 1.0;
+
+  void _showSpeedMenu() {
+    showModalBottomSheet<double>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF161B22),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Oynatma Hızı', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            for (final speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
+              ListTile(
+                leading: Icon(
+                  _playbackSpeed == speed ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: _playbackSpeed == speed ? const Color(0xFF1E88E5) : Colors.white54,
+                ),
+                title: Text('${speed}x', style: const TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() => _playbackSpeed = speed);
+                  Navigator.pop(ctx);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   // Seek HUD flash
@@ -563,42 +661,54 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                IconButton(onPressed: () => _seekBy(-10), tooltip: '-10 sn',
-                                  icon: const Icon(Icons.replay_10, color: Colors.white, size: 30)),
-                                IconButton(onPressed: _togglePlay,
-                                  tooltip: _playing ? 'Duraklat' : 'Oynat', iconSize: 48,
-                                  icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                                    color: Colors.white)),
-                                IconButton(onPressed: () => _seekBy(10), tooltip: '+10 sn',
-                                  icon: const Icon(Icons.forward_10, color: Colors.white, size: 30)),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            // Altyazı butonu
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _VodCtrlBtn(
-                                  icon: _activeSubtitleId != null && _activeSubtitleId != 'off'
-                                      ? Icons.subtitles : Icons.subtitles_off,
-                                  label: 'Altyazı (S)',
-                                  active: _activeSubtitleId != null && _activeSubtitleId != 'off',
-                                  onTap: _showSubtitlesMenu,
-                                ),
-                                const SizedBox(width: 24),
-                                _VodCtrlBtn(
-                                  icon: Icons.speed,
-                                  label: 'Hız',
-                                  onTap: () {},
-                                ),
-                              ],
-                            ),
+                            const SizedBox(height: 8),
+                            if (_showControlMenu)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _VodMenuBtn(icon: Icons.subtitles, label: 'Altyazı', focused: _controlFocus == 0,
+                                    active: _activeSubtitleId != null && _activeSubtitleId != 'off'),
+                                  _VodMenuBtn(icon: Icons.speed, label: 'Hız', focused: _controlFocus == 1),
+                                  _VodMenuBtn(icon: _playing ? Icons.pause : Icons.play_arrow, label: 'Oynat', focused: _controlFocus == 2),
+                                  _VodMenuBtn(icon: Icons.replay_10, label: '-10 dk', focused: _controlFocus == 3),
+                                  _VodMenuBtn(icon: Icons.forward_10, label: '+10 dk', focused: _controlFocus == 4),
+                                ],
+                              )
+                            else ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  IconButton(onPressed: () => _seekBy(-10), tooltip: '-10 sn',
+                                    icon: const Icon(Icons.replay_10, color: Colors.white, size: 30)),
+                                  IconButton(onPressed: _togglePlay,
+                                    tooltip: _playing ? 'Duraklat' : 'Oynat', iconSize: 48,
+                                    icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                      color: Colors.white)),
+                                  IconButton(onPressed: () => _seekBy(10), tooltip: '+10 sn',
+                                    icon: const Icon(Icons.forward_10, color: Colors.white, size: 30)),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _VodCtrlBtn(
+                                    icon: _activeSubtitleId != null && _activeSubtitleId != 'off'
+                                        ? Icons.subtitles : Icons.subtitles_off,
+                                    label: 'Altyazı',
+                                    active: _activeSubtitleId != null && _activeSubtitleId != 'off',
+                                    onTap: _showSubtitlesMenu,
+                                  ),
+                                  const SizedBox(width: 24),
+                                  _VodCtrlBtn(icon: Icons.speed, label: 'Hız', onTap: _showSpeedMenu),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 2),
-                            const Text('S:Altyazı  ←→:10sn  ↑↓:30sn  OK:Aç/Kapat',
-                              style: TextStyle(color: Colors.white30, fontSize: 9), textAlign: TextAlign.center),
+                            Text(_showControlMenu
+                                ? '←→:Seç  OK:Onayla  Geri:Kapat'
+                                : '←→:10sn  ↑↓:30sn  OK:Aç  →:Menü',
+                              style: const TextStyle(color: Colors.white30, fontSize: 9), textAlign: TextAlign.center),
                           ],
                         ),
                       ),
@@ -684,6 +794,37 @@ class _VodSubtitlesSheet extends StatelessWidget {
             onTap: () => Navigator.of(context).pop('file'),
           ),
           const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+/// VOD menü butonu (D-pad ile gezilebilir)
+class _VodMenuBtn extends StatelessWidget {
+  const _VodMenuBtn({required this.icon, required this.label, required this.focused, this.active = false});
+  final IconData icon;
+  final String label;
+  final bool focused;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: focused ? Colors.blue.withValues(alpha: 0.4) : Colors.white10,
+        borderRadius: BorderRadius.circular(8),
+        border: focused ? Border.all(color: Colors.blue, width: 2) : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: active ? Colors.amber : (focused ? Colors.white : Colors.white70), size: 24),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(
+            color: active ? Colors.amber : (focused ? Colors.white : Colors.white70),
+            fontSize: 10, fontWeight: focused ? FontWeight.bold : FontWeight.normal)),
         ],
       ),
     );
