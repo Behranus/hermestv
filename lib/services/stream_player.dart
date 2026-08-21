@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:iptv_player/services/hls_subtitle_service.dart';
+import 'package:hermestv/services/hls_subtitle_service.dart';
 import 'package:video_player/video_player.dart';
 
 /// Altyazı parçası bilgisi (oynatıcıdan bağımsız).
@@ -288,7 +288,9 @@ class ExoStreamPlayer extends StreamPlayer {
   /// HLS master playlist'ten altyazı parçalarını bulur ve varsayılan olarak
   /// Türkçe parçayı (yoksa ilk parçayı) otomatik seçer.
   Future<void> _discoverHlsSubtitles(String url) async {
-    if (!url.toLowerCase().endsWith('.m3u8')) return;
+    // HLS master playlist'i bulmaya çalış — .m3u8 olmasa bile dene
+    final lower = url.toLowerCase();
+    if (!lower.contains('.m3u8') && !lower.contains('/live/') && !lower.contains('/movie/') && !lower.contains('/series/')) return;
     final tracks = await HlsSubtitleService.discoverTracks(url, headers: _headers);
     if (_disposed || tracks.isEmpty) return;
     if (_lastUrl != url) return; // Kanal değiştiyse eski sonucu yoksay.

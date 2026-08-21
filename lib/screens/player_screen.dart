@@ -112,7 +112,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _panelRightArrow() {
-    if (_panelGroups.length <= 2) return;
+    // Kategori sayısı önemli değil — geçiş her zaman çalışsın
     final currentIdx = _panelGroups.indexOf(_panelFilterGroup);
     if (currentIdx < 0 || currentIdx >= _panelGroups.length - 1) {
       _panelFilterGroup = _panelGroups.first;
@@ -125,7 +125,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _panelLeftArrow() {
-    if (_panelGroups.length <= 2) return;
+    // Kategori sayısı önemli değil — geçiş her zaman çalışsın
     final currentIdx = _panelGroups.indexOf(_panelFilterGroup);
     if (currentIdx <= 0) {
       _panelFilterGroup = _panelGroups.last;
@@ -642,11 +642,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 child: _player.buildVideo(fit: _boxFit),
               ),
 
-              // Sol overlay: kanal listesi
+              // Sol overlay: kanal listesi — Focus ile kumanda tuşları
               if (_showPanel)
                 Positioned(
                   left: 0, top: 0, bottom: 0, width: 280,
-                  child: _TiviMateChannelList(
+                  child: Focus(
+                    autofocus: true,
+                    onKeyEvent: (node, event) {
+                      if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                      final key = event.logicalKey;
+                      if (key == LogicalKeyboardKey.arrowRight) {
+                        _panelRightArrow();
+                        return KeyEventResult.handled;
+                      }
+                      if (key == LogicalKeyboardKey.arrowLeft) {
+                        _panelLeftArrow();
+                        return KeyEventResult.handled;
+                      }
+                      if (key == LogicalKeyboardKey.arrowUp) {
+                        setState(() => _panelIndex = (_panelIndex - 1).clamp(0, (_panelFilteredChannels.length - 1).clamp(0, 9999)));
+                        return KeyEventResult.handled;
+                      }
+                      if (key == LogicalKeyboardKey.arrowDown) {
+                        setState(() => _panelIndex = (_panelIndex + 1).clamp(0, (_panelFilteredChannels.length - 1).clamp(0, 9999)));
+                        return KeyEventResult.handled;
+                      }
+                      if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
+                        _selectPanelChannel(_panelIndex);
+                        _closePanel();
+                        return KeyEventResult.handled;
+                      }
+                      if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
+                        _closePanel();
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: _TiviMateChannelList(
                     channels: _panelFilteredChannels,
                     selectedIndex: _panelIndex,
                     filterGroup: _panelFilterGroup,
@@ -668,6 +700,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       });
                     },
                     onClose: _closePanel,
+                  ),
                   ),
                 ),
 
@@ -857,27 +890,7 @@ class _TiviMateChannelListState extends State<_TiviMateChannelList> {
   Widget build(BuildContext context) {
     final channels = widget.channels;
 
-    return KeyboardListener(
-      focusNode: FocusNode(),
-      onKeyEvent: (event) {
-        if (event is! KeyDownEvent) return;
-        final key = event.logicalKey;
-        // Sol/sag ok tuşları → kategori değiştir
-        if (key == LogicalKeyboardKey.arrowRight) {
-          if (widget.groups.length > 2) {
-            final ci = widget.groups.indexOf(widget.filterGroup);
-            final next = (ci < 0 || ci >= widget.groups.length - 1) ? 0 : ci + 1;
-            widget.filterGroupChanged(widget.groups[next]);
-          }
-        } else if (key == LogicalKeyboardKey.arrowLeft) {
-          if (widget.groups.length > 2) {
-            final ci = widget.groups.indexOf(widget.filterGroup);
-            final prev = (ci <= 0) ? widget.groups.length - 1 : ci - 1;
-            widget.filterGroupChanged(widget.groups[prev]);
-          }
-        }
-      },
-      child: Container(
+    return Container(
       color: Colors.black.withValues(alpha: 0.85),
       child: Column(
       children: [
@@ -1069,7 +1082,6 @@ class _TiviMateChannelListState extends State<_TiviMateChannelList> {
             ),
           ),
         ],
-      ),
       ),
     );
   }
