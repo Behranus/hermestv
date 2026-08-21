@@ -857,10 +857,30 @@ class _TiviMateChannelListState extends State<_TiviMateChannelList> {
   Widget build(BuildContext context) {
     final channels = widget.channels;
 
-    return Container(
+    return KeyboardListener(
+      focusNode: FocusNode(),
+      onKeyEvent: (event) {
+        if (event is! KeyDownEvent) return;
+        final key = event.logicalKey;
+        // Sol/sag ok tuşları → kategori değiştir
+        if (key == LogicalKeyboardKey.arrowRight) {
+          if (widget.groups.length > 2) {
+            final ci = widget.groups.indexOf(widget.filterGroup);
+            final next = (ci < 0 || ci >= widget.groups.length - 1) ? 0 : ci + 1;
+            widget.filterGroupChanged(widget.groups[next]);
+          }
+        } else if (key == LogicalKeyboardKey.arrowLeft) {
+          if (widget.groups.length > 2) {
+            final ci = widget.groups.indexOf(widget.filterGroup);
+            final prev = (ci <= 0) ? widget.groups.length - 1 : ci - 1;
+            widget.filterGroupChanged(widget.groups[prev]);
+          }
+        }
+      },
+      child: Container(
       color: Colors.black.withValues(alpha: 0.85),
       child: Column(
-        children: [
+      children: [
           // Üst bar: Playlist başlığı
           Container(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -969,10 +989,11 @@ class _TiviMateChannelListState extends State<_TiviMateChannelList> {
 
           const Divider(height: 1, color: Colors.white12),
 
-          // Kanal listesi
+          // Kanal listesi — ok tuşları üst panele iletilsin
           Expanded(
             child: ListView.builder(
               controller: _scroll,
+              physics: const BouncingScrollPhysics(),
               itemCount: channels.length,
               itemExtent: 56,
               itemBuilder: (context, i) {
@@ -1048,6 +1069,7 @@ class _TiviMateChannelListState extends State<_TiviMateChannelList> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
