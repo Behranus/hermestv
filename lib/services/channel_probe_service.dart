@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:iptv_player/models/channel.dart';
+import 'package:hermestv/models/channel.dart';
 
 /// Kanal adreslerini hızlıca canlı kontrol eder ve listeyi filtreler.
 ///

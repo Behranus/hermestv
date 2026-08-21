@@ -15,6 +15,16 @@ class SubtitleInfo {
   final String? language;
 }
 
+/// Ses parçası bilgisi.
+class AudioTrackInfo {
+  const AudioTrackInfo({required this.id, required this.title, this.language, this.isDefault = false});
+
+  final String id;
+  final String title;
+  final String? language;
+  final bool isDefault;
+}
+
 /// Oynatıcı motoru soyutlaması.
 ///
 /// Motor **resmi video_player eklentisi (Android'de ExoPlayer)** — IPTV
@@ -81,6 +91,11 @@ abstract class StreamPlayer {
   /// Yerleşik (akış içi) altyazı parçasını seç.
   Future<void> setSubtitleTrackById(String id);
 
+  // ---- Ses parçaları ----
+  Stream<List<AudioTrackInfo>> get audioTracks;
+  Stream<String?> get activeAudioTrackId;
+  Future<void> setAudioTrackById(String id);
+
   Future<void> dispose();
 }
 
@@ -122,6 +137,12 @@ class ExoStreamPlayer extends StreamPlayer {
   final _subtitleText = StreamController<String?>.broadcast();
   final _activeSubtitleId = StreamController<String?>.broadcast();
 
+  // ---- Ses parçaları ----
+  final _audioTracksCtrl = StreamController<List<AudioTrackInfo>>.broadcast();
+  final _activeAudioTrackId = StreamController<String?>.broadcast();
+  List<AudioTrackInfo> _audioTrackList = const [];
+  String? _activeAudioId;
+
   DateTime _lastPositionEmit = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
@@ -144,6 +165,10 @@ class ExoStreamPlayer extends StreamPlayer {
   Stream<String?> get subtitleText => _subtitleText.stream;
   @override
   Stream<String?> get activeSubtitleId => _activeSubtitleId.stream;
+  @override
+  Stream<List<AudioTrackInfo>> get audioTracks => _audioTracksCtrl.stream;
+  @override
+  Stream<String?> get activeAudioTrackId => _activeAudioTrackId.stream;
   @override
   bool? get isLive => _live;
   @override
@@ -297,6 +322,9 @@ class ExoStreamPlayer extends StreamPlayer {
     _hlsTracks = tracks;
     _subtitleTracks.add(tracks.map((t) => t.toInfo()).toList());
 
+    // HLS audio track'leri de keşfet
+    _discoverHlsAudioTracks(url);
+
     // Varsayılan: Türkçe parça varsa onu, yoksa DEFAULT/AUTOSELECT olanı,
     // o da yoksa ilk parçayı seç (varsayılan AÇIK).
     HlsSubtitleTrack? pick;
@@ -311,6 +339,39 @@ class ExoStreamPlayer extends StreamPlayer {
     await setSubtitleTrackById(pick.id);
   }
 
+
+  /// HLS master playlist'ten ses parçalarını keşfet.
+  Future<void> _discoverHlsAudioTracks(String url) async {
+    if (!url.toLowerCase().contains('.m3u8') && !url.contains('/live/')) return;
+    try {
+      final resp = await http
+          .get(Uri.parse(url), headers: _headers ?? const {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode != 200) return;
+      final body = resp.body;
+      final tracks = <AudioTrackInfo>[];
+      // #EXT-X-MEDIA:TYPE=AUDIO parçalarını ayrıştır
+      final re = RegExp(r'#EXT-X-MEDIA:TYPE=AUDIO.*?GROUP-ID="([^"]*)".*?NAME="([^"]*)"(?:.*?LANGUAGE="([^"]*)")?(?:.*?DEFAULT=(YES|NO))?(?:.*?URI="([^"]*)")');
+      for (final m in re.allMatches(body)) {
+        tracks.add(AudioTrackInfo(
+          id: 'audio_${m.group(2)}',
+          title: m.group(2) ?? 'Ses',
+          language: m.group(3),
+          isDefault: m.group(4) == 'YES',
+        ));
+      }
+      if (tracks.isEmpty) {
+        // Varsayılan ses parçası
+        tracks.add(const AudioTrackInfo(id: 'audio_default', title: 'Varsayılan Ses'));
+      }
+      _audioTrackList = tracks;
+      _safeAdd(_audioTracksCtrl, tracks);
+      // Varsayılan ses parçasını seç
+      final def = tracks.where((t) => t.isDefault).firstOrNull ?? tracks.first;
+      _activeAudioId = def.id;
+      _safeAdd(_activeAudioTrackId, def.id);
+    } catch (_) {}
+  }
 
   /// Seçilen HLS altyazı parçasının WebVTT segmentlerini yükler.
   /// Canlı akışlarda playlist kaydığı için periyodik olarak tazelenir.
@@ -435,6 +496,14 @@ class ExoStreamPlayer extends StreamPlayer {
     // Yerleşik (video_player) parça yok; bilinmeyen id'yi yoksay.
   }
 
+  @override
+  Future<void> setAudioTrackById(String id) async {
+    _activeAudioId = id;
+    _activeAudioTrackId.add(id);
+    // video_player ExoPlayer'da ses parçası değiştirme — platform kanalı gerekli
+    // Şimdilik sadece UI durumunu güncelle
+  }
+
   Future<String?> _fetchSubtitle(String uri) async {
     if (uri.startsWith('http://') || uri.startsWith('https://')) {
       final resp = await http
@@ -493,7 +562,7 @@ class ExoStreamPlayer extends StreamPlayer {
       } catch (_) {}
     }
     // Stream'leri güvenli kapat — zaten kapalıysa sessizce geç
-    for (final sc in [_buffering, _error, _playing, _volume, _position, _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId]) {
+    for (final sc in [_buffering, _error, _playing, _volume, _position, _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId, _audioTracksCtrl, _activeAudioTrackId]) {
       if (!sc.isClosed) await sc.close();
     }
   }

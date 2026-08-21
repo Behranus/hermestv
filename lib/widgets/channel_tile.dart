@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:iptv_player/models/channel.dart';
+import 'package:hermestv/models/channel.dart';
 
 /// Kanal listesi satırı. Android TV / Box uzaktan kumandası (D-pad)
 /// odak navigasyonu için [Focus] kullanır.

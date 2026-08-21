@@ -1,10 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:iptv_player/screens/free_tv_screen.dart';
-import 'package:iptv_player/services/playlist_service.dart';
-import 'package:iptv_player/services/settings_service.dart';
-import 'package:iptv_player/services/test_server_service.dart';
-import 'package:iptv_player/state/app_state.dart';
+import 'package:hermestv/screens/free_tv_screen.dart';
+import 'package:hermestv/services/playlist_service.dart';
+import 'package:hermestv/services/settings_service.dart';
+import 'package:hermestv/services/test_server_service.dart';
+import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
 
 /// Kaynak ekleme ekranı: URL + Xtream Codes + dosya + test yayınları + ücretsiz kanallar + EPG.

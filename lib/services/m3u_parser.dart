@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:iptv_player/models/channel.dart';
+import 'package:hermestv/models/channel.dart';
 
 /// M3U / M3U8 playlist içeriğini kanal listesine çeviren ayrıştırıcı.
 class M3uParser {

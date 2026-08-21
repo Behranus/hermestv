@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:iptv_player/services/alternative_subtitles_service.dart';
-import 'package:iptv_player/services/open_subtitles_service.dart';
+import 'package:hermestv/services/alternative_subtitles_service.dart';
+import 'package:hermestv/services/open_subtitles_service.dart';
 
 /// Birleşik altyazı arama sayfası.
 ///

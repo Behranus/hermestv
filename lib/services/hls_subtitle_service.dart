@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:iptv_player/services/stream_player.dart';
+import 'package:hermestv/services/stream_player.dart';
 
 /// HLS akışındaki bir altyazı parçası (`#EXT-X-MEDIA:TYPE=SUBTITLES`).
 class HlsSubtitleTrack {

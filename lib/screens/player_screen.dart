@@ -50,6 +50,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<SubtitleInfo> _subtitleTracks = [];
   String? _activeSubtitleId;
   String? _subtitleText;
+  List<AudioTrackInfo> _audioTrackList = [];
+  String? _activeAudioTrackId;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   // Panel modu: false = sol kanal listesi, true = sağ EPG
@@ -203,6 +205,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     _player.activeSubtitleId.listen((id) {
       if (mounted && id != null) setState(() => _activeSubtitleId = id);
+    });
+    _player.audioTracks.listen((tracks) {
+      if (mounted) setState(() => _audioTrackList = tracks);
+    });
+    _player.activeAudioTrackId.listen((id) {
+      if (mounted && id != null) setState(() => _activeAudioTrackId = id);
     });
   }
 
@@ -359,6 +367,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
               onTap: () { Navigator.pop(ctx); _showSubtitlesMenu(); },
             ),
             ListTile(
+              leading: const Icon(Icons.volume_up, color: Colors.white70),
+              title: const Text('Ses Parçaları', style: TextStyle(color: Colors.white)),
+              subtitle: Text(
+                _activeAudioTrackId ?? 'Varsayılan',
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+              onTap: () { Navigator.pop(ctx); _showAudioMenu(); },
+            ),
+            ListTile(
               leading: const Icon(Icons.fast_rewind, color: Colors.white70),
               title: const Text('10 sn Geri Al', style: TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(ctx); _seekBy(-10); },
@@ -510,6 +527,52 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else {
       await _player.setSubtitleTrackById(selected);
       setState(() => _activeSubtitleId = selected);
+    }
+  }
+
+  // ==================== Ses Seçimi ====================
+
+  Future<void> _showAudioMenu() async {
+    if (_audioTrackList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bu yayında birden fazla ses parçası bulunamadı')),
+      );
+      return;
+    }
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF161B22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Ses Parçaları', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            for (final t in _audioTrackList)
+              ListTile(
+                leading: Icon(
+                  t.id == _activeAudioTrackId ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: t.id == _activeAudioTrackId ? const Color(0xFF1E88E5) : Colors.white54,
+                ),
+                title: Text(t.title, style: const TextStyle(color: Colors.white)),
+                subtitle: t.language != null ? Text(t.language!, style: const TextStyle(color: Colors.white38, fontSize: 12)) : null,
+                onTap: () {
+                  Navigator.pop(ctx, t.id);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      await _player.setAudioTrackById(selected);
     }
   }
 

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:iptv_player/models/epg_program.dart';
+import 'package:hermestv/models/epg_program.dart';
 import 'package:xml/xml.dart';
 
 /// XMLTV (EPG) verisini URL'den indirip ayrıştırır.

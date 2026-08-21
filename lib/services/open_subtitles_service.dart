@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -194,8 +195,27 @@ class OpenSubtitlesService {
             'User-Agent': 'TemporaryUserAgent',
           })
           .timeout(const Duration(seconds: 20));
-      if (resp.statusCode == 200) return resp.body;
-      return null;
+      if (resp.statusCode != 200) return null;
+      var body = resp.body;
+      // gzip sıkıştırılmış olabilir — çöz
+      if (body.length > 2 &&
+          resp.headers['content-type']?.contains('gzip') == true) {
+        try {
+          final bytes = resp.bodyBytes;
+          final decoded = gzip.decode(bytes);
+          if (decoded != null) {
+            body = String.fromCharCodes(decoded);
+          }
+        } catch (_) {}
+      }
+      // base64 encode edilmiş olabilir
+      if (body.startsWith('UEsDB') || body.startsWith('H4sI')) {
+        try {
+          final decoded = utf8.decode(base64.decode(body));
+          body = decoded;
+        } catch (_) {}
+      }
+      return body;
     } catch (_) {
       return null;
     }

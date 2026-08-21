@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:iptv_player/screens/movie_detail_screen.dart';
-import 'package:iptv_player/screens/series_detail_screen.dart';
-import 'package:iptv_player/screens/vod_player_screen.dart';
-import 'package:iptv_player/services/resume_service.dart';
-import 'package:iptv_player/state/app_state.dart';
+import 'package:hermestv/screens/movie_detail_screen.dart';
+import 'package:hermestv/screens/series_detail_screen.dart';
+import 'package:hermestv/screens/vod_player_screen.dart';
+import 'package:hermestv/services/resume_service.dart';
+import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
 
 /// Turkcell TV Plus tarzı VOD ekranı:

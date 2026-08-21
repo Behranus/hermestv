@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:iptv_player/models/channel.dart';
-import 'package:iptv_player/models/epg_program.dart';
-import 'package:iptv_player/state/app_state.dart';
+import 'package:hermestv/models/channel.dart';
+import 'package:hermestv/models/epg_program.dart';
+import 'package:hermestv/state/app_state.dart';
 
 /// Kanalın EPG program çizelgesini gösteren alt sayfa.
 Future<void> showChannelGuide(

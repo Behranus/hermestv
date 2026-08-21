@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:iptv_player/models/vod.dart';
-import 'package:iptv_player/screens/vod_player_screen.dart';
-import 'package:iptv_player/services/resume_service.dart';
-import 'package:iptv_player/state/app_state.dart';
+import 'package:hermestv/models/vod.dart';
+import 'package:hermestv/screens/vod_player_screen.dart';
+import 'package:hermestv/services/resume_service.dart';
+import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
 
 /// Film detay sayfası: kompakt, tam sayfa scroll edilebilir.

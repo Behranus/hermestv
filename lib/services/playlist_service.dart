@@ -4,10 +4,10 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:iptv_player/models/channel.dart';
-import 'package:iptv_player/services/channel_probe_service.dart';
-import 'package:iptv_player/services/m3u_parser.dart';
-import 'package:iptv_player/services/test_stream_service.dart';
+import 'package:hermestv/models/channel.dart';
+import 'package:hermestv/services/channel_probe_service.dart';
+import 'package:hermestv/services/m3u_parser.dart';
+import 'package:hermestv/services/test_stream_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

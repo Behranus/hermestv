@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:iptv_player/services/free_tv_service.dart';
-import 'package:iptv_player/state/app_state.dart';
+import 'package:hermestv/services/free_tv_service.dart';
+import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
 
 /// iptv-org kataloğundan ücretsiz ve yasal kanallar.

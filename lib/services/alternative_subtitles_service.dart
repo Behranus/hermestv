@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:convert';
+import 'package:archive/archive.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -306,8 +308,45 @@ class AltSubtitleResult {
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
           })
           .timeout(const Duration(seconds: 20));
-      if (resp.statusCode == 200) return resp.body;
-      return null;
+      if (resp.statusCode != 200) return null;
+      // ZIP dosyası olabilir — SRT içeriğini çıkar
+      final ct = resp.headers['content-type'] ?? '';
+      if (ct.contains('zip') || ct.contains('octet-stream') ||
+          resp.bodyBytes.length >= 4 &&
+              resp.bodyBytes[0] == 0x50 && resp.bodyBytes[1] == 0x4B) {
+        // PK header = ZIP
+        try {
+          final archive = ZipDecoder().decodeBytes(resp.bodyBytes);
+          for (final file in archive) {
+            final name = file.name.toLowerCase();
+            if (name.endsWith('.srt') || name.endsWith('.vtt') ||
+                name.endsWith('.ass') || name.endsWith('.sub')) {
+              final content = utf8.decode(file.content as List<int>,
+                  allowMalformed: true);
+              if (content.isNotEmpty) return content;
+            }
+          }
+          // İlk dosyayı dene
+          if (archive.isNotEmpty) {
+            return utf8.decode(archive.first.content as List<int>,
+                allowMalformed: true);
+          }
+        } catch (_) {}
+      }
+      // Gzip
+      if (ct.contains('gzip')) {
+        try {
+          final decoded = gzip.decode(resp.bodyBytes);
+          if (decoded != null) return String.fromCharCodes(decoded);
+        } catch (_) {}
+      }
+      // Base64
+      if (resp.body.startsWith('UEsDB') || resp.body.startsWith('H4sI')) {
+        try {
+          return utf8.decode(base64.decode(resp.body));
+        } catch (_) {}
+      }
+      return resp.body;
     } catch (_) {
       return null;
     }

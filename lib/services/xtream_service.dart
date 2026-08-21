@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:iptv_player/models/channel.dart';
-import 'package:iptv_player/models/vod.dart';
+import 'package:hermestv/models/channel.dart';
+import 'package:hermestv/models/vod.dart';
 
 /// Xtream Codes portal bilgileri.
 class XtreamCredentials {

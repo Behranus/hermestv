@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:iptv_player/screens/channel_guide_sheet.dart';
-import 'package:iptv_player/screens/player_screen.dart';
-import 'package:iptv_player/state/app_state.dart';
-import 'package:iptv_player/widgets/channel_list.dart';
+import 'package:hermestv/screens/channel_guide_sheet.dart';
+import 'package:hermestv/screens/player_screen.dart';
+import 'package:hermestv/state/app_state.dart';
+import 'package:hermestv/widgets/channel_list.dart';
 import 'package:provider/provider.dart';
 
 /// Favori kanallar ekranı.

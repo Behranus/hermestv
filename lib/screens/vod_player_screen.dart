@@ -5,9 +5,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:iptv_player/screens/subtitle_search_screen.dart';
-import 'package:iptv_player/services/resume_service.dart';
-import 'package:iptv_player/services/stream_player.dart';
+import 'package:hermestv/screens/subtitle_search_screen.dart';
+import 'package:hermestv/services/resume_service.dart';
+import 'package:hermestv/services/stream_player.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -55,6 +55,8 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _subtitleText;
   List<SubtitleInfo> _subtitleTracks = [];
+  List<AudioTrackInfo> _audioTrackList = [];
+  String? _activeAudioTrackId;
   String? _activeSubtitleId;
 
   // Alt kontrol odağı: 0=Altyazı, 1=Hız, 2=Oynat, 3=Geri10, 4=İleri10
@@ -203,6 +205,12 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     _player.activeSubtitleId.listen((id) {
       if (mounted && id != null) setState(() => _activeSubtitleId = id);
     });
+    _player.audioTracks.listen((tracks) {
+      if (mounted) setState(() => _audioTrackList = tracks);
+    });
+    _player.activeAudioTrackId.listen((id) {
+      if (mounted && id != null) setState(() => _activeAudioTrackId = id);
+    });
     _player.completed.listen((_) {
       if (mounted) setState(() => _playing = false);
     });
@@ -238,6 +246,8 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       builder: (context) => _VodSubtitlesSheet(
         tracks: _subtitleTracks,
         activeId: _activeSubtitleId,
+        audioTracks: _audioTrackList,
+        activeAudioId: _activeAudioTrackId,
       ),
     );
     if (selected == null || !mounted) return;
@@ -254,6 +264,8 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       if (path == null) return;
       await _player.setExternalSubtitle('file://$path');
       setState(() => _activeSubtitleId = 'file://$path');
+    } else if (selected == 'audio') {
+      _showAudioMenu();
     } else if (selected == 'opensubtitles') {
       // OpenSubtitles arama sayfasına git
       if (!mounted) return;
@@ -279,6 +291,43 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       // HLS gömülü parça seçimi.
       await _player.setSubtitleTrackById(selected);
       setState(() => _activeSubtitleId = selected);
+    }
+  }
+
+  Future<void> _showAudioMenu() async {
+    if (_audioTrackList.isEmpty) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF161B22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Ses Parçaları', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            for (final t in _audioTrackList)
+              ListTile(
+                leading: Icon(
+                  t.id == _activeAudioTrackId ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: t.id == _activeAudioTrackId ? const Color(0xFF1E88E5) : Colors.white54,
+                ),
+                title: Text(t.title, style: const TextStyle(color: Colors.white)),
+                subtitle: t.language != null ? Text(t.language!, style: const TextStyle(color: Colors.white38, fontSize: 12)) : null,
+                onTap: () => Navigator.pop(ctx, t.id),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      await _player.setAudioTrackById(selected);
     }
   }
 
@@ -719,10 +768,17 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
 
 /// VOD altyazı seçim sayfası (HLS gömülü parçalar + dosyadan yükleme).
 class _VodSubtitlesSheet extends StatelessWidget {
-  const _VodSubtitlesSheet({required this.tracks, required this.activeId});
+  const _VodSubtitlesSheet({
+    required this.tracks,
+    required this.activeId,
+    this.audioTracks = const [],
+    this.activeAudioId,
+  });
 
   final List<SubtitleInfo> tracks;
   final String? activeId;
+  final List<AudioTrackInfo> audioTracks;
+  final String? activeAudioId;
 
   @override
   Widget build(BuildContext context) {
@@ -780,6 +836,13 @@ class _VodSubtitlesSheet extends StatelessWidget {
             title: const Text('OpenSubtitles\'da ara'),
             subtitle: const Text('İnternette altyazı bul ve yükle'),
             onTap: () => Navigator.of(context).pop('opensubtitles'),
+          ),
+          if (audioTracks.length > 1)
+            ListTile(
+              leading: const Icon(Icons.volume_up),
+              title: const Text('Ses Parçaları'),
+              subtitle: Text('Mevcut: ${audioTracks.length} dil'),
+              onTap: () => Navigator.of(context).pop('audio'),
           ),
           ListTile(
             leading: const Icon(Icons.upload_file),

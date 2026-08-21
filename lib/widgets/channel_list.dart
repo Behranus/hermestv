@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:iptv_player/models/channel.dart';
-import 'package:iptv_player/widgets/channel_tile.dart';
+import 'package:hermestv/models/channel.dart';
+import 'package:hermestv/widgets/channel_tile.dart';
 
 /// Paylaşılan kaydırılabilir kanal listesi.
 class ChannelList extends StatelessWidget {

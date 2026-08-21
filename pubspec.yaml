@@ -47,6 +47,7 @@ dependencies:
   # Linux masaüstü oynatıcı motoru (media_kit/libmpv) — yalnızca Linux'ta
   # kullanılır; Android'de video_player (ExoPlayer) kalır.
   fvp: ^0.38.1
+  archive: ^4.1.0
 
 dev_dependencies:
   flutter_test:

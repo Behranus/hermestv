@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:iptv_player/services/stream_player.dart';
+import 'package:hermestv/services/stream_player.dart';
 
 /// VOD kartında 5 saniye odaklanınca küçük pencerede video preview.
 /// Netflix tarzı: kart büyür, küçük oynatıcı açılır.

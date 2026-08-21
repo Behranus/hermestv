@@ -2,16 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:iptv_player/models/channel.dart';
-import 'package:iptv_player/models/epg_program.dart';
-import 'package:iptv_player/models/vod.dart';
-import 'package:iptv_player/services/channel_probe_service.dart';
-import 'package:iptv_player/services/epg_service.dart';
-import 'package:iptv_player/services/favorites_service.dart';
-import 'package:iptv_player/services/playlist_service.dart';
-import 'package:iptv_player/services/test_server_service.dart';
-import 'package:iptv_player/services/test_vod_catalog.dart';
-import 'package:iptv_player/services/xtream_service.dart';
+import 'package:hermestv/models/channel.dart';
+import 'package:hermestv/models/epg_program.dart';
+import 'package:hermestv/models/vod.dart';
+import 'package:hermestv/services/channel_probe_service.dart';
+import 'package:hermestv/services/epg_service.dart';
+import 'package:hermestv/services/favorites_service.dart';
+import 'package:hermestv/services/playlist_service.dart';
+import 'package:hermestv/services/test_server_service.dart';
+import 'package:hermestv/services/test_vod_catalog.dart';
+import 'package:hermestv/services/xtream_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Uygulamanın merkezi durumu: playlist, gruplar, arama, favoriler, EPG.
