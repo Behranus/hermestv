@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:hermestv/services/hls_subtitle_service.dart';
-import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 /// Altyazı parçası bilgisi (oynatıcıdan bağımsız).
 class SubtitleInfo {
@@ -25,21 +26,7 @@ class AudioTrackInfo {
   final bool isDefault;
 }
 
-/// Oynatıcı motoru soyutlaması.
-///
-/// Motor **resmi video_player eklentisi (Android'de ExoPlayer)** — IPTV
-/// dünyasında fiilen standart olan, en çok test edilmiş ve en kararlı motor.
-/// TiviMate, IBO Player, Smarters, OTT Navigator — hepsi ExoPlayer tabanlıdır.
-///
-/// Neden ExoPlayer?
-/// - Donanım hızlandırmalı MediaCodec (otomatik), 4K/2K/FHD akıcı
-/// - Tampon yönetimi ExoPlayer'a ait → önceki motorun "3x hızda oynayıp
-///   kapanma" ve VOD açmama gibi canlı/VOD tampon hataları yok
-/// - HLS canlı + MP4/HLS VOD: endüstri standardı, çok kararlı
-///
-/// Altyazı: video_player harici altyazı dosyası desteklemediği için
-/// SRT/VTT parser'ı burada Flutter içinde çalışır; metin [subtitleText]
-/// akışıyla ekrana çizilir.
+/// Oynatıcı motoru soyutlaması — media_kit (ExoPlayer/libmpv) ile tam ses/altyazı track desteği.
 abstract class StreamPlayer {
   Stream<bool> get buffering;
   Stream<String> get error;
@@ -49,49 +36,24 @@ abstract class StreamPlayer {
   Stream<Duration> get duration;
   Stream<bool> get completed;
   Stream<List<SubtitleInfo>> get subtitleTracks;
-
-  /// Şu an gösterilecek altyazı metni (null = altyazı yok).
   Stream<String?> get subtitleText;
-
-  /// Aktif altyazı parçasının id'si (menüde işaretli gösterim için;
-  /// 'off' = kapalı). Otomatik seçim (örn. Türkçe) buradan bildirilir.
   Stream<String?> get activeSubtitleId;
-
-  /// Akış canlı mı? (biliniyorsa; bilinmiyorsa null → ekran süre tahminini kullanır)
   bool? get isLive;
-
-  /// Açılan akışın çözünürlük bilgisi (HUD için, örn. "1920×1080").
   String? get streamInfo;
-
-  /// Oynatıcının seçtiği tampon süresi (saniye). ExoPlayer tamponu kendisi
-  /// yönetir; bu değer yalnızca bilgi amaçlıdır (küçük = hızlı kanal geçişi).
   double get bufferSecs;
   set bufferSecs(double value);
 
   Widget buildVideo({BoxFit fit = BoxFit.contain});
 
-  /// [url]'i açar. [subtitleUrl] varsa harici altyazı olarak yüklenir.
-  Future<void> open(
-    String url, {
-    Map<String, String>? headers,
-    String? subtitleUrl,
-  });
-
+  Future<void> open(String url, {Map<String, String>? headers, String? subtitleUrl});
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
   Future<void> setVolume(double v);
-
-  /// Harici altyazı dosyası/URL'si yükle (SRT/VTT — http, https veya file://).
   Future<void> setExternalSubtitle(String uri);
-
-  /// Altyazıyı kapat.
   Future<void> disableSubtitles();
-
-  /// Yerleşik (akış içi) altyazı parçasını seç.
   Future<void> setSubtitleTrackById(String id);
 
-  // ---- Ses parçaları ----
   Stream<List<AudioTrackInfo>> get audioTracks;
   Stream<String?> get activeAudioTrackId;
   Future<void> setAudioTrackById(String id);
@@ -99,33 +61,26 @@ abstract class StreamPlayer {
   Future<void> dispose();
 }
 
-/// Oynatıcı motoru: Tüm platformlarda resmi video_player (Android'de
-/// ExoPlayer, Linux'ta fvp/libmdk/FFmpeg). Tek motor, tek API.
+/// media_kit tabanlı oynatıcı — Android'de ExoPlayer, Linux'ta libmpv.
+/// Tam ses ve altyazı track desteği.
 StreamPlayer createStreamPlayer({double bufferSecs = 1.0}) {
-  return ExoStreamPlayer(bufferSecs: bufferSecs);
+  return MediaKitStreamPlayer(bufferSecs: bufferSecs);
 }
 
-class ExoStreamPlayer extends StreamPlayer {
-  ExoStreamPlayer({required this.bufferSecs});
+class MediaKitStreamPlayer extends StreamPlayer {
+  MediaKitStreamPlayer({this.bufferSecs = 1.0});
 
-  VideoPlayerController? _controller;
-  int _generation = 0;
+  Player? _player;
+  VideoController? _vc;
+  int _gen = 0;
   bool _disposed = false;
-  double _pendingVolume = 1.0;
-  bool? _live;
+  bool _started = false;
   String? _lastError;
-  String? _streamInfo;
-  bool _startedPlaying = false;
-
-  // ---- Altyazı durumu ----
-  List<SubtitleCue> _cues = const [];
-  String? _activeSubtitle;
-  List<HlsSubtitleTrack> _hlsTracks = const [];
-  HlsSubtitleTrack? _selectedHlsTrack;
-  Timer? _hlsSubtitleRefresh;
-  Map<String, String>? _headers;
   String? _lastUrl;
+  Map<String, String>? _headers;
+  bool? _live;
 
+  // Stream controllers
   final _buffering = StreamController<bool>.broadcast();
   final _error = StreamController<String>.broadcast();
   final _playing = StreamController<bool>.broadcast();
@@ -136,475 +91,339 @@ class ExoStreamPlayer extends StreamPlayer {
   final _subtitleTracks = StreamController<List<SubtitleInfo>>.broadcast();
   final _subtitleText = StreamController<String?>.broadcast();
   final _activeSubtitleId = StreamController<String?>.broadcast();
-
-  // ---- Ses parçaları ----
   final _audioTracksCtrl = StreamController<List<AudioTrackInfo>>.broadcast();
   final _activeAudioTrackId = StreamController<String?>.broadcast();
-  List<AudioTrackInfo> _audioTrackList = const [];
+
+  // Altyazı
+  List<SubtitleCue> _cues = const [];
+  String? _activeSub;
+  List<HlsSubtitleTrack> _hlsTracks = const [];
+  HlsSubtitleTrack? _selHlsTrack;
+  Timer? _hlsRefresh;
+
+  // Ses
   String? _activeAudioId;
 
-  DateTime _lastPositionEmit = DateTime.fromMillisecondsSinceEpoch(0);
+  @override Stream<bool> get buffering => _buffering.stream;
+  @override Stream<String> get error => _error.stream;
+  @override Stream<bool> get playing => _playing.stream;
+  @override Stream<double> get volume => _volume.stream;
+  @override Stream<Duration> get position => _position.stream;
+  @override Stream<Duration> get duration => _duration.stream;
+  @override Stream<bool> get completed => _completed.stream;
+  @override Stream<List<SubtitleInfo>> get subtitleTracks => _subtitleTracks.stream;
+  @override Stream<String?> get subtitleText => _subtitleText.stream;
+  @override Stream<String?> get activeSubtitleId => _activeSubtitleId.stream;
+  @override Stream<List<AudioTrackInfo>> get audioTracks => _audioTracksCtrl.stream;
+  @override Stream<String?> get activeAudioTrackId => _activeAudioTrackId.stream;
+  @override bool? get isLive => _live;
+  @override String? get streamInfo => null;
+  @override double bufferSecs;
 
-  @override
-  Stream<bool> get buffering => _buffering.stream;
-  @override
-  Stream<String> get error => _error.stream;
-  @override
-  Stream<bool> get playing => _playing.stream;
-  @override
-  Stream<double> get volume => _volume.stream;
-  @override
-  Stream<Duration> get position => _position.stream;
-  @override
-  Stream<Duration> get duration => _duration.stream;
-  @override
-  Stream<bool> get completed => _completed.stream;
-  @override
-  Stream<List<SubtitleInfo>> get subtitleTracks => _subtitleTracks.stream;
-  @override
-  Stream<String?> get subtitleText => _subtitleText.stream;
-  @override
-  Stream<String?> get activeSubtitleId => _activeSubtitleId.stream;
-  @override
-  Stream<List<AudioTrackInfo>> get audioTracks => _audioTracksCtrl.stream;
-  @override
-  Stream<String?> get activeAudioTrackId => _activeAudioTrackId.stream;
-  @override
-  bool? get isLive => _live;
-  @override
-  String? get streamInfo => _streamInfo;
-
-  @override
-  double bufferSecs;
-
-  /// Güvenli event gönderimi — disposed veya kapatılmış stream'lere ekleme.
-  void _safeAdd<T>(StreamController<T> sc, T value) {
+  void _add<T>(StreamController<T> sc, T v) {
     if (_disposed || sc.isClosed) return;
-    try { sc.add(value); } catch (_) {}
-  }
-
-  /// Sadece EKRANDAKİ oynatıcının olaylarını işler.
-  void _onValueChanged(VideoPlayerController src) {
-    final c = _controller;
-    if (c == null || _disposed) return;
-    if (!identical(src, c)) return;
-    final v = c.value;
-    if (v.hasError && v.errorDescription != null && v.errorDescription != _lastError) {
-      _lastError = v.errorDescription;
-      _safeAdd(_error, v.errorDescription!);
-    }
-    if (v.isPlaying && !_startedPlaying) {
-      _startedPlaying = true;
-      _safeAdd(_buffering, false);
-      _captureStreamInfo(c);
-    }
-    if (!v.isPlaying) {
-      _safeAdd(_buffering, v.isBuffering);
-    }
-    _safeAdd(_playing, v.isPlaying);
-    _safeAdd(_volume, v.volume);
-    final now = DateTime.now();
-    if (now.difference(_lastPositionEmit) >= const Duration(milliseconds: 250)) {
-      _lastPositionEmit = now;
-      _safeAdd(_position, v.position);
-      _updateSubtitleAt(v.position);
-    }
-    _safeAdd(_duration, v.duration);
-    if (v.isCompleted) _safeAdd(_completed, true);
-  }
-
-  void _captureStreamInfo(VideoPlayerController c) {
-    if (_streamInfo != null) return;
-    final size = c.value.size;
-    if (size.width > 0 && size.height > 0) {
-      _streamInfo = '${size.width.round()}×${size.height.round()}';
-    }
-  }
-
-  @override
-  Future<void> open(
-    String url, {
-    Map<String, String>? headers,
-    String? subtitleUrl,
-  }) async {
-    final gen = ++_generation;
-    _live = null;
-    _lastError = null;
-    _streamInfo = null;
-    _startedPlaying = false;
-    _cues = const [];
-    _activeSubtitle = null;
-    _safeAdd(_subtitleText, null);
-    _safeAdd(_activeSubtitleId, null);
-    _safeAdd(_buffering, true);
-    _safeAdd(_position, Duration.zero);
-    _safeAdd(_duration, Duration.zero);
-    _headers = headers;
-    _lastUrl = url;
-    _hlsSubtitleRefresh?.cancel();
-    _hlsSubtitleRefresh = null;
-
-    // Eski oynatıcının sesini kes ama SON KARESİNİ ekranda tut: yeni akış
-    // hazır olana dek siyah ekran görünmez (hızlı kanal geçişi hissi).
-    // dispose'u BEKLEMEYİZ — eski oynatıcının kapanması yeni kanalın
-    // yüklenmesini engellememeli (gecikmenin gizli kaynağı buydu).
-    final old = _controller;
-    if (old != null) {
-      try {
-        unawaited(old.pause());
-      } catch (_) {}
-    }
-
-    // Doğrulama (ChannelProbeService) ile aynı User-Agent → doğrulanan
-    // kanallar oynatıcıda da aynı şekilde açılır (bazı CDN'ler UA ister).
-    // 4K/HD akışlarda tampon süresi 20→30 saniyeye çıkarıldı.
-    final c = VideoPlayerController.networkUrl(
-      Uri.parse(url),
-      httpHeaders: headers ??
-          const {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 '
-                'Chrome/120.0 Mobile Safari/537.36',
-          },
-    );
-    c.addListener(() => _onValueChanged(c));
-
-    try {
-      await c.initialize().timeout(const Duration(seconds: 30));
-    } catch (e) {
-      // Kontrolcüyü serbest bırak (kaynak sızıntısı olmasın) ve hatayı bildir.
-      unawaited(c.dispose());
-      if (gen != _generation || _disposed) return;
-      _lastError = 'Akış açılamadı: $e';
-      _error.add(_lastError!);
-      return;
-    }
-    if (gen != _generation || _disposed) {
-      unawaited(c.dispose());
-      return;
-    }
-
-    // Yeni akış hazır → ekrandaki oynatıcıyı değiştir; eskiyi serbest bırak.
-    _controller = c;
-    if (old != null) {
-      unawaited(old.dispose());
-    }
-
-    // Canlı tespiti: canlı akışlar genellikle süre bildirmez (0).
-    _live = c.value.duration == Duration.zero;
-
-    // Harici altyazı (kanaldan tanımlıysa).
-    if (subtitleUrl != null && subtitleUrl.isNotEmpty) {
-      await setExternalSubtitle(subtitleUrl);
-    } else {
-      // HLS akışındaki gömülü altyazı parçalarını keşfet (master playlist).
-      unawaited(_discoverHlsSubtitles(url));
-    }
-
-    // Kayıtlı ses seviyesini uygula.
-    try {
-      await c.setVolume(_pendingVolume);
-    } catch (_) {}
-
-    try {
-      await c.play();
-    } catch (_) {}
-  }
-
-  /// HLS master playlist'ten altyazı parçalarını bulur ve varsayılan olarak
-  /// Türkçe parçayı (yoksa ilk parçayı) otomatik seçer.
-  Future<void> _discoverHlsSubtitles(String url) async {
-    // HLS master playlist'i bulmaya çalış — .m3u8 olmasa bile dene
-    final lower = url.toLowerCase();
-    if (!lower.contains('.m3u8') && !lower.contains('/live/') && !lower.contains('/movie/') && !lower.contains('/series/')) return;
-    final tracks = await HlsSubtitleService.discoverTracks(url, headers: _headers);
-    if (_disposed || tracks.isEmpty) return;
-    if (_lastUrl != url) return; // Kanal değiştiyse eski sonucu yoksay.
-    _hlsTracks = tracks;
-    _subtitleTracks.add(tracks.map((t) => t.toInfo()).toList());
-
-    // HLS audio track'leri de keşfet
-    _discoverHlsAudioTracks(url);
-
-    // Varsayılan: Türkçe parça varsa onu, yoksa DEFAULT/AUTOSELECT olanı,
-    // o da yoksa ilk parçayı seç (varsayılan AÇIK).
-    HlsSubtitleTrack? pick;
-    for (final t in tracks) {
-      if (t.isTurkish) {
-        pick = t;
-        break;
-      }
-    }
-    pick ??= tracks.where((t) => t.isDefault || t.isAutoselect).firstOrNull;
-    pick ??= tracks.first;
-    await setSubtitleTrackById(pick.id);
-  }
-
-
-  /// HLS master playlist'ten ses parçalarını keşfet.
-  Future<void> _discoverHlsAudioTracks(String url) async {
-    if (!url.toLowerCase().contains('.m3u8') && !url.contains('/live/')) return;
-    try {
-      final resp = await http
-          .get(Uri.parse(url), headers: _headers ?? const {'User-Agent': 'Mozilla/5.0'})
-          .timeout(const Duration(seconds: 10));
-      if (resp.statusCode != 200) return;
-      final body = resp.body;
-      final tracks = <AudioTrackInfo>[];
-      // #EXT-X-MEDIA:TYPE=AUDIO parçalarını ayrıştır
-      final re = RegExp(r'#EXT-X-MEDIA:TYPE=AUDIO.*?GROUP-ID="([^"]*)".*?NAME="([^"]*)"(?:.*?LANGUAGE="([^"]*)")?(?:.*?DEFAULT=(YES|NO))?(?:.*?URI="([^"]*)")');
-      for (final m in re.allMatches(body)) {
-        tracks.add(AudioTrackInfo(
-          id: 'audio_${m.group(2)}',
-          title: m.group(2) ?? 'Ses',
-          language: m.group(3),
-          isDefault: m.group(4) == 'YES',
-        ));
-      }
-      if (tracks.isEmpty) {
-        // Varsayılan ses parçası
-        tracks.add(const AudioTrackInfo(id: 'audio_default', title: 'Varsayılan Ses'));
-      }
-      _audioTrackList = tracks;
-      _safeAdd(_audioTracksCtrl, tracks);
-      // Varsayılan ses parçasını seç
-      final def = tracks.where((t) => t.isDefault).firstOrNull ?? tracks.first;
-      _activeAudioId = def.id;
-      _safeAdd(_activeAudioTrackId, def.id);
-    } catch (_) {}
-  }
-
-  /// Seçilen HLS altyazı parçasının WebVTT segmentlerini yükler.
-  /// Canlı akışlarda playlist kaydığı için periyodik olarak tazelenir.
-  Future<void> _loadHlsTrack(HlsSubtitleTrack track) async {
-    _selectedHlsTrack = track;
-    final cues = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
-    if (_disposed) return;
-    if (!identical(_selectedHlsTrack, track)) return; // Başka parça seçildi.
-    _cues = cues;
-    final c = _controller;
-    if (c != null) _updateSubtitleAt(c.value.position);
-
-    // Canlıda media playlist kayar → yeni segmentleri topla (her 45 sn).
-    _hlsSubtitleRefresh?.cancel();
-    if (_live == true) {
-      _hlsSubtitleRefresh = Timer.periodic(const Duration(seconds: 45), (_) {
-        if (_disposed || _selectedHlsTrack == null) return;
-        unawaited(_refreshHlsTrack(track));
-      });
-    }
-  }
-
-  Future<void> _refreshHlsTrack(HlsSubtitleTrack track) async {
-    final fresh = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
-    if (_disposed || !identical(_selectedHlsTrack, track)) return;
-    // Yeni bölümlerin cue'ları ekle (çakışmaları yeni olanla değiştir).
-    final byStart = <int, SubtitleCue>{};
-    for (final c in _cues) {
-      byStart[c.start.inMilliseconds] = c;
-    }
-    var changed = false;
-    for (final c in fresh) {
-      final k = c.start.inMilliseconds;
-      if (!byStart.containsKey(k)) {
-        byStart[k] = c;
-        changed = true;
-      }
-    }
-    if (changed) {
-      _cues = byStart.values.toList()..sort((a, b) => a.start.compareTo(b.start));
-      final c = _controller;
-      if (c != null) _updateSubtitleAt(c.value.position);
-    }
+    try { sc.add(v); } catch (_) {}
   }
 
   @override
   Widget buildVideo({BoxFit fit = BoxFit.contain}) {
-    final c = _controller;
-    if (c == null) return const ColoredBox(color: Colors.black);
-    return ColoredBox(
-      color: Colors.black,
-      child: VideoPlayer(c),
-    );
+    final vc = _vc;
+    if (vc == null) return const ColoredBox(color: Colors.black);
+    return Video(controller: vc, fit: fit);
   }
 
   @override
-  Future<void> play() async {
+  Future<void> open(String url, {Map<String, String>? headers, String? subtitleUrl}) async {
+    _gen++;
+    final gen = _gen;
+    _lastUrl = url;
+    _headers = headers;
+    _started = false;
+    _lastError = null;
+    _cues = const [];
+    _activeSub = null;
+    _hlsTracks = const [];
+    _selHlsTrack = null;
+    _hlsRefresh?.cancel();
+    _add(_buffering, true);
+    _add(_error, '');
+    _add(_subtitleText, null);
+    _add(_activeSubtitleId, null);
+    _add(_audioTracksCtrl, <AudioTrackInfo>[]);
+
+    final old = _player;
+    _player = null;
+    _vc = null;
+
+    final player = Player();
+    if (gen != _gen || _disposed) { await player.dispose(); return; }
+    _player = player;
+    _vc = VideoController(player);
+
+    // Stream listeners
+    player.stream.playing.listen((p) {
+      if (gen != _gen || _disposed) return;
+      _add(_playing, p);
+      if (p && !_started) { _started = true; _add(_buffering, false); }
+    });
+    player.stream.completed.listen((c) { if (gen != _gen) return; if (c) _add(_completed, true); });
+    player.stream.volume.listen((v) { if (gen != _gen) return; _add(_volume, v / 100.0); });
+    player.stream.position.listen((p) {
+      if (gen != _gen || _disposed) return;
+      _add(_position, p);
+      _updateSubtitle(p);
+    });
+    player.stream.duration.listen((d) {
+      if (gen != _gen || _disposed) return;
+      _add(_duration, d);
+      _live = d == Duration.zero;
+    });
+    player.stream.buffering.listen((b) { if (gen != _gen) return; _add(_buffering, b); });
+
+    if (old != null) { try { await old.dispose(); } catch (_) {} }
+
     try {
-      await _controller?.play();
+      await player.open(Media(url, httpHeaders: headers ?? {}));
+      if (gen != _gen || _disposed) return;
+
+      // Keşfet: ses + altyazı track'leri
+      _discoverNativeTracks();
+      _discoverHlsSubtitle(url);
+
+      // Harici altyazı
+      if (subtitleUrl != null && subtitleUrl.isNotEmpty) {
+        await setExternalSubtitle(subtitleUrl);
+      }
+
+      try { await player.play(); } catch (_) {}
+    } catch (e) {
+      if (gen != _gen || _disposed) return;
+      _lastError = 'Akış açılamadı: $e';
+      _add(_error, _lastError!);
+    }
+  }
+
+  /// media_kit player'dan native ses ve altyazı track'lerini keşfet
+  void _discoverNativeTracks() {
+    final p = _player;
+    if (p == null) return;
+    try {
+      // Ses track'leri
+      final audios = p.state.tracks.audio;
+      final aTracks = <AudioTrackInfo>[];
+      for (var i = 0; i < audios.length; i++) {
+        final a = audios[i];
+        aTracks.add(AudioTrackInfo(
+          id: 'audio_$i',
+          title: a.title ?? a.id ?? 'Ses ${i + 1}',
+          language: a.language,
+          isDefault: i == 0,
+        ));
+      }
+      if (aTracks.isEmpty) {
+        aTracks.add(const AudioTrackInfo(id: 'audio_default', title: 'Varsayılan'));
+      }
+      _add(_audioTracksCtrl, aTracks);
+      if (aTracks.isNotEmpty) {
+        _activeAudioId = aTracks.first.id;
+        _add(_activeAudioTrackId, aTracks.first.id);
+      }
+
+      // Altyazı track'leri (gömülü)
+      final subs = p.state.tracks.subtitle;
+      final sTracks = <SubtitleInfo>[];
+      for (var i = 0; i < subs.length; i++) {
+        final s = subs[i];
+        sTracks.add(SubtitleInfo(
+          id: 'sub_$i',
+          title: s.title ?? s.id ?? 'Altyazı ${i + 1}',
+          language: s.language,
+        ));
+      }
+      if (sTracks.isNotEmpty) {
+        _add(_subtitleTracks, sTracks);
+      }
+    } catch (_) {}
+  }
+
+  /// HLS master playlist'ten altyazı parçalarını keşfet
+  void _discoverHlsSubtitle(String url) {
+    final lower = url.toLowerCase();
+    if (!lower.contains('.m3u8') && !lower.contains('/live/') && !lower.contains('/movie/') && !lower.contains('/series/')) return;
+    unawaited(_discoverHlsSubtitleAsync(url));
+  }
+
+  Future<void> _discoverHlsSubtitleAsync(String url) async {
+    try {
+      final tracks = await HlsSubtitleService.discoverTracks(url, headers: _headers);
+      if (_disposed || tracks.isEmpty || _lastUrl != url) return;
+      _hlsTracks = tracks;
+      _add(_subtitleTracks, tracks.map((t) => t.toInfo()).toList());
+
+      // Varsayılan: Türkçe
+      HlsSubtitleTrack? pick;
+      for (final t in tracks) { if (t.isTurkish) { pick = t; break; } }
+      pick ??= tracks.where((t) => t.isDefault || t.isAutoselect).firstOrNull;
+      pick ??= tracks.first;
+      await setSubtitleTrackById(pick.id);
     } catch (_) {}
   }
 
   @override
-  Future<void> pause() async {
+  Future<void> setSubtitleTrackById(String id) async {
+    // HLS track
+    for (final t in _hlsTracks) {
+      if (t.id == id) {
+        await _loadHlsTrack(t);
+        _add(_activeSubtitleId, id);
+        return;
+      }
+    }
+    // Native subtitle track
+    final p = _player;
+    if (p == null) return;
     try {
-      await _controller?.pause();
+      final subs = p.state.tracks.subtitle;
+      final idx = int.tryParse(id.replaceFirst('sub_', ''));
+      if (idx != null && idx < subs.length) {
+        await p.setSubtitleTrack(subs[idx]);
+        _add(_activeSubtitleId, id);
+      }
     } catch (_) {}
+  }
+
+  Future<void> _loadHlsTrack(HlsSubtitleTrack track) async {
+    _selHlsTrack = track;
+    final cues = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
+    if (_disposed || !identical(_selHlsTrack, track)) return;
+    _cues = cues;
+    final p = _player;
+    if (p != null) _updateSubtitle(p.state.position);
+
+    _hlsRefresh?.cancel();
+    if (_live == true) {
+      _hlsRefresh = Timer.periodic(const Duration(seconds: 45), (_) {
+        if (_disposed || _selHlsTrack == null) return;
+        unawaited(_refreshHls(track));
+      });
+    }
+  }
+
+  Future<void> _refreshHls(HlsSubtitleTrack track) async {
+    final fresh = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
+    if (_disposed || !identical(_selHlsTrack, track)) return;
+    final map = <int, SubtitleCue>{};
+    for (final c in _cues) { map[c.start.inMilliseconds] = c; }
+    var changed = false;
+    for (final c in fresh) {
+      final k = c.start.inMilliseconds;
+      if (!map.containsKey(k)) { map[k] = c; changed = true; }
+    }
+    if (changed) {
+      _cues = map.values.toList()..sort((a, b) => a.start.compareTo(b.start));
+      final p = _player;
+      if (p != null) _updateSubtitle(p.state.position);
+    }
   }
 
   @override
-  Future<void> seek(Duration position) async {
+  Future<void> setAudioTrackById(String id) async {
+    final p = _player;
+    if (p == null) return;
     try {
-      await _controller?.seekTo(position);
+      final audios = p.state.tracks.audio;
+      final idx = int.tryParse(id.replaceFirst('audio_', ''));
+      if (idx != null && idx < audios.length) {
+        await p.setAudioTrack(audios[idx]);
+        _activeAudioId = id;
+        _add(_activeAudioTrackId, id);
+      }
     } catch (_) {}
   }
-
-  @override
-  Future<void> setVolume(double v) async {
-    _pendingVolume = v.clamp(0.0, 1.0);
-    try {
-      await _controller?.setVolume(_pendingVolume);
-    } catch (_) {}
-  }
-
-  // ---- Altyazı ----
 
   @override
   Future<void> setExternalSubtitle(String uri) async {
     try {
-      final raw = await _fetchSubtitle(uri);
+      final raw = await _fetchSub(uri);
       if (raw == null) return;
       _cues = parseSubtitleCues(raw);
-      _activeSubtitle = null;
-      final c = _controller;
-      if (c != null) {
-        _updateSubtitleAt(c.value.position);
-      }
-    } catch (_) {
-      // Altyazı yüklenemezse sessizce geç — oynatma etkilenmez.
-    }
+      _activeSub = null;
+      final p = _player;
+      if (p != null) _updateSubtitle(p.state.position);
+    } catch (_) {}
   }
 
   @override
   Future<void> disableSubtitles() async {
     _cues = const [];
-    _activeSubtitle = null;
-    _subtitleText.add(null);
-    _activeSubtitleId.add('off');
+    _activeSub = null;
+    _add(_subtitleText, null);
+    _add(_activeSubtitleId, 'off');
   }
 
-  @override
-  Future<void> setSubtitleTrackById(String id) async {
-    // HLS gömülü parça mı? (video_player API'si sunmadığı için kendimiz
-    // master playlist'ten bulduğumuz parçalar.)
-    for (final t in _hlsTracks) {
-      if (t.id == id) {
-        await _loadHlsTrack(t);
-        _activeSubtitleId.add(id);
-        return;
-      }
-    }
-    // Yerleşik (video_player) parça yok; bilinmeyen id'yi yoksay.
-  }
-
-  @override
-  Future<void> setAudioTrackById(String id) async {
-    _activeAudioId = id;
-    _activeAudioTrackId.add(id);
-    // video_player ExoPlayer'da ses parçası değiştirme — platform kanalı gerekli
-    // Şimdilik sadece UI durumunu güncelle
-  }
-
-  Future<String?> _fetchSubtitle(String uri) async {
+  Future<String?> _fetchSub(String uri) async {
     if (uri.startsWith('http://') || uri.startsWith('https://')) {
-      final resp = await http
-          .get(Uri.parse(uri), headers: const {
-            'User-Agent':
-                'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 '
-                    'Chrome/120.0 Mobile Safari/537.36',
-          })
-          .timeout(const Duration(seconds: 20));
+      final resp = await http.get(Uri.parse(uri), headers: const {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 20));
       if (resp.statusCode == 200) {
-        // UTF-8; BOM varsa temizle.
         var body = resp.body;
         if (body.startsWith('\uFEFF')) body = body.substring(1);
         return body;
       }
-      return null;
     }
     if (uri.startsWith('file://')) {
-      final path = uri.replaceFirst('file://', '');
-      final file = File(path);
-      if (await file.exists()) {
-        return await file.readAsString();
-      }
+      final f = File(uri.replaceFirst('file://', ''));
+      if (await f.exists()) return await f.readAsString();
     }
     return null;
   }
 
-  void _updateSubtitleAt(Duration position) {
+  void _updateSubtitle(Duration pos) {
     if (_cues.isEmpty) return;
     String? text;
-    for (final cue in _cues) {
-      if (position >= cue.start && position <= cue.end) {
-        text = cue.text;
-        break;
-      }
+    for (final c in _cues) {
+      if (pos >= c.start && pos <= c.end) { text = c.text; break; }
     }
-    if (text != _activeSubtitle) {
-      _activeSubtitle = text;
-      _subtitleText.add(text);
-    }
+    if (text != _activeSub) { _activeSub = text; _add(_subtitleText, text); }
   }
+
+  @override Future<void> play() async { try { await _player?.play(); } catch (_) {} }
+  @override Future<void> pause() async { try { await _player?.pause(); } catch (_) {} }
+  @override Future<void> seek(Duration pos) async { try { await _player?.seek(pos); } catch (_) {} }
+  @override Future<void> setVolume(double v) async { try { await _player?.setVolume(v * 100.0); } catch (_) {} _add(_volume, v); }
 
   @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _generation++;
-    _hlsSubtitleRefresh?.cancel();
-    _hlsSubtitleRefresh = null;
-    final c = _controller;
-    _controller = null;
-    if (c != null) {
-      try {
-        c.removeListener(() {});
-        await c.dispose();
-      } catch (_) {}
-    }
-    // Stream'leri güvenli kapat — zaten kapalıysa sessizce geç
+    _gen++;
+    _hlsRefresh?.cancel();
+    final p = _player;
+    _player = null;
+    _vc = null;
+    if (p != null) { try { await p.dispose(); } catch (_) {} }
     for (final sc in [_buffering, _error, _playing, _volume, _position, _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId, _audioTracksCtrl, _activeAudioTrackId]) {
       if (!sc.isClosed) await sc.close();
     }
   }
 }
 
-// ---- SRT / VTT ayrıştırıcı ----
+// ==================== Altyazı Parser ====================
 
-/// Bir altyazı parçası (zaman aralığı + metin).
 class SubtitleCue {
-  const SubtitleCue(this.start, this.end, this.text);
-
+  SubtitleCue(this.start, this.end, this.text);
   final Duration start;
   final Duration end;
   final String text;
 }
 
-class _SubCue {
-  const _SubCue(this.start, this.end, this.text);
-
-  final Duration start;
-  final Duration end;
-  final String text;
-}
-
-/// SRT ("00:00:01,000 --> 00:00:04,000") ve WebVTT (nokta ayracı, opsiyonel
-/// satır başlığı) formatlarını destekler.
 List<SubtitleCue> parseSubtitleCues(String raw) {
-  return _parseSubtitles(raw)
-      .map((c) => SubtitleCue(c.start, c.end, c.text))
-      .toList(growable: false);
+  return _parseSubtitles(raw).map((c) => SubtitleCue(c.start, c.end, c.text)).toList(growable: false);
 }
 
 List<_SubCue> _parseSubtitles(String raw) {
-  final lines = raw
-      .replaceAll('\r\n', '\n')
-      .replaceAll('\r', '\n')
-      .split('\n');
+  final lines = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
   final cues = <_SubCue>[];
-  final re = RegExp(
-    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
-    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})',
-  );
+  final re = RegExp(r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})');
   for (var i = 0; i < lines.length; i++) {
     final m = re.firstMatch(lines[i]);
     if (m == null) continue;
@@ -616,9 +435,7 @@ List<_SubCue> _parseSubtitles(String raw) {
       textLines.add(lines[i].trim());
       i++;
     }
-    if (textLines.isNotEmpty) {
-      cues.add(_SubCue(start, end, textLines.join('\n')));
-    }
+    if (textLines.isNotEmpty) cues.add(_SubCue(start, end, textLines.join('\n')));
   }
   return cues;
 }
@@ -626,10 +443,12 @@ List<_SubCue> _parseSubtitles(String raw) {
 Duration _cueTime(String h, String m, String s, String ms) {
   var millis = ms.padRight(3, '0');
   if (millis.length > 3) millis = millis.substring(0, 3);
-  return Duration(
-    hours: int.parse(h),
-    minutes: int.parse(m),
-    seconds: int.parse(s),
-    milliseconds: int.parse(millis),
-  );
+  return Duration(hours: int.parse(h), minutes: int.parse(m), seconds: int.parse(s), milliseconds: int.parse(millis));
+}
+
+class _SubCue {
+  _SubCue(this.start, this.end, this.text);
+  final Duration start;
+  final Duration end;
+  final String text;
 }
