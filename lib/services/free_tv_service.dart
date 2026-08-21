@@ -50,6 +50,11 @@ class FreeTvService {
         '${baseUrl}categories/music/tr.m3u'),
     ('🇹🇷 Türkçe Eğlence',
         '${baseUrl}categories/entertainment/tr.m3u'),
+    // ---- Türkçe Sinema/Film Kanalları ----
+    ('🎬 Türkçe Film Kanalları (7)',
+        '${baseUrl}countries/tr.m3u'),  // Movies grubu
+    ('🎬 Dünya Film Kanalları (731)',
+        '${baseUrl}categories/movies.m3u'),
     // ---- Kürtçe Kanallar ----
     ('🏴 Kürtçe Kanallar (34)',
         '${baseUrl}languages/kur.m3u'),
