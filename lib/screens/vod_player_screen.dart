@@ -319,18 +319,12 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       return KeyEventResult.handled;
     }
 
-    // ---- Sağ ok: menü paneli aç ----
+    // ---- Sağ ok: her zaman menüyü aç ----
     if (key == LogicalKeyboardKey.arrowRight) {
-      if (_overlayVisible && !_showControlMenu) {
-        // Overlay açıkken sağ ok → menü aç
-        _openControlMenu();
-      } else if (_showControlMenu) {
-        // Menü açıkken sağ ok → sonraki buton
+      if (_showControlMenu) {
         setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 4));
       } else {
-        // Overlay kapalıyken sağ ok → ileri sar 10sn
-        _seekBy(10);
-        _flashSeekHud(10);
+        _openControlMenu();
       }
       return KeyEventResult.handled;
     }

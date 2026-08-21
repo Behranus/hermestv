@@ -59,8 +59,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String _panelFilterGroup = 'all';
   List<String> _panelGroups = [];
 
-  // Alt kontrol odağı: 0=Altyazı, 1=Ekran, 2=Oynat, 3=Uyku, 4=Kanal Listesi
-  int _controlFocus = 2;
+  // Ekran oranı
+  BoxFit _boxFit = BoxFit.contain;
 
 
 
@@ -301,22 +301,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _updatePanelChannels();
   }
 
-  void _activateFocusedControl() {
-    switch (_controlFocus) {
-      case 0: _showSubtitlesMenu(); break; // Altyazı
-      case 1: _showAspectRatio(context); break; // Ekran Oranı
-      case 2: // Oynat/Duraklat
-        if (_player.playing.toString().contains('true')) {
-          _player.pause();
-        } else {
-          _player.play();
-        }
-        break;
-      case 3: _showSleepTimer(context); break; // Uyku
-      case 4: _togglePanel(); break; // Kanal Listesi
-    }
-  }
-
   void _showMainMenu() {
     _overlayTimer?.cancel();
     showModalBottomSheet(
@@ -336,7 +320,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
             const Padding(
               padding: EdgeInsets.all(12),
-              child: Text('Menü', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              child: Text('Seçenekler', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             ),
             ListTile(
               leading: const Icon(Icons.subtitles, color: Colors.white70),
@@ -354,6 +338,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
               onTap: () { Navigator.pop(ctx); _seekBy(10); },
             ),
             ListTile(
+              leading: const Icon(Icons.videocam, color: Colors.white70),
+              title: const Text('Görüntü Kalitesi', style: TextStyle(color: Colors.white)),
+              subtitle: Text(_boxFit == BoxFit.contain ? 'Otomatik' : _boxFit == BoxFit.fill ? 'Tam Ekran' : _boxFit == BoxFit.cover ? 'Kapla' : 'Özel',
+                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () { Navigator.pop(ctx); _showAspectRatio(context); },
+            ),
+            ListTile(
               leading: const Icon(Icons.aspect_ratio, color: Colors.white70),
               title: const Text('Ekran Oranı', style: TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(ctx); _showAspectRatio(context); },
@@ -364,7 +355,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
               onTap: () { Navigator.pop(ctx); _showSleepTimer(context); },
             ),
             ListTile(
-              leading: const Icon(Icons.volume_up, color: Colors.white70),
+              leading: Icon(_volume == 0 ? Icons.volume_off : _volume < 0.5 ? Icons.volume_down : Icons.volume_up,
+                color: Colors.white70),
               title: Text('Ses: ${(_volume * 100).round()}%', style: const TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(ctx); },
             ),
@@ -393,8 +385,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;      // ---- Global tuşlar (panel açık/kapalı fark etmez) ----
-    // Geri tuşu: önce paneli kapat, sonra overlay'ı kapat, en son çık
+    final key = event.logicalKey;
+
+    // ---- Geri tuşu: panel→overlay→çıkış ----
     if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
       if (_showPanel) { _closePanel(); return KeyEventResult.handled; }
       if (_overlayVisible) { setState(() => _overlayVisible = false); return KeyEventResult.handled; }
@@ -402,35 +395,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
 
-    // Enter/Select (OK): panel açıkken seç, overlay'deyken kontrolü aktifleştir, yoksa kanal listesini aç
+    // ---- OK/Enter/Select: her zaman kanal listesini aç/kapat ----
     if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
       if (_showPanel) {
         _selectChannel(_panelIndex);
         _closePanel();
-      } else if (_overlayVisible) {
-        _activateFocusedControl();
       } else {
-        // Kanal listesi panelini aç (canlı yayın devam ederken)
         _togglePanel();
       }
       return KeyEventResult.handled;
     }
-    // Space: overlay aç/kapat
+
+    // ---- Space: overlay aç/kapat ----
     if (key == LogicalKeyboardKey.space) {
       _toggleOverlay();
       return KeyEventResult.handled;
-    }
-
-    // ---- Overlay'deyken D-pad: soldaki butonlarda gezin ----
-    if (_overlayVisible && !_showPanel) {
-      if (key == LogicalKeyboardKey.arrowLeft) {
-        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 4));
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.arrowRight) {
-        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 4));
-        return KeyEventResult.handled;
-      }
     }
 
     // ---- Paneldeyken ok tuşları ----
@@ -454,7 +433,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
 
-    // ---- Ana mod ok tuşları ----
+    // ---- Ana mod: panel kapalı ----
     if (key == LogicalKeyboardKey.arrowUp) {
       _switchChannel(-1);
       return KeyEventResult.handled;
@@ -468,7 +447,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      // Sağ ok: menü panelini aç (altyazı, ekran oranı, uyku, ses)
       _showMainMenu();
       return KeyEventResult.handled;
     }
@@ -560,8 +538,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   // ==================== Ekran Oranı ====================
-
-  BoxFit _boxFit = BoxFit.contain;
 
   void _showAspectRatio(BuildContext context) {
     showModalBottomSheet<BoxFit>(
@@ -758,33 +734,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 ),
 
-              // Alt kontrol barı (4 buton: Önceki, Oynat, Sonraki, Menü)
-              if (_overlayVisible && _error == null && !_showPanel)
-                Positioned(
-                  bottom: 0, left: 0, right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter, end: Alignment.topCenter,
-                        colors: [Colors.black87, Colors.transparent],
-                      ),
-                    ),
-                    child: SafeArea(
-                      top: false,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _CtrlBtn(icon: Icons.subtitles, label: 'Altyazı', focused: _controlFocus == 0),
-                          _CtrlBtn(icon: Icons.aspect_ratio, label: 'Ekran', focused: _controlFocus == 1),
-                          _CtrlBtn(icon: Icons.play_circle_filled, label: 'Oynat', focused: _controlFocus == 2, size: 48),
-                          _CtrlBtn(icon: Icons.bedtime_outlined, label: 'Uyku', focused: _controlFocus == 3),
-                          _CtrlBtn(icon: Icons.queue_music, label: 'Liste', focused: _controlFocus == 4),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+
 
               // Üst gradient — her zaman overlayVisible iken göster
               if (_overlayVisible && _error == null)
