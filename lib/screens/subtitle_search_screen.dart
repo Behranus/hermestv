@@ -108,14 +108,16 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
       ),
     ];
 
-    // 2. YIFY + Subdl paralel
+    // 2. Alternatif kaynaklar paralel
     setState(() => _sourceStatus['YIFY'] = 'Aranıyor...');
     setState(() => _sourceStatus['Subdl'] = 'Aranıyor...');
+    setState(() => _sourceStatus['Subf2m'] = 'Aranıyor...');
+    setState(() => _sourceStatus['TürkçeAltyazı'] = 'Aranıyor...');
 
     final altFutures = AlternativeSubtitlesService.searchAll(
       query: query,
       languages: _selectedLanguage,
-      limit: 10,
+      limit: 20,
     );
 
     // Tüm sonuçları bekle
@@ -140,7 +142,7 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
       ));
     }
 
-    // YIFY ve Subdl sonuçlarını dönüştür
+    // Alternatif sonuçları dönüştür
     for (final sub in altResults) {
       allResults.add(_UnifiedResult(
         id: sub.id,
@@ -163,6 +165,14 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
           .toString();
       _sourceStatus['Subdl'] = altResults
           .where((r) => r.source == 'Subdl')
+          .length
+          .toString();
+      _sourceStatus['Subf2m'] = altResults
+          .where((r) => r.source == 'Subf2m')
+          .length
+          .toString();
+      _sourceStatus['TürkçeAltyazı'] = altResults
+          .where((r) => r.source == 'TürkçeAltyazı')
           .length
           .toString();
     });
@@ -418,6 +428,10 @@ class _SubtitleSearchScreenState extends State<SubtitleSearchScreen> {
         return Colors.orange;
       case 'Subdl':
         return Colors.cyan;
+      case 'Subf2m':
+        return Colors.purple;
+      case 'TürkçeAltyazı':
+        return Colors.red.shade300;
       default:
         return Colors.white54;
     }
