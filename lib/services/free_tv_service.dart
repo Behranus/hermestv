@@ -29,7 +29,7 @@ class FreeTvCountry {
 /// Kaynaklar:
 /// - iptv-org: world'un en büyük ücretsiz IPTV depoası (1000+ kanal)
 /// - free-tv/iptv: HD/4K odaklı, kalite öncelikli ücretsiz kanallar
-/// - Pluto TV, Samsung TV Plus, Plex TV: Yayıncı bedava servisleri
+/// - Ülkelere göre kanallar, dil bazlı kanallar, kategori bazlı kanallar
 ///
 /// Bu kaynak yalnızca yayıncıların kendilerinin ücretsiz sunduğu
 /// (public broadcaster / free-to-air) kanalları içerir.
@@ -39,29 +39,61 @@ class FreeTvService {
   /// Ek ücretsiz HD/4K kanal kaynakları.
   /// Her biri bir M3U playlist URL'si.
   static const extraSources = <(String label, String url)>[
-    // ---- Türkçe Kanallar ----
-    ('🇹🇷 Türkçe Kanallar (TURKTV)',
-        'https://itasli.github.io/TURKTV/index.m3u'),
-    ('🇹🇷 Türkçe Kanallar (iptv-org TR)',
+    // ---- Türkçe Kanallar (Premium benzeri) ----
+    ('🇹🇷 Türkçe Tüm Kanallar (174)',
         '${baseUrl}countries/tr.m3u'),
-    ('🇹🇷 Türkçe Haber Kanalları',
+    ('🇹🇷 TURKTV (55)',
+        'https://itasli.github.io/TURKTV/index.m3u'),
+    ('🇹🇷 Türkçe Haber',
         '${baseUrl}categories/news/tr.m3u'),
-    ('🇹🇷 Türkçe Müzik Kanalları',
+    ('🇹🇷 Türkçe Müzik',
         '${baseUrl}categories/music/tr.m3u'),
     ('🇹🇷 Türkçe Eğlence',
         '${baseUrl}categories/entertainment/tr.m3u'),
     // ---- Kürtçe Kanallar ----
-    ('Kurdish TV (Kanallar)',
-        'https://iptv-org.github.io/iptv/languages/kur.m3u'),
-    // ---- HD/4K Global ----
-    ('Free-TV HD/4K',
-        'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8'),
-    ('Pluto TV (Global)',
-        'https://i.mjh.nz/pluto/tv.m3u'),
-    ('Samsung TV Plus',
-        'https://i.mjh.nz/samsung-tv-plus/tv.m3u'),
-    ('Plex TV',
-        'https://i.mjh.nz/plex/tv.m3u'),
+    ('🏴 Kürtçe Kanallar (34)',
+        '${baseUrl}languages/kur.m3u'),
+    // ---- Spor (Premium benzeri) ----
+    ('⚽ Spor Kanalları Dünya (462)',
+        '${baseUrl}categories/sports.m3u'),
+    // ---- Haber ----
+    ('📰 Haber Kanalları Dünya (963)',
+        '${baseUrl}categories/news.m3u'),
+    // ---- Film ----
+    ('🎬 Film Kanalları Dünya (731)',
+        '${baseUrl}categories/movies.m3u'),
+    // ---- Belgesel ----
+    ('📚 Belgesel Kanalları (241)',
+        '${baseUrl}categories/documentary.m3u'),
+    // ---- Çocuk ----
+    ('👶 Çocuk Kanalları (370)',
+        '${baseUrl}categories/kids.m3u'),
+    // ---- Ülke Bazlı Premium Benzeri ----
+    ('🇩🇪 Almanya (294)',
+        '${baseUrl}countries/de.m3u'),
+    ('🇺🇸 ABD (1462)',
+        '${baseUrl}countries/us.m3u'),
+    ('🇫🇷 Fransa (215)',
+        '${baseUrl}countries/fr.m3u'),
+    ('🇰🇷 Güney Kore (73)',
+        '${baseUrl}countries/kr.m3u'),
+    ('🇮🇳 Hindistan (722)',
+        '${baseUrl}countries/in.m3u'),
+    ('🇧🇷 Brezilya (392)',
+        '${baseUrl}countries/br.m3u'),
+    ('🇷🇺 Rusya (452)',
+        '${baseUrl}countries/ru.m3u'),
+    ('🇮🇹 İtalya (310)',
+        '${baseUrl}countries/it.m3u'),
+    // ---- Dil Bazlı ----
+    ('🇸🇦 Arapça',
+        '${baseUrl}languages/ara.m3u'),
+    ('🇬🇧 İngilizce',
+        '${baseUrl}languages/eng.m3u'),
+    ('🇩🇪 Almanca',
+        '${baseUrl}languages/deu.m3u'),
+    ('🇫🇷 Fransızca',
+        '${baseUrl}languages/fra.m3u'),
   ];
 
   static const categories = <FreeTvCategory>[
