@@ -371,7 +371,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     // ---- Sağ ok: her zaman menüyü aç ----
     if (key == LogicalKeyboardKey.arrowRight) {
       if (_showControlMenu) {
-        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 4));
+        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 5));
       } else {
         _openControlMenu();
       }
@@ -381,7 +381,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     // ---- Sol ok ----
     if (key == LogicalKeyboardKey.arrowLeft) {
       if (_showControlMenu) {
-        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 4));
+        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 5));
       } else {
         _seekBy(-10);
         _flashSeekHud(-10);
@@ -436,6 +436,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       case 2: _closeControlMenu(); _togglePlay(); break; // Oynat/Duraklat
       case 3: _closeControlMenu(); _seekBy(-600); _flashSeekHud(-600); break; // -10 dk
       case 4: _closeControlMenu(); _seekBy(600); _flashSeekHud(600); break; // +10 dk
+      case 5: _closeControlMenu(); _showAudioMenu(); break; // Ses
     }
   }
 
@@ -715,6 +716,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
                                   _VodMenuBtn(icon: _playing ? Icons.pause : Icons.play_arrow, label: 'Oynat', focused: _controlFocus == 2),
                                   _VodMenuBtn(icon: Icons.replay_10, label: '-10 dk', focused: _controlFocus == 3),
                                   _VodMenuBtn(icon: Icons.forward_10, label: '+10 dk', focused: _controlFocus == 4),
+                                  _VodMenuBtn(icon: Icons.volume_up, label: 'Ses', focused: _controlFocus == 5),
                                 ],
                               )
                             else ...[
