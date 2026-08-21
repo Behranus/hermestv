@@ -52,13 +52,19 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   }
 
   void _openPlayer(BuildContext context, AppState state, int index) {
-    final channels = state.filteredChannels;
-    if (index < 0 || index >= channels.length) return;
-    final channel = channels[index];
+    final filtered = state.filteredChannels;
+    if (index < 0 || index >= filtered.length) return;
+    final channel = filtered[index];
     state.setLastPlayed(channel);
+    // Tüm kanalları gönder — panelde kategoriler arası geçiş için
+    final allChannels = state.channels;
+    final allIndex = allChannels.indexOf(channel);
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PlayerScreen(channels: channels, initialIndex: index),
+        builder: (_) => PlayerScreen(
+          channels: allChannels,
+          initialIndex: allIndex >= 0 ? allIndex : 0,
+        ),
       ),
     );
   }
