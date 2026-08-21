@@ -183,7 +183,7 @@ class MediaKitStreamPlayer extends StreamPlayer {
     if (old != null) { try { await old.dispose(); } catch (_) {} }
 
     try {
-      await player.open(Media(url, httpHeaders: headers ?? {}));
+      await player.open(Media(url, httpHeaders: headers != null && headers.isNotEmpty ? headers : null));
       if (gen != _gen || _disposed) return;
 
       // Keşfet: ses + altyazı track'leri
