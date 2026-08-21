@@ -76,7 +76,7 @@ class AlternativeSubtitlesService {
           .replace(queryParameters: params);
       final resp = await http
           .get(uri, headers: {
-            'User-Agent': 'bbtv v1.1',
+            'User-Agent': 'hermestv v1.0',
           })
           .timeout(const Duration(seconds: 12));
 

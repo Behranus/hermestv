@@ -128,7 +128,7 @@ class OpenSubtitlesService {
       final resp = await http
           .get(uri, headers: {
             'Api-Key': key,
-            'User-Agent': 'bbtv v1.1',
+            'User-Agent': 'hermestv v1.0',
           })
           .timeout(const Duration(seconds: 15));
 
@@ -160,7 +160,7 @@ class OpenSubtitlesService {
             headers: {
               'Api-Key': key,
               'Content-Type': 'application/json',
-              'User-Agent': 'bbtv v1.1',
+              'User-Agent': 'hermestv v1.0',
             },
             body: json.encode({'file_id': int.parse(fileId)}),
           )

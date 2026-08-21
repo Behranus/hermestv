@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:iptv_player/screens/home_shell.dart';
+import 'package:hermestv/screens/home_shell.dart';
 import 'package:fvp/fvp.dart' as fvp;
-import 'package:iptv_player/state/app_state.dart';
+import 'package:hermestv/state/app_state.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -67,7 +67,7 @@ class IptvApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => AppState()..init(),
       child: MaterialApp(
-        title: 'bbtv',
+        title: 'hermestv',
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.dark,
         theme: _buildTheme(Brightness.light),

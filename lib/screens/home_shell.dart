@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:iptv_player/screens/channels_screen.dart';
-import 'package:iptv_player/screens/favorites_screen.dart';
-import 'package:iptv_player/screens/setup_screen.dart';
-import 'package:iptv_player/screens/vod_screen.dart';
+import 'package:hermestv/screens/channels_screen.dart';
+import 'package:hermestv/screens/favorites_screen.dart';
+import 'package:hermestv/screens/setup_screen.dart';
+import 'package:hermestv/screens/vod_screen.dart';
 
 /// Ana kabuk: geniş ekranda (TV/Box) solda NavigationRail,
 /// dar ekranda (telefon) altta NavigationBar.
@@ -77,7 +77,7 @@ class _HomeShellState extends State<HomeShell> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'bbtv',
+                        'hermestv',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 14,

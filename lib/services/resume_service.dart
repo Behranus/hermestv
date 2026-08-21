@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// VOD izleme geçmişini ve kaldığın yer bilgisini saklar.
 class ResumeService {
-  static const _key = 'bbtv_resume_history';
+  static const _key = 'hermestv_resume_history';
   static const _maxItems = 50;
 
   /// Bir izleme kaydı.
