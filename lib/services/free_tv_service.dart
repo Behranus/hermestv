@@ -39,26 +39,7 @@ class FreeTvService {
   /// Ek ücretsiz HD/4K kanal kaynakları.
   /// Her biri bir M3U playlist URL'si.
   static const extraSources = <(String label, String url)>[
-    // ---- Türkçe Kanallar (Premium benzeri) ----
-    ('🇹🇷 Türkçe Tüm Kanallar (174)',
-        '${baseUrl}countries/tr.m3u'),
-    ('🇹🇷 TURKTV (55)',
-        'https://itasli.github.io/TURKTV/index.m3u'),
-    ('🇹🇷 Türkçe Haber',
-        '${baseUrl}categories/news/tr.m3u'),
-    ('🇹🇷 Türkçe Müzik',
-        '${baseUrl}categories/music/tr.m3u'),
-    ('🇹🇷 Türkçe Eğlence',
-        '${baseUrl}categories/entertainment/tr.m3u'),
-    // ---- Türkçe Sinema/Film Kanalları ----
-    ('🎬 Türkçe Film Kanalları (7)',
-        '${baseUrl}countries/tr.m3u'),  // Movies grubu
-    ('🎬 Dünya Film Kanalları (731)',
-        '${baseUrl}categories/movies.m3u'),
-    // ---- Kürtçe Kanallar ----
-    ('🏴 Kürtçe Kanallar (34)',
-        '${baseUrl}languages/kur.m3u'),
-    // ---- Spor (Premium benzeri) ----
+    // ---- Spor ----
     ('⚽ Spor Kanalları Dünya (462)',
         '${baseUrl}categories/sports.m3u'),
     // ---- Haber ----
@@ -73,7 +54,7 @@ class FreeTvService {
     // ---- Çocuk ----
     ('👶 Çocuk Kanalları (370)',
         '${baseUrl}categories/kids.m3u'),
-    // ---- Ülke Bazlı Premium Benzeri ----
+    // ---- Ülke Bazlı (TR ve Kürdistan hariç) ----
     ('🇩🇪 Almanya (294)',
         '${baseUrl}countries/de.m3u'),
     ('🇺🇸 ABD (1462)',
@@ -125,8 +106,6 @@ class FreeTvService {
   ];
 
   static const countries = <FreeTvCountry>[
-    FreeTvCountry('tr', 'Türkiye', '🇹🇷'),
-    FreeTvCountry('kur', 'Kürdistan', '🏴'),
     FreeTvCountry('us', 'ABD', '🇺🇸'),
     FreeTvCountry('gb', 'İngiltere', '🇬🇧'),
     FreeTvCountry('de', 'Almanya', '🇩🇪'),
