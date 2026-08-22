@@ -106,16 +106,13 @@ class AppState extends ChangeNotifier {
   /// Uygulama açılışında kaydedilmiş kaynağı yükler.
   Future<void> init() async {
     // Sürüm değiştiyse disk cache'leri temizle (eski kanallar kalmasın).
-    const cacheVersion = 3; // Bu numara her cache yıkıcı değişiklikte artırılır.
+    const cacheVersion = 4; // Bu numara her cache yıkıcı değişiklikte artırılır.
     final prefs = await SharedPreferences.getInstance();
     final savedVer = prefs.getInt('_cache_version') ?? 0;
     if (savedVer < cacheVersion) {
-      // SharedPreferences cache'lerini temizle.
-      for (final key in prefs.getKeys()) {
-        if (key.startsWith('test_channels_') ||
-            key.startsWith('cache_')) {
-          await prefs.remove(key);
-        }
+      // SharedPreferences: tüm cache + playlist source temizle.
+      for (final key in prefs.getKeys().toList()) {
+        await prefs.remove(key);
       }
       // Disk cache dosyalarını temizle (playlist_*.json).
       try {
