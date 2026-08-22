@@ -1775,53 +1775,131 @@ class _SubtitlesSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final hasStreamTracks = tracks.isNotEmpty;
 
+    // Altyazı sayısına göre yüksekliği ayarla
+    final trackHeight = tracks.length.clamp(0, 8) * 56.0;
+    final sheetHeight = 120.0 + trackHeight + 60.0; // başlık + tracks + dosya seçimi
+
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('Altyazılar', style: theme.textTheme.titleLarge),
-          ),
-          ListTile(
-            leading: const Icon(Icons.subtitles_off),
-            title: const Text('Kapalı'),
-            trailing: activeId == null || activeId == 'off'
-                ? const Icon(Icons.check, color: Colors.green) : null,
-            onTap: () => Navigator.of(context).pop('off'),
-          ),
-          if (hasStreamTracks) ...[
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Text('Akış altyazıları', style: theme.textTheme.labelLarge),
-            ),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true, itemCount: tracks.length,
-                itemBuilder: (context, i) {
-                  final t = tracks[i];
-                  final label = [t.title, t.language].whereType<String>().where((s) => s.isNotEmpty).join(' • ');
-                  return ListTile(
-                    leading: const Icon(Icons.subtitles),
-                    title: Text(label.isEmpty ? 'Parça ${i + 1}' : label),
-                    trailing: activeId == t.id ? const Icon(Icons.check, color: Colors.green) : null,
-                    onTap: () => Navigator.of(context).pop(t.id),
-                  );
-                },
+      child: SizedBox(
+        height: sheetHeight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sürükleme çubuğu + başlık
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.subtitles, color: Colors.blueAccent, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Altyazılar', style: theme.textTheme.titleMedium?.copyWith(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+                  if (tracks.isNotEmpty) ...[
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text('${tracks.length} parça',
+                        style: const TextStyle(color: Colors.blueAccent, fontSize: 11)),
+                    ),
+                  ],
+                ],
               ),
             ),
+            const Divider(height: 1, color: Colors.white12),
+            // Kapalı seçeneği
+            ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              leading: Icon(Icons.subtitles_off, size: 20,
+                color: (activeId == null || activeId == 'off') ? Colors.green : Colors.white54),
+              title: const Text('Kapalı', style: TextStyle(color: Colors.white, fontSize: 15)),
+              trailing: (activeId == null || activeId == 'off')
+                  ? const Icon(Icons.check_circle, color: Colors.green, size: 20) : null,
+              onTap: () => Navigator.of(context).pop('off'),
+            ),
+            if (hasStreamTracks) ...[
+              const Divider(height: 1, color: Colors.white12),
+              // Başlık çubuğu
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                color: Colors.white.withValues(alpha: 0.05),
+                child: Row(
+                  children: [
+                    const Icon(Icons.wifi, size: 14, color: Colors.white54),
+                    const SizedBox(width: 6),
+                    Text('Akış Altyazıları (${tracks.length})',
+                      style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              // Altyazı listesi —.scroll edilebilir, tek satır sıkışması yok
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: tracks.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 56, endIndent: 16, color: Colors.white10),
+                  itemBuilder: (context, i) {
+                    final t = tracks[i];
+                    final name = t.title?.isNotEmpty == true ? t.title! : '';
+                    final lang = t.language?.isNotEmpty == true ? t.language! : '';
+                    final isActive = activeId == t.id;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      leading: Icon(
+                        isActive ? Icons.subtitles : Icons.subtitles_outlined,
+                        size: 20,
+                        color: isActive ? Colors.green : Colors.white54,
+                      ),
+                      title: Text(
+                        name.isNotEmpty ? name : 'Parça ${i + 1}',
+                        style: TextStyle(
+                          color: isActive ? Colors.green : Colors.white,
+                          fontSize: 14,
+                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.visible,
+                      ),
+                      subtitle: lang.isNotEmpty
+                          ? Text(lang, style: const TextStyle(color: Colors.white38, fontSize: 11))
+                          : null,
+                      trailing: isActive
+                          ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
+                          : null,
+                      onTap: () => Navigator.of(context).pop(t.id),
+                    );
+                  },
+                ),
+              ),
+            ] else ...[
+              // Akış altyazısı yoksa bilgi mesajı
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Text(
+                  'Bu yayında yerleşik altyazı bulunamadı',
+                  style: TextStyle(color: Colors.white38, fontSize: 13, fontStyle: FontStyle.italic),
+                ),
+              ),
+            ],
+            const Divider(height: 1, color: Colors.white12),
+            // Dosyadan yükle
+            ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              leading: const Icon(Icons.upload_file, size: 20, color: Colors.amber),
+              title: const Text('Dosyadan altyazı yükle', style: TextStyle(color: Colors.white, fontSize: 14)),
+              subtitle: const Text('SRT, VTT, ASS, SSA, SUB', style: TextStyle(color: Colors.white38, fontSize: 11)),
+              onTap: () => Navigator.of(context).pop('file'),
+            ),
           ],
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.upload_file),
-            title: const Text('Dosyadan altyazı yükle'),
-            subtitle: const Text('SRT, VTT, ASS, SSA, SUB'),
-            onTap: () => Navigator.of(context).pop('file'),
-          ),
-          const SizedBox(height: 8),
-        ],
+        ),
       ),
     );
   }
