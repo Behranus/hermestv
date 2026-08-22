@@ -87,16 +87,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       g.add(c.displayGroup);
     }
     final sorted = g.toList()..sort();
-    final turkish = sorted.where(_isTurkish).toList();
-    final rest = sorted.where((x) => !_isTurkish(x)).toList();
-    _panelGroups = ['all', ...turkish, ...rest];
+    _panelGroups = ['all', ...sorted];
     _updatePanelChannels();
-  }
-
-  static bool _isTurkish(String g) {
-    final l = g.toLowerCase();
-    return l.contains('türk') || l.contains('turk') || l.contains('tr |') ||
-        l.startsWith('tr ') || l.startsWith('tr|') || l == 'tr' || l.contains('türkiye');
   }
 
   void _updatePanelChannels() {

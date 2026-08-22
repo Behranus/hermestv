@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:hermestv/models/channel.dart';
@@ -8,6 +9,7 @@ import 'package:hermestv/models/vod.dart';
 import 'package:hermestv/services/channel_probe_service.dart';
 import 'package:hermestv/services/epg_service.dart';
 import 'package:hermestv/services/favorites_service.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:hermestv/services/playlist_service.dart';
 import 'package:hermestv/services/test_server_service.dart';
 import 'package:hermestv/services/test_vod_catalog.dart';
@@ -63,43 +65,18 @@ class AppState extends ChangeNotifier {
 
   List<Channel> get channels => List.unmodifiable(_channels);
 
-  /// Benzersiz, sıralı grup listesi. Türkçe/Türkiye grupları en başta.
+  /// Benzersiz, sıralı grup listesi.
   List<String> get groups {
     final g = <String>{};
     for (final c in _channels) {
       g.add(c.displayGroup);
     }
     final list = g.toList()..sort();
-    // Türkçe kanallar her zaman ilk sırada (kullanıcı isteği).
-    final turkish = list.where(_isTurkishGroup).toList();
-    final rest = list.where((x) => !_isTurkishGroup(x)).toList();
-    return ['all', ...turkish, ...rest];
+    return ['all', ...list];
   }
 
-  /// Gruplar: Premium en üstte, sonra Türkçe, sonra diğerleri.
-  List<String> get sortedGroups {
-    final g = <String>{};
-    for (final c in _channels) {
-      g.add(c.displayGroup);
-    }
-    final list = g.toList()..sort();
-    final premium = list.where((x) => x.toLowerCase().contains('premium')).toList();
-    final turkish = list.where((x) => _isTurkishGroup(x) && !x.toLowerCase().contains('premium')).toList();
-    final rest = list.where((x) => !_isTurkishGroup(x) && !x.toLowerCase().contains('premium')).toList();
-    return ['all', ...premium, ...turkish, ...rest];
-  }
-
-  /// Grup adı Türkçe/Türkiye/Turkey vb. içeriyorsa true.
-  static bool _isTurkishGroup(String group) {
-    final g = group.toLowerCase();
-    return g.contains('türk') ||
-        g.contains('turk') ||
-        g.contains('tr |') ||
-        g.startsWith('tr ') ||
-        g.startsWith('tr|') ||
-        g == 'tr' ||
-        g.contains('türkiye');
-  }
+  /// Gruplar: alfabetik sıralı.
+  List<String> get sortedGroups => groups;
 
   bool get hasChannels => _channels.isNotEmpty;
 
@@ -128,6 +105,30 @@ class AppState extends ChangeNotifier {
 
   /// Uygulama açılışında kaydedilmiş kaynağı yükler.
   Future<void> init() async {
+    // Sürüm değiştiyse disk cache'leri temizle (eski kanallar kalmasın).
+    const cacheVersion = 3; // Bu numara her cache yıkıcı değişiklikte artırılır.
+    final prefs = await SharedPreferences.getInstance();
+    final savedVer = prefs.getInt('_cache_version') ?? 0;
+    if (savedVer < cacheVersion) {
+      // SharedPreferences cache'lerini temizle.
+      for (final key in prefs.getKeys()) {
+        if (key.startsWith('test_channels_') ||
+            key.startsWith('cache_')) {
+          await prefs.remove(key);
+        }
+      }
+      // Disk cache dosyalarını temizle (playlist_*.json).
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final files = dir.listSync().whereType<File>();
+        for (final f in files) {
+          if (f.path.contains('playlist_') && f.path.endsWith('.json')) {
+            await f.delete();
+          }
+        }
+      } catch (_) {}
+      await prefs.setInt('_cache_version', cacheVersion);
+    }
     _favorites = await FavoritesService.load();
     notifyListeners();
     final saved = await PlaylistService.restoreSource();
