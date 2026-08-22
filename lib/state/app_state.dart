@@ -105,33 +105,28 @@ class AppState extends ChangeNotifier {
 
   /// Uygulama açılışında kaydedilmiş kaynağı yükler.
   Future<void> init() async {
-    // Sürüm değiştiyse disk cache'leri temizle (eski kanallar kalmasın).
-    const cacheVersion = 4; // Bu numara her cache yıkıcı değişiklikte artırılır.
+    // v2.0: Otomatik kaynak yükleme tamamen kaldırıldı.
+    // Kullanıcı kendi kaynağını elle eklemeli.
+    // Eski cache'leri de temizle.
     final prefs = await SharedPreferences.getInstance();
-    final savedVer = prefs.getInt('_cache_version') ?? 0;
-    if (savedVer < cacheVersion) {
-      // SharedPreferences: tüm cache + playlist source temizle.
-      for (final key in prefs.getKeys().toList()) {
-        await prefs.remove(key);
-      }
-      // Disk cache dosyalarını temizle (playlist_*.json).
-      try {
-        final dir = await getApplicationDocumentsDirectory();
-        final files = dir.listSync().whereType<File>();
-        for (final f in files) {
-          if (f.path.contains('playlist_') && f.path.endsWith('.json')) {
-            await f.delete();
-          }
-        }
-      } catch (_) {}
-      await prefs.setInt('_cache_version', cacheVersion);
+    // Eski playlist_source varsa sil.
+    if (prefs.containsKey('playlist_source')) {
+      await prefs.remove('playlist_source');
     }
+    // Disk cache dosyalarını temizle (playlist_*.json).
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final files = dir.listSync().whereType<File>();
+      for (final f in files) {
+        if (f.path.contains('playlist_') && f.path.endsWith('.json')) {
+          await f.delete();
+        }
+      }
+    } catch (_) {}
     _favorites = await FavoritesService.load();
     notifyListeners();
-    final saved = await PlaylistService.restoreSource();
-    if (saved != null) {
-      await loadFromSource(saved);
-    }
+    // NOT: Artık otomatik kaynak yüklenmiyor.
+    // Kullanıcı Kurulum ekranından Free TV veya kendi kaynağını eklemeli.
   }
 
   Future<void> loadFromSource(PlaylistSource s) async {
