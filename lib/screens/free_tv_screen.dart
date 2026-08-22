@@ -92,53 +92,24 @@ class _FreeTvScreenState extends State<FreeTvScreen> {
           Text('Ülkeler', style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'Türkiye önerilen — ilk sırada.',
+            'İstediğin ülkenin ücretsiz kanallarını keşfet.',
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12),
           ),
           const SizedBox(height: 8),
-          // Türkiye her zaman ilk sırada
-          Card(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
-            child: ListTile(
-              leading: const Text('🇹🇷', style: TextStyle(fontSize: 26)),
-              title: const Text('Türkiye'),
-              subtitle: const Text('Önerilen — kanal ve kategorileri aç'),
-              trailing: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.star, color: Colors.amber, size: 18),
-                  SizedBox(width: 4),
-                  Icon(Icons.chevron_right),
-                ],
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => _CategoryGridScreen(
-                    country: FreeTvService.countries.first,
+          for (final country in FreeTvService.countries)
+            Card(
+              child: ListTile(
+                dense: true,
+                leading: Text(country.flag, style: const TextStyle(fontSize: 22)),
+                title: Text(country.label),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _CategoryGridScreen(country: country),
                   ),
                 ),
               ),
             ),
-          ),
-          if (FreeTvService.countries.length > 1) ...[
-            const SizedBox(height: 16),
-            Text('Diğer Ülkeler', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            for (final country in FreeTvService.countries.skip(1))
-              Card(
-                child: ListTile(
-                  dense: true,
-                  leading: Text(country.flag, style: const TextStyle(fontSize: 22)),
-                  title: Text(country.label),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => _CategoryGridScreen(country: country),
-                    ),
-                  ),
-                ),
-              ),
-          ],
           const SizedBox(height: 24),
         ],
       ),

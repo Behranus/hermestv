@@ -139,12 +139,8 @@ class FreeTvService {
       ? '${baseUrl}categories/$slug.m3u'
       : '${baseUrl}categories/$slug/$country.m3u';
 
-  /// Ülkenin (veya dilin) tüm kanalları.
-  /// Kürtçe özel durum: iptv-org dil bazlı playlist kullanır.
-  static String countryM3u(String code) {
-    if (code == 'kur') return '${baseUrl}languages/kur.m3u';
-    return '${baseUrl}countries/$code.m3u';
-  }
+  /// Ülkenin tüm kanalları.
+  static String countryM3u(String code) => '${baseUrl}countries/$code.m3u';
 
   static const allM3u = '${baseUrl}index.m3u';
 
