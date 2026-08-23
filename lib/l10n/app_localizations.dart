@@ -453,8 +453,11 @@ class AppLocalizations {
 
 AppLocalizations loc(String lang) => AppLocalizations(lang);
 const supportedLocales = ['tr', 'en', 'ku'];
+/// Kürdistan Bölgesel Yönetimi bayrağı — Unicode tag sequence (IR-16).
+const kuFlag = '🏴󠁩󠁲󠀱󠀶󠁿';
+
 const localeLabels = {
   'tr': '🇹🇷 Türkçe',
   'en': '🇬🇧 English',
-  'ku': '☀️ Kurdî',
+  'ku': '$kuFlag Kurdî',
 };
