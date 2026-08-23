@@ -20,10 +20,13 @@ modules:
     buildsystem: simple
     build-commands:
       # Binary ve kütüphaneleri kur
-      - mkdir -p /app/bin /app/lib /app/data
+      # NOT: Flutter Linux bundle'da flutter_assets data/ altında,
+      # ama binary bunu binary ile aynı dizinde arar.
+      # data/ içeriğini doğrudan lib/ altına kopyalıyoruz.
+      - mkdir -p /app/bin /app/lib
       - cp -r bundle/lib/* /app/lib/
-      - cp -r bundle/data/* /app/data/
       - cp bundle/hermestv /app/lib/hermestv
+      - cp -r bundle/data/* /app/lib/
       # Çalıştırma scripti
       - |
         cat > /app/bin/hermestv << 'EOF'
