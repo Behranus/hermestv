@@ -4,42 +4,29 @@ runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 command: hermestv
 
+# ─── GÜVENLİK: Minimum izinler ───
+# Sadece IPTV oynatma için kesinlikle gerekli olan izinler.
+# Mikrofon, kamera, konum, bildirim, tam ev erişimi YOK.
 finish-args:
   - --share=network
-  - --share=ipc
-  - --device=dri
   - --socket=wayland
   - --socket=x11
+  - --share=ipc
   - --socket=pulseaudio
-  - --filesystem=home
+  - --device=dri
   - --filesystem=xdg-run/wayland-0
-  - --talk-name=org.freedesktop.Notifications
 
 modules:
   - name: hermestv
     buildsystem: simple
     build-commands:
-      # Orijinal bundle yapısını koru: hermestv root'ta, lib/ altında kütüphaneler
-      - mkdir -p /app/bin /app/lib
-      # Wrapper script
-      - |
-        cat > /app/bin/hermestv << 'WRAPPER'
-        #!/bin/sh
-        export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
-        if [ -n "$WAYLAND_DISPLAY" ]; then
-          export GDK_BACKEND=wayland
-        fi
-        exec /app/hermestv "$@"
-        WRAPPER
-      - chmod +x /app/bin/hermestv
-      # Binary'yi /app/ root'una koy (orijinal bundle yapısı)
+      - mkdir -p /app/bin /app/lib /app/data
       - cp bundle/hermestv /app/hermestv
-      # Kütüphaneleri /app/lib/ altına koy
       - cp -r bundle/lib/* /app/lib/
-      # flutter_assets'ı /app/data/ altına koy (binary bunu data/ altında arar)
-      - mkdir -p /app/data
       - cp -r bundle/data/* /app/data/
-      # Desktop + İkon + Metadata
+      # Wrapper script (heredoc ile)
+      - "printf '#!/bin/sh\\nexport LD_LIBRARY_PATH=\"/app/lib:$LD_LIBRARY_PATH\"\\nif [ -n \"$WAYLAND_DISPLAY\" ]; then export GDK_BACKEND=wayland; fi\\nexec /app/hermestv \"$@\"\\n' > /app/bin/hermestv"
+      - chmod +x /app/bin/hermestv
       - install -Dm644 desktop/com.iptv.iptv_player.desktop /app/share/applications/com.iptv.iptv_player.desktop
       - install -Dm644 desktop/com.iptv.iptv_player.metainfo.xml /app/share/metainfo/com.iptv.iptv_player.metainfo.xml
       - install -Dm644 desktop/com.iptv.iptv_player.png /app/share/icons/hicolor/256x256/apps/com.iptv.iptv_player.png
