@@ -4,16 +4,13 @@ runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 command: hermestv
 
-# ─── GÜVENLİK: Minimum izinler ───
-# Sadece IPTV oynatma için kesinlikle gerekli olan izinler.
-# Mikrofon, kamera, konum, bildirim, tam ev erişimi YOK.
 finish-args:
   - --share=network
+  - --share=ipc
+  - --device=dri
   - --socket=wayland
   - --socket=x11
-  - --share=ipc
   - --socket=pulseaudio
-  - --device=dri
   - --filesystem=xdg-run/wayland-0
 
 modules:
@@ -24,8 +21,15 @@ modules:
       - cp bundle/hermestv /app/hermestv
       - cp -r bundle/lib/* /app/lib/
       - cp -r bundle/data/* /app/data/
-      # Wrapper script (heredoc ile)
-      - "printf '#!/bin/sh\\nexport LD_LIBRARY_PATH=\"/app/lib:$LD_LIBRARY_PATH\"\\nif [ -n \"$WAYLAND_DISPLAY\" ]; then export GDK_BACKEND=wayland; fi\\nexec /app/hermestv \"$@\"\\n' > /app/bin/hermestv"
+      - |
+        cat > /app/bin/hermestv << 'ENDOFSCRIPT'
+        #!/bin/sh
+        export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
+        if [ -n "$WAYLAND_DISPLAY" ]; then
+          export GDK_BACKEND=wayland
+        fi
+        exec /app/hermestv "$@"
+        ENDOFSCRIPT
       - chmod +x /app/bin/hermestv
       - install -Dm644 desktop/com.iptv.iptv_player.desktop /app/share/applications/com.iptv.iptv_player.desktop
       - install -Dm644 desktop/com.iptv.iptv_player.metainfo.xml /app/share/metainfo/com.iptv.iptv_player.metainfo.xml

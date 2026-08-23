@@ -4,8 +4,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Flatpak](https://img.shields.io/badge/Flatpak-Install-blue.svg)](https://flathub.org/apps/com.iptv.iptv_player)
-[![Android](https://img.shields.io/badge/Android-APK-green.svg)](#android)
-[![Linux](https://img.shields.io/badge/Linux-Tar.gz-orange.svg)](#linux)
+[![Android](https://img.shields.io/badge/Android-APK-green.svg)](https://github.com/Behranus/hermestv/releases/download/v2.1.0/hermestv.apk)
+[![Linux](https://img.shields.io/badge/Linux-Tar.gz-orange.svg)](https://github.com/Behranus/hermestv/releases/download/v2.1.0/hermestv-linux-x64.tar.gz)
+[![Download](https://img.shields.io/badge/Download-Page-blue.svg)](https://behranus.github.io/hermestv/)
 
 ---
 
@@ -35,12 +36,17 @@ flatpak-builder --user --install --force-clean build-dir flatpak/com.iptv.iptv_p
 ```
 
 ### Android APK
-Download the latest APK from [Releases](https://github.com/Behranus/hermestv/releases) or build:
+[⬇️ Download APK (59 MB)](https://github.com/Behranus/hermestv/releases/download/v2.1.0/hermestv.apk)
+
+Or build from source:
 ```bash
 flutter build apk --release
 ```
 
 ### Linux (Tarball)
+[⬇️ Download Linux x64 (59 MB)](https://github.com/Behranus/hermestv/releases/download/v2.1.0/hermestv-linux-x64.tar.gz)
+
+Or build from source:
 ```bash
 flutter build linux --release
 tar czf hermestv-linux.tar.gz -C build/linux/x64/release/bundle .
