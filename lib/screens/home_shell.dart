@@ -150,7 +150,7 @@ class _CompactLangSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final flag = locale.lang == 'tr' ? '🇹🇷' : locale.lang == 'ku' ? '🏴' : '🇬🇧';
+    final flag = locale.lang == 'tr' ? '🇹🇷' : locale.lang == 'ku' ? '☀️' : '🇬🇧';
 
     return PopupMenuButton<String>(
       onSelected: (v) => locale.setLocale(v),

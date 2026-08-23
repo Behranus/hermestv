@@ -456,5 +456,5 @@ const supportedLocales = ['tr', 'en', 'ku'];
 const localeLabels = {
   'tr': '🇹🇷 Türkçe',
   'en': '🇬🇧 English',
-  'ku': '🏴 Kürtçe',
+  'ku': '☀️ Kurdî',
 };
