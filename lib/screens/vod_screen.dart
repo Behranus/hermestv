@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:hermestv/l10n/locale_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:hermestv/screens/movie_detail_screen.dart';
 import 'package:hermestv/screens/series_detail_screen.dart';
@@ -60,10 +62,10 @@ class _VodScreenState extends State<VodScreen>
             children: [
               Icon(Icons.movie_filter_outlined, color: Colors.white24, size: 80),
               const SizedBox(height: 16),
-              const Text('VOD için Xtream bağlantısı gerekir',
+              Text(context.watch<LocaleProvider>().loc.vodNeedsXtream,
                 style: TextStyle(color: Colors.white70, fontSize: 18)),
               const SizedBox(height: 8),
-              Text('Kurulum sekmesinden Xtream Codes girişi yap',
+              Text(context.watch<LocaleProvider>().loc.vodXtreamHint,
                 style: TextStyle(color: Colors.white38, fontSize: 14)),
             ],
           ),

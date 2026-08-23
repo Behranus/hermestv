@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hermestv/l10n/locale_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 
 /// Donate / Bağış ekranı — HermesTV'nin gelişimine destek olmak için.
@@ -15,7 +17,7 @@ class DonateScreen extends StatelessWidget {
     final colors = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Destek')),
+      appBar: AppBar(title: Text(context.watch<LocaleProvider>().loc.support)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         children: [
@@ -39,7 +41,7 @@ class DonateScreen extends StatelessWidget {
                 Icon(Icons.favorite, size: 48, color: colors.primary),
                 const SizedBox(height: 12),
                 Text(
-                  'HermesTV\'yi Destekleyin',
+                  context.watch<LocaleProvider>().loc.supportTitle,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -172,7 +174,7 @@ class DonateScreen extends StatelessWidget {
                         );
                       },
                       icon: const Icon(Icons.open_in_new),
-                      label: const Text('GitHub Sponsors\'ta Destekle'),
+                      label: Text(context.watch<LocaleProvider>().loc.supportOnGithub),
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF6e40c9),
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -196,7 +198,7 @@ class DonateScreen extends StatelessWidget {
                         );
                       },
                       icon: const Icon(Icons.copy, size: 14),
-                      label: const Text('Linki Kopyala'),
+                      label: Text(context.watch<LocaleProvider>().loc.copyLink),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                       ),

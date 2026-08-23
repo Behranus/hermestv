@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hermestv/l10n/locale_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:hermestv/models/vod.dart';
 import 'package:hermestv/screens/vod_player_screen.dart';
 import 'package:hermestv/state/app_state.dart';
@@ -143,10 +145,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
               ),
             )
           else if (info.seasons.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: Text('Bu dizi için bölüm bulunamadı.')),
+                padding: const EdgeInsets.all(24),
+                child: Center(child: Text(context.watch<LocaleProvider>().loc.noEpisodes)),
               ),
             )
           else ...[

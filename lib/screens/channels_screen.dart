@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:hermestv/l10n/app_localizations.dart';
+import 'package:hermestv/l10n/locale_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:hermestv/models/channel.dart';
 import 'package:hermestv/screens/channel_guide_sheet.dart';
@@ -82,7 +85,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kanallar'),
+        title: Text(context.watch<LocaleProvider>().loc.channels),
         actions: [
           if (state.hasChannels) ...[
             // Arama ikonu — sadece OK ile aktif olur

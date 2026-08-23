@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hermestv/l10n/locale_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:hermestv/screens/channel_guide_sheet.dart';
 import 'package:hermestv/screens/player_screen.dart';
 import 'package:hermestv/state/app_state.dart';

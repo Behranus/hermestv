@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hermestv/l10n/locale_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:hermestv/services/free_tv_service.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
@@ -20,7 +22,7 @@ class _FreeTvScreenState extends State<FreeTvScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ücretsiz ve Yasal Kanallar')),
+      appBar: AppBar(title: Text(context.watch<LocaleProvider>().loc.freeLegal)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -77,7 +79,7 @@ class _FreeTvScreenState extends State<FreeTvScreen> {
                   color: theme.colorScheme.primary,
                 ),
                 title: Text(label),
-                subtitle: const Text('HD/4K ücretsiz yayınlar'),
+                subtitle: Text(context.watch<LocaleProvider>().loc.freeHd),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   final state = context.read<AppState>();

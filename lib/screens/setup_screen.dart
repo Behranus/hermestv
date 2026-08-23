@@ -1,4 +1,6 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:hermestv/l10n/locale_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:hermestv/screens/free_tv_screen.dart';
 import 'package:hermestv/services/playlist_service.dart';
@@ -186,7 +188,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Kurulum')),
+      appBar: AppBar(title: Text(context.watch<LocaleProvider>().loc.setup)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -227,8 +229,8 @@ class _SetupScreenState extends State<SetupScreen> {
           Card(
             child: ListTile(
               leading: const Icon(Icons.folder_open),
-              title: const Text('Dosya ile M3U Yükle'),
-              subtitle: const Text('Cihazdan M3U dosyası seç'),
+              title: Text(context.watch<LocaleProvider>().loc.pickFile),
+              subtitle: Text(context.watch<LocaleProvider>().loc.pickFileSub),
               onTap: _pickFile,
             ),
           ),
@@ -245,7 +247,7 @@ class _SetupScreenState extends State<SetupScreen> {
           Card(
             child: ListTile(
               leading: const Icon(Icons.public),
-              title: const Text('Ücretsiz ve Yasal Kanallar'),
+              title: Text(context.watch<LocaleProvider>().loc.freeLegal),
               subtitle: const Text('iptv-org kataloğundan ülke → kategori seç (Türkiye ilk sırada)'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
@@ -352,14 +354,14 @@ class _SetupScreenState extends State<SetupScreen> {
                           if (v.trim().isNotEmpty) state.loadEpg(v.trim());
                         },
                         icon: const Icon(Icons.download),
-                        label: const Text('EPG Yükle'),
+                        label: Text(context.watch<LocaleProvider>().loc.loadEpg),
                       ),
                       if (state.epg != null || state.epgUrl != null) ...[
                         const SizedBox(width: 12),
                         OutlinedButton.icon(
                           onPressed: state.clearEpg,
                           icon: const Icon(Icons.delete_outline),
-                          label: const Text('Kaldır'),
+                          label: Text(context.watch<LocaleProvider>().loc.remove),
                         ),
                       ],
                     ],
@@ -391,7 +393,7 @@ class _SetupScreenState extends State<SetupScreen> {
             Card(
               child: ListTile(
                 leading: const Icon(Icons.info_outline),
-                title: const Text('Kayıtlı kaynak'),
+                title: Text(context.watch<LocaleProvider>().loc.savedSource),
                 subtitle: Text(
                   '${_sourceLabel(state.source!)} • ${state.channels.length} kanal',
                 ),
@@ -409,7 +411,7 @@ class _SetupScreenState extends State<SetupScreen> {
               color: theme.colorScheme.errorContainer,
               child: ListTile(
                 leading: Icon(Icons.error_outline, color: theme.colorScheme.error),
-                title: const Text('Hata'),
+                title: Text(context.watch<LocaleProvider>().loc.error),
                 subtitle: Text(state.error!, maxLines: 3),
               ),
             ),
@@ -482,7 +484,7 @@ class _SetupScreenState extends State<SetupScreen> {
               child: FilledButton.icon(
                 onPressed: state.isLoading ? null : _loadUrl,
                 icon: const Icon(Icons.download),
-                label: const Text('URL\'den Yükle'),
+                label: Text(context.watch<LocaleProvider>().loc.loadUrl),
               ),
             ),
           ],
