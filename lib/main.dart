@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hermestv/screens/home_shell.dart';
 import 'package:fvp/fvp.dart' as fvp;
+import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -64,8 +65,11 @@ class IptvApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppState()..init(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppState()..init()),
+        ChangeNotifierProvider(create: (_) => LocaleProvider()),
+      ],
       child: MaterialApp(
         title: 'hermestv',
         debugShowCheckedModeBanner: false,
