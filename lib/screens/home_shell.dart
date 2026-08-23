@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hermestv/screens/channels_screen.dart';
+import 'package:hermestv/screens/donate_screen.dart';
 import 'package:hermestv/screens/favorites_screen.dart';
 import 'package:hermestv/screens/setup_screen.dart';
 import 'package:hermestv/screens/vod_screen.dart';
@@ -22,8 +23,8 @@ class _HomeShellState extends State<HomeShell> {
   /// ağırlaştırıyordu — VOD posteri ve Kurulum ağı aynı anda yükleniyordu.)
   final Set<int> _visited = {0};
 
-  static const _titles = ['Kanallar', 'VOD', 'Favoriler', 'Kurulum'];
-  static const _icons = [Icons.live_tv, Icons.movie, Icons.star, Icons.settings];
+  static const _titles = ['Kanallar', 'VOD', 'Favoriler', 'Destek', 'Kurulum'];
+  static const _icons = [Icons.live_tv, Icons.movie, Icons.star, Icons.favorite, Icons.settings];
 
   void _select(int i) {
     setState(() {
@@ -40,12 +41,13 @@ class _HomeShellState extends State<HomeShell> {
       // Yalnızca ziyaret edilen sekmeler kurulur; diğerleri boş tutulur.
       // IndexedStack çocukların hepsini kurduğu için ziyaret edilmemiş
       // sekmeleri yer tutucuyla doldurup `index` ile senkron tutarız.
-      final placeholders = List<Widget>.generate(4, (i) {
+      final placeholders = List<Widget>.generate(5, (i) {
         if (!_visited.contains(i)) return const SizedBox.shrink();
         return switch (i) {
-          0 => ChannelsScreen(onGoToSetup: () => _select(3)),
-          1 => VodScreen(onGoToSetup: () => _select(3)),
+          0 => ChannelsScreen(onGoToSetup: () => _select(4)),
+          1 => VodScreen(onGoToSetup: () => _select(4)),
           2 => const FavoritesScreen(),
+          3 => const DonateScreen(),
           _ => const SetupScreen(),
         };
       });

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.iptv.iptv_player</id>
+  <name>HermesTV</name>
+  <summary>IPTV Player — Canlı TV, Film ve Dizi</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>HermesTV, ücretsiz ve yasal dünya TV kanallarını izlemenizi sağlayan bir IPTV oynatıcısıdır.</p>
+    <p>Özellikler:</p>
+    <ul>
+      <li>M3U/Xtream Codes IPTV desteği</li>
+      <li>Ücretsiz ve yasal dünya kanalları</li>
+      <li>VOD — Film ve dizi desteği</li>
+      <li>EPG program rehberi</li>
+      <li>Altyazı desteği</li>
+      <li>TV kumandası uyumlu</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.iptv.iptv_player.desktop</launchable>
+  <url type="homepage">https://github.com/hermestv/hermestv</url>
+  <developer_name>HermesTV</developer_name>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="drugs-alcohol">none</content_attribute>
+    <content_attribute id="sex-nudity">none</content_attribute>
+  </content_rating>
+</component>
