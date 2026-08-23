@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:hermestv/l10n/app_localizations.dart';
 import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +27,7 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _xtreamBusy = false;
   String? _xtreamError;
   PlayerSpeed? _speed;
+  AppLocalizations get loc => context.read<LocaleProvider>().loc;
 
 
 
@@ -111,7 +113,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final username = _xtreamUser.text.trim();
     final password = _xtreamPass.text.trim();
     if (server.isEmpty || username.isEmpty || password.isEmpty) {
-      setState(() => _xtreamError = 'Sunucu, kullanıcı adı ve şifre gerekli.');
+      setState(() => _xtreamError = loc.server + ', ' + loc.username + ', ' + loc.password);
       return;
     }
     setState(() {
@@ -140,7 +142,7 @@ class _SetupScreenState extends State<SetupScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _xtreamError = e.toString());
-        messenger.showSnackBar(SnackBar(content: Text('Giriş hatası: $e')));
+        messenger.showSnackBar(SnackBar(content: Text(loc.loginError + ': $e')));
       }
     } finally {
       if (mounted) setState(() => _xtreamBusy = false);
@@ -186,6 +188,7 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final theme = Theme.of(context);
+    final loc = context.watch<LocaleProvider>().loc;
 
     return Scaffold(
       appBar: AppBar(title: Text(context.watch<LocaleProvider>().loc.setup)),
@@ -196,8 +199,8 @@ class _SetupScreenState extends State<SetupScreen> {
           _sectionHeader(
             theme,
             Icons.add_circle_outline,
-            'Kaynak Ekle',
-            'URL, Xtream Codes veya cihazdan M3U dosyası',
+            loc.addSource,
+            'URL, Xtream Codes, ' + loc.pickFileSub,
           ),
 
           // URL + Xtream yan yana (geniş ekran) / alt alta (telefon)
@@ -239,8 +242,8 @@ class _SetupScreenState extends State<SetupScreen> {
           _sectionHeader(
             theme,
             Icons.public,
-            'Ücretsiz Kanallar',
-            'Yasal ve ücretsiz dünya kanalları',
+            loc.freeTv + ' ',
+            loc.freeLegalSub,
           ),
 
           // Ücretsiz ve yasal kanallar
@@ -260,8 +263,8 @@ class _SetupScreenState extends State<SetupScreen> {
           _sectionHeader(
             theme,
             Icons.speed,
-            'Oynatıcı',
-            'Kanal geçiş hızı ve tampon ayarı',
+            loc.player,
+            loc.speedDesc,
           ),
 
           // Bağlantı hızı (kanal geçişi)
@@ -271,11 +274,10 @@ class _SetupScreenState extends State<SetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Bağlantı Hızı', style: theme.textTheme.titleMedium),
+                  Text(loc.connectionSpeed, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    'Kanal geçiş hızı ve tampon süresi. Küçük tampon = daha hızlı geçiş, '
-                    'büyük tampon = yavaş ağlarda daha akıcı yayın.',
+                    loc.speedDesc,
                     style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
                   ),
                   const SizedBox(height: 12),
@@ -308,8 +310,8 @@ class _SetupScreenState extends State<SetupScreen> {
           _sectionHeader(
             theme,
             Icons.calendar_month,
-            'Rehber',
-            'EPG program bilgileri',
+            loc.epg,
+            'EPG',
           ),
 
           // EPG
@@ -319,13 +321,12 @@ class _SetupScreenState extends State<SetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('EPG (Program Rehberi)', style: theme.textTheme.titleMedium),
+                  Text(loc.epg, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Text(
                     state.epg != null
                         ? '${state.epg!.channelCount} kanal için program yüklendi.'
-                        : 'Sağlayıcının verdiği XMLTV adresini gir (ör. https://…/epg.xml.gz). '
-                            'Xtream girişinde EPG otomatik yüklenir.',
+                        : loc.epgDesc,
                     style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 12),
@@ -334,8 +335,8 @@ class _SetupScreenState extends State<SetupScreen> {
                     keyboardType: TextInputType.url,
                     textInputAction: TextInputAction.done,
                     onTapOutside: (_) => _closeKeyboard(),
-                    decoration: const InputDecoration(
-                      labelText: 'EPG URL\'si',
+                    decoration: InputDecoration(
+                      labelText: loc.epgUrl + ':',
                       hintText: 'https://ornek.com/epg.xml.gz',
                       prefixIcon: Icon(Icons.calendar_month),
                       border: OutlineInputBorder(),
@@ -387,8 +388,8 @@ class _SetupScreenState extends State<SetupScreen> {
             _sectionHeader(
               theme,
               Icons.info_outline,
-              'Durum',
-              'Aktif kaynak ve bilgiler',
+              loc.status,
+              'IP',
             ),
             Card(
               child: ListTile(
@@ -398,7 +399,7 @@ class _SetupScreenState extends State<SetupScreen> {
                   '${_sourceLabel(state.source!)} • ${state.channels.length} kanal',
                 ),
                 trailing: IconButton(
-                  tooltip: 'Kaldır',
+                  tooltip: loc.remove,
                   icon: const Icon(Icons.delete_outline),
                   onPressed: state.clearPlaylist,
                 ),
@@ -428,7 +429,7 @@ class _SetupScreenState extends State<SetupScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Kanallar doğrulanıyor… '
+                    loc.verified + ' '
                     '${state.testProbeDone}/${state.testProbeTotal}'
                     ' (yalnızca açılanlar listelenir)',
                     style: TextStyle(
@@ -458,10 +459,10 @@ class _SetupScreenState extends State<SetupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Playlist URL\'si (M3U)', style: theme.textTheme.titleMedium),
+            Text(loc.urlPlaylist, style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
-              'Sağlayıcının verdiği M3U/M3U8 adresini yapıştır.',
+              'M3U/M3U8 URL',
               style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -470,8 +471,8 @@ class _SetupScreenState extends State<SetupScreen> {
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.done,
               onTapOutside: (_) => _closeKeyboard(),
-              decoration: const InputDecoration(
-                labelText: 'Playlist URL\'si',
+              decoration: InputDecoration(
+                labelText: loc.urlPlaylist + ':',
                 hintText: 'https://ornek.com/playlist.m3u8',
                 prefixIcon: Icon(Icons.link),
                 border: OutlineInputBorder(),
@@ -503,7 +504,7 @@ class _SetupScreenState extends State<SetupScreen> {
             Text('Xtream Codes', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
-              'Portal adresi + kullanıcı adı + şifre. Canlı kanallar, VOD ve EPG otomatik yüklenir.',
+              'Portal + ' + loc.username + ' + ' + loc.password,
               style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -512,8 +513,8 @@ class _SetupScreenState extends State<SetupScreen> {
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.next,
               onTapOutside: (_) => _closeKeyboard(),
-              decoration: const InputDecoration(
-                labelText: 'Sunucu adresi',
+              decoration: InputDecoration(
+                labelText: loc.server,
                 hintText: 'http://sunucu:8080',
                 prefixIcon: Icon(Icons.dns),
                 border: OutlineInputBorder(),
@@ -525,8 +526,8 @@ class _SetupScreenState extends State<SetupScreen> {
               controller: _xtreamUser,
               textInputAction: TextInputAction.next,
               onTapOutside: (_) => _closeKeyboard(),
-              decoration: const InputDecoration(
-                labelText: 'Kullanıcı adı',
+              decoration: InputDecoration(
+                labelText: loc.username,
                 prefixIcon: Icon(Icons.person),
                 border: OutlineInputBorder(),
                 isDense: true,
@@ -539,8 +540,8 @@ class _SetupScreenState extends State<SetupScreen> {
               textInputAction: TextInputAction.done,
               onTapOutside: (_) => _closeKeyboard(),
               onSubmitted: (_) => _loginXtream(),
-              decoration: const InputDecoration(
-                labelText: 'Şifre',
+              decoration: InputDecoration(
+                labelText: loc.password,
                 prefixIcon: Icon(Icons.lock),
                 border: OutlineInputBorder(),
                 isDense: true,
@@ -565,7 +566,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.login),
-                label: Text(_xtreamBusy ? 'Bağlanılıyor…' : 'Giriş Yap'),
+                label: Text(_xtreamBusy ? loc.connecting : loc.login),
               ),
             ),
           ],
@@ -578,8 +579,8 @@ class _SetupScreenState extends State<SetupScreen> {
     return switch (source.type) {
       PlaylistSourceType.url => 'URL: ${source.value}',
       PlaylistSourceType.file => 'Dosya: ${source.value.split('/').last}',
-      PlaylistSourceType.demo => 'Test yayınları',
-      PlaylistSourceType.xtream => 'Xtream Codes hesabı',
+      PlaylistSourceType.demo => 'Demo',
+      PlaylistSourceType.xtream => 'Xtream',
     };
   }
 }
