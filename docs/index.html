@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔱 HermesTV — İndir</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1219;
+            color: #e6edf3;
+            min-height: 100vh;
+        }
+        .hero {
+            text-align: center;
+            padding: 60px 20px 40px;
+            background: linear-gradient(135deg, #141824 0%, #1a1f2e 100%);
+        }
+        .logo {
+            width: 80px; height: 80px;
+            background: #3b82f6;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin-bottom: 16px;
+        }
+        h1 { font-size: 2.2em; margin-bottom: 8px; }
+        .subtitle { color: #8b949e; font-size: 1.1em; }
+        .badges { margin-top: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .badge-green { background: #1a4731; color: #3fb950; }
+        .badge-blue { background: #0c2d6b; color: #58a6ff; }
+        .badge-orange { background: #5a3800; color: #d29922; }
+        .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card h2 { font-size: 1.3em; margin-bottom: 8px; }
+        .card p { color: #8b949e; margin-bottom: 16px; }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1em;
+            transition: transform 0.1s;
+        }
+        .btn:hover { transform: scale(1.03); }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+        .btn-flatpak { background: #4a9e6e; color: white; }
+        .meta { color: #8b949e; font-size: 0.85em; margin-top: 8px; }
+        .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 30px 0; }
+        .feature {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        .feature .icon { font-size: 2em; margin-bottom: 8px; }
+        .feature h3 { font-size: 1em; margin-bottom: 4px; }
+        .feature p { color: #8b949e; font-size: 0.85em; }
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #484f58;
+            border-top: 1px solid #21262d;
+        }
+        .screenshots { display: flex; gap: 12px; overflow-x: auto; margin: 20px 0; padding-bottom: 10px; }
+        .screenshots img {
+            height: 200px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+        }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <div class="logo">🔱</div>
+        <h1>HermesTV</h1>
+        <p class="subtitle">Free & Open-Source IPTV Player</p>
+        <div class="badges">
+            <span class="badge badge-green">v2.1.0</span>
+            <span class="badge badge-blue">MIT License</span>
+            <span class="badge badge-orange">7,000+ Channels</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Downloads -->
+        <div class="card">
+            <h2>📱 Android</h2>
+            <p>Android 7.0+ cihazlar ve Android TV Box için APK.</p>
+            <a href="hermestv.apk" class="btn btn-primary" download>
+                ⬇️ APK İndir (61 MB)
+            </a>
+            <p class="meta">Son güncelleme: Ağustos 2026 • ARM64</p>
+        </div>
+
+        <div class="card">
+            <h2>🐧 Linux</h2>
+            <p>Ubuntu, Fedora, Debian ve türevleri için taşınabilir binary.</p>
+            <a href="hermestv-linux-x64.tar.gz" class="btn btn-secondary" download>
+                ⬇️ Linux x64 İndir (18 MB)
+            </a>
+            <p class="meta">tar xzf ile çıkart, ./hermestv ile çalıştır</p>
+        </div>
+
+        <div class="card">
+            <h2>📦 Flatpak</h2>
+            <p>Flathub üzerinden kurulum (önerilen).</p>
+            <a href="https://flathub.org/apps/com.iptv.iptv_player" class="btn btn-flatpak" target="_blank">
+                🏪 Flathub'da Aç
+            </a>
+            <p class="meta">flatpak install flathub com.iptv.iptv_player</p>
+        </div>
+
+        <!-- Screenshots -->
+        <h2 style="margin: 30px 0 15px;">📸 Ekran Görüntüleri</h2>
+        <div class="screenshots">
+            <img src="channels.png" alt="Kanal Listesi">
+            <img src="vod.png" alt="VOD Kataloğu">
+            <img src="player.png" alt="Oynatıcı">
+        </div>
+
+        <!-- Features -->
+        <div class="features">
+            <div class="feature">
+                <div class="icon">📺</div>
+                <h3>Live TV</h3>
+                <p>7,000+ ücretsiz kanal</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🎬</div>
+                <h3>VOD</h3>
+                <p>Film & dizi kataloğu</p>
+            </div>
+            <div class="feature">
+                <div class="icon">📝</div>
+                <h3>Altyazı</h3>
+                <p>HLS + harici dosya</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🌍</div>
+                <h3>3 Dil</h3>
+                <p>TR / EN / KU</p>
+            </div>
+        </div>
+
+        <!-- Links -->
+        <div class="card">
+            <h2>🔗 Bağlantılar</h2>
+            <p style="margin-bottom: 12px;">
+                <a href="https://github.com/Behranus/hermestv" style="color: #58a6ff;">GitHub</a> •
+                <a href="https://github.com/Behranus/hermestv/issues" style="color: #58a6ff;">Sorun Bildir</a> •
+                <a href="https://github.com/sponsors/Behranus" style="color: #58a6ff;">Destek Ol</a>
+            </p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>🔱 HermesTV v2.1.0 • Made with ❤️ by Behranus</p>
+        <p style="margin-top: 8px;">MIT License • Free & Open Source</p>
+    </div>
+</body>
+</html>
