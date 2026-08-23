@@ -19,10 +19,9 @@ modules:
   - name: hermestv
     buildsystem: simple
     build-commands:
+      # Orijinal bundle yapısını koru: hermestv root'ta, lib/ altında kütüphaneler
       - mkdir -p /app/bin /app/lib
-      - cp -r bundle/lib/* /app/lib/
-      - cp bundle/hermestv /app/lib/hermestv
-      - cp -r bundle/data/* /app/lib/
+      # Wrapper script
       - |
         cat > /app/bin/hermestv << 'WRAPPER'
         #!/bin/sh
@@ -30,9 +29,17 @@ modules:
         if [ -n "$WAYLAND_DISPLAY" ]; then
           export GDK_BACKEND=wayland
         fi
-        exec /app/lib/hermestv "$@"
+        exec /app/hermestv "$@"
         WRAPPER
       - chmod +x /app/bin/hermestv
+      # Binary'yi /app/ root'una koy (orijinal bundle yapısı)
+      - cp bundle/hermestv /app/hermestv
+      # Kütüphaneleri /app/lib/ altına koy
+      - cp -r bundle/lib/* /app/lib/
+      # flutter_assets'ı /app/data/ altına koy (binary bunu data/ altında arar)
+      - mkdir -p /app/data
+      - cp -r bundle/data/* /app/data/
+      # Desktop + İkon + Metadata
       - install -Dm644 desktop/com.iptv.iptv_player.desktop /app/share/applications/com.iptv.iptv_player.desktop
       - install -Dm644 desktop/com.iptv.iptv_player.metainfo.xml /app/share/metainfo/com.iptv.iptv_player.metainfo.xml
       - install -Dm644 desktop/com.iptv.iptv_player.png /app/share/icons/hicolor/256x256/apps/com.iptv.iptv_player.png
