@@ -5,9 +5,9 @@ import 'package:flutter/services.dart';
 class DonateScreen extends StatelessWidget {
   const DonateScreen({super.key});
 
-  // ── YER TUTUCU: Kendi IBAN bilgilerinizi buraya girin ──
-  static const String _iban = 'XX00 0000 0000 0000 0000 0000';
-  static const String _holderName = 'Adınız Soyadınız';
+  // ── GitHub Sponsors ──
+  static const String _githubUsername = 'Behranus';
+  static const String _sponsorUrl = 'https://github.com/sponsors/$_githubUsername';
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +47,7 @@ class DonateScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   'HermesTV tamamen ücretsiz ve reklamsızdır.\n'
-                  'Geliştirmeye devam etmemiz için bağışlarınız çok değerli.',
+                  'Geliştirmeye devam etmemiz için destekleriniz çok değerli.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
@@ -61,7 +61,7 @@ class DonateScreen extends StatelessWidget {
 
           const SizedBox(height: 28),
 
-          // ── IBAN Kartı ──
+          // ── GitHub Sponsors Kartı ──
           Card(
             clipBehavior: Clip.antiAlias,
             child: Padding(
@@ -75,12 +75,12 @@ class DonateScreen extends StatelessWidget {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1B5E20).withValues(alpha: 0.12),
+                          color: const Color(0xFF6e40c9).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
-                          Icons.account_balance,
-                          color: Color(0xFF1B5E20),
+                          Icons.code,
+                          color: Color(0xFF6e40c9),
                           size: 24,
                         ),
                       ),
@@ -90,14 +90,14 @@ class DonateScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'IBAN (Havale / EFT)',
+                              'GitHub Sponsors',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Doğrudan banka hesabına bağış',
+                              'Açık kaynak geliştirmeyi destekle',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: colors.onSurfaceVariant,
@@ -111,7 +111,7 @@ class DonateScreen extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
-                  // IBAN gösterimi
+                  // GitHub profil kutusu
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
@@ -119,76 +119,87 @@ class DonateScreen extends StatelessWidget {
                       color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(
-                      _iban,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'monospace',
-                        letterSpacing: 1.2,
-                        color: colors.onSurface,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Kopyala + Alıcı
-                  Row(
-                    children: [
-                      Text(
-                        'Alıcı: $_holderName',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: _iban.replaceAll(' ', '')));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('IBAN kopyalandı: $_iban'),
-                              duration: const Duration(seconds: 2),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.copy, size: 14),
-                        label: const Text('Kopyala'),
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Bilgi notu
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: colors.primaryContainer.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 16, color: colors.primary),
-                        const SizedBox(width: 8),
+                        const CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Color(0xFF6e40c9),
+                          child: Icon(Icons.person, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            'Açıklamaya "HermesTV" yazarsanız çok seviniriz!',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: colors.onPrimaryContainer,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _githubUsername,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: colors.onSurface,
+                                ),
+                              ),
+                              Text(
+                                _sponsorUrl,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: colors.onSurfaceVariant,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                       ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Sponsor ol butonu
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: _sponsorUrl));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Link kopyalandı: $_sponsorUrl'),
+                            duration: const Duration(seconds: 3),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('GitHub Sponsors\'ta Destekle'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF6e40c9),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Kopyala butonu
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: _sponsorUrl));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Link kopyalandı: $_sponsorUrl'),
+                            duration: const Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy, size: 14),
+                      label: const Text('Linki Kopyala'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
                     ),
                   ),
                 ],
