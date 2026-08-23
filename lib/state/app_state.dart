@@ -105,15 +105,8 @@ class AppState extends ChangeNotifier {
 
   /// Uygulama açılışında kaydedilmiş kaynağı yükler.
   Future<void> init() async {
-    // v2.0: Otomatik kaynak yükleme tamamen kaldırıldı.
-    // Kullanıcı kendi kaynağını elle eklemeli.
-    // Eski cache'leri de temizle.
     final prefs = await SharedPreferences.getInstance();
-    // Eski playlist_source varsa sil.
-    if (prefs.containsKey('playlist_source')) {
-      await prefs.remove('playlist_source');
-    }
-    // Disk cache dosyalarını temizle (playlist_*.json).
+    // Eski cache dosyalarını temizle (playlist_*.json).
     try {
       final dir = await getApplicationDocumentsDirectory();
       final files = dir.listSync().whereType<File>();
@@ -125,8 +118,11 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
     _favorites = await FavoritesService.load();
     notifyListeners();
-    // NOT: Artık otomatik kaynak yüklenmiyor.
-    // Kullanıcı Kurulum ekranından Free TV veya kendi kaynağını eklemeli.
+    // Kayıtlı kaynağı otomatik yükle (Xtream, URL, dosya).
+    final saved = await PlaylistService.restoreSource();
+    if (saved != null) {
+      unawaited(loadFromSource(saved));
+    }
   }
 
   Future<void> loadFromSource(PlaylistSource s) async {
