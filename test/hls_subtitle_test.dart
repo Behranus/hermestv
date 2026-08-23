@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/services/hls_subtitle_service.dart';
+import 'package:hermestv/services/hls_subtitle_service.dart';
 
 void main() {
   group('HLS master playlist ayrıştırma', () {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/models/vod.dart';
+import 'package:hermestv/models/vod.dart';
 
 void main() {
   group('VodMovie.fromJson', () {

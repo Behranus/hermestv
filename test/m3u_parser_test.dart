@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/services/m3u_parser.dart';
+import 'package:hermestv/services/m3u_parser.dart';
 
 void main() {
   group('M3uParser', () {

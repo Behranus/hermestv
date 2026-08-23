@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/services/test_vod_catalog.dart';
+import 'package:hermestv/services/test_vod_catalog.dart';
 
 void main() {
   test('test VOD kataloğu boş değil ve kimlikler benzersiz', () {

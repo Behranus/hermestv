@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/services/stream_player.dart';
+import 'package:hermestv/services/stream_player.dart';
 
 void main() {
   group('SRT altyazı ayrıştırma', () {

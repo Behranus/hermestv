@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/models/vod.dart';
-import 'package:iptv_player/services/xtream_service.dart';
+import 'package:hermestv/models/vod.dart';
+import 'package:hermestv/services/xtream_service.dart';
 
 void main() {
   group('Xtream VOD URL uzantı mantığı', () {

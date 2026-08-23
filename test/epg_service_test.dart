@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/services/epg_service.dart';
+import 'package:hermestv/services/epg_service.dart';
 
 /// DateTime'i XMLTV zaman biçimine çevirir: `yyyyMMddHHmmss +0300`.
 String _xmltv(DateTime utc) {

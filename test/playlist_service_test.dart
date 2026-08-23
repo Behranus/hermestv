@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iptv_player/services/m3u_parser.dart';
-import 'package:iptv_player/services/playlist_service.dart';
+import 'package:hermestv/services/m3u_parser.dart';
+import 'package:hermestv/services/playlist_service.dart';
 
 void main() {
   group('PlaylistService.decodeContent', () {
