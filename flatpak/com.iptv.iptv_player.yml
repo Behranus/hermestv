@@ -5,49 +5,41 @@ sdk: org.freedesktop.Sdk
 command: hermestv
 
 finish-args:
-  --share=network
-  --device=dri
-  --socket=pulseaudio
-  --socket=alsa
-  --socket=wayland
-  --socket=fallback-x11
-  --share=ipc
-  --filesystem=home
-  --talk-name=org.freedesktop.Notifications
+  - --share=network
+  - --share=ipc
+  - --device=dri
+  - --socket=wayland
+  - --socket=x11
+  - --socket=pulseaudio
+  - --filesystem=home
+  - --filesystem=xdg-run/wayland-0
+  - --talk-name=org.freedesktop.Notifications
 
 modules:
   - name: hermestv
     buildsystem: simple
     build-commands:
-      # Binary ve kütüphaneleri kur
-      # NOT: Flutter Linux bundle'da flutter_assets data/ altında,
-      # ama binary bunu binary ile aynı dizinde arar.
-      # data/ içeriğini doğrudan lib/ altına kopyalıyoruz.
       - mkdir -p /app/bin /app/lib
       - cp -r bundle/lib/* /app/lib/
       - cp bundle/hermestv /app/lib/hermestv
       - cp -r bundle/data/* /app/lib/
-      # Çalıştırma scripti
       - |
-        cat > /app/bin/hermestv << 'EOF'
+        cat > /app/bin/hermestv << 'WRAPPER'
         #!/bin/sh
         export LD_LIBRARY_PATH="/app/lib:$LD_LIBRARY_PATH"
+        if [ -n "$WAYLAND_DISPLAY" ]; then
+          export GDK_BACKEND=wayland
+        fi
         exec /app/lib/hermestv "$@"
-        EOF
+        WRAPPER
       - chmod +x /app/bin/hermestv
-      # Desktop + İkon + Metadata
       - install -Dm644 desktop/com.iptv.iptv_player.desktop /app/share/applications/com.iptv.iptv_player.desktop
       - install -Dm644 desktop/com.iptv.iptv_player.metainfo.xml /app/share/metainfo/com.iptv.iptv_player.metainfo.xml
       - install -Dm644 desktop/com.iptv.iptv_player.png /app/share/icons/hicolor/256x256/apps/com.iptv.iptv_player.png
     sources:
-      # Hazır Linux build bundle'ı
-      # KULLANIM: flatpak-builder'ı proje kökünden çalıştır:
-      #   cd ~/Masaüstü/orhan
-      #   flatpak-builder build-dir flatpak/com.iptv.iptv_player.yml
       - type: dir
         path: ../build/linux/x64/release/bundle
         dest: bundle
-      # Desktop dosyaları
       - type: dir
         path: .
         dest: desktop
