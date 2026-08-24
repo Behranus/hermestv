@@ -1,5 +1,6 @@
 name: hermestv
 version: '2.1.0'
+title: HermesTV
 summary: HermesTV — Free IPTV Player
 description: |
   HermesTV is a free and open-source IPTV player for Android and Linux.
@@ -16,6 +17,11 @@ description: |
   
   Supports: TR / EN / KU languages
 
+contact: https://github.com/Behranus/hermestv/issues
+website: https://github.com/Behranus/hermestv
+source-code: https://github.com/Behranus/hermestv
+issues: https://github.com/Behranus/hermestv/issues
+
 base: core22
 confinement: strict
 grade: stable
@@ -27,51 +33,57 @@ architectures:
 
 apps:
   hermestv:
-    command: bin/hermestv
-    extensions: [gnome]
+    command: usr/local/bin/hermestv
     plugs:
       - network
       - audio-playback
       - opengl
       - x11
       - wayland
-      - unity7
     environment:
       LD_LIBRARY_PATH: $SNAP/usr/lib:$SNAP/usr/lib/x86_64-linux-gnu:$SNAP/lib:$SNAP/lib/x86_64-linux-gnu
-      GTK_DATA_PREFIX: $SNAP
-      GDK_BACKEND: wayland,x11
 
 parts:
   hermestv:
-    plugin: nil
-    source: .
+    plugin: dump
+    source: build/linux/x64/release/bundle/
     build-packages:
-      - curl
-      - unzip
-      - libgtk-3-dev
-      - ninja-build
-      - clang
-      - pkg-config
-      - liblzma-dev
-      - libstdc++-12-dev
-    override-build: |
-      # Install Flutter SDK
-      export FLUTTER_HOME=$SNAPCRAFT_PART_BUILD/flutter-sdk
-      if [ ! -d "$FLUTTER_HOME" ]; then
-        curl -sL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz | tar xJ
-        mv flutter "$FLUTTER_HOME"
-      fi
-      export PATH="$FLUTTER_HOME/bin:$PATH"
-      
-      # Build
-      flutter config --no-analytics
-      flutter pub get
-      flutter build linux --release
-      
-      # Install
-      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
-      cp build/linux/x64/release/bundle/hermestv $SNAPCRAFT_PART_INSTALL/bin/
-      cp -r build/linux/x64/release/bundle/lib/* $SNAPCRAFT_PART_INSTALL/bin/../usr/lib/ 2>/dev/null || true
-      cp -r build/linux/x64/release/bundle/data $SNAPCRAFT_PART_INSTALL/
+      - libfontconfig1
+      - libfribidi0
+      - libgbm1
+      - libgtk-3-0t64
+      - libgdk-pixbuf-2.0-0
+      - libgraphite2-3
+      - libharfbuzz0b
+      - libjpeg-turbo8
+      - libmp3lame0
+      - libmpg123-0t64
+      - libogg0
+      - libopus0
+      - libpango-1.0-0
+      - libpangocairo-1.0-0
+      - libpangoft2-1.0-0
+      - libpixman-1-0
+      - libpulse0
+      - libsndfile1
+      - libthai0
+      - libvorbis0a
+      - libvorbisenc2
+      - libwayland-client0
+      - libwayland-cursor0
+      - libwayland-egl1
+      - libxcb-render0
+      - libxcb-shm0
+      - libxcb1
+      - libxkbcommon0
+    organize:
+      hermestv: usr/local/bin/hermestv
+      lib/*: usr/lib/
+      data/*: usr/share/hermestv/
+    stage:
+      - usr/local/bin/hermestv
+      - usr/lib/*
+      - usr/share/hermestv/*
     override-prime: |
       craftctl default
+      chmod +x usr/local/bin/hermestv
