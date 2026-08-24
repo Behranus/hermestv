@@ -1,0 +1,77 @@
+name: hermestv
+version: '2.1.0'
+summary: HermesTV — Free IPTV Player
+description: |
+  HermesTV is a free and open-source IPTV player for Android and Linux.
+  
+  Features:
+  - M3U playlist and Xtream Codes IPTV support
+  - 7,000+ free world TV channels via iptv-org
+  - VOD — movies and TV series with poster art
+  - EPG (Electronic Program Guide) support
+  - Subtitle support — HLS embedded and external SRT/VTT/ASS
+  - Audio track selection — multi-language audio
+  - TV remote / D-pad navigation support
+  - Zorin OS inspired dark theme
+  
+  Supports: TR / EN / KU languages
+
+base: core22
+confinement: strict
+grade: stable
+icon: flatpak/com.iptv.iptv_player.png
+license: MIT
+
+architectures:
+  - build-on: amd64
+
+apps:
+  hermestv:
+    command: bin/hermestv
+    extensions: [gnome]
+    plugs:
+      - network
+      - audio-playback
+      - opengl
+      - x11
+      - wayland
+      - unity7
+    environment:
+      LD_LIBRARY_PATH: $SNAP/usr/lib:$SNAP/usr/lib/x86_64-linux-gnu:$SNAP/lib:$SNAP/lib/x86_64-linux-gnu
+      GTK_DATA_PREFIX: $SNAP
+      GDK_BACKEND: wayland,x11
+
+parts:
+  hermestv:
+    plugin: nil
+    source: .
+    build-packages:
+      - curl
+      - unzip
+      - libgtk-3-dev
+      - ninja-build
+      - clang
+      - pkg-config
+      - liblzma-dev
+      - libstdc++-12-dev
+    override-build: |
+      # Install Flutter SDK
+      export FLUTTER_HOME=$SNAPCRAFT_PART_BUILD/flutter-sdk
+      if [ ! -d "$FLUTTER_HOME" ]; then
+        curl -sL https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz | tar xJ
+        mv flutter "$FLUTTER_HOME"
+      fi
+      export PATH="$FLUTTER_HOME/bin:$PATH"
+      
+      # Build
+      flutter config --no-analytics
+      flutter pub get
+      flutter build linux --release
+      
+      # Install
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cp build/linux/x64/release/bundle/hermestv $SNAPCRAFT_PART_INSTALL/bin/
+      cp -r build/linux/x64/release/bundle/lib/* $SNAPCRAFT_PART_INSTALL/bin/../usr/lib/ 2>/dev/null || true
+      cp -r build/linux/x64/release/bundle/data $SNAPCRAFT_PART_INSTALL/
+    override-prime: |
+      craftctl default
