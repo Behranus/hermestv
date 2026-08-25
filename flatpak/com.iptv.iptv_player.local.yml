@@ -1,0 +1,57 @@
+app-id: com.iptv.iptv_player
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: hermestv-launcher
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --device=dri
+  - --socket=wayland
+  - --socket=x11
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --filesystem=xdg-run/pipewire-0:ro
+  - --filesystem=xdg-run/wayland-0
+  - --filesystem=host
+
+modules:
+  - name: hermestv
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/bin /app/lib /app/data /app/share/applications /app/share/icons/hicolor/256x256/apps
+      - cp hermestv /app/bin/hermestv
+      - chmod +x /app/bin/hermestv
+      # Sadece libmpv ve bağımlılıklarını kopyala (runtime ile çakışmayanlar)
+      - cp lib/* /app/lib/
+      - cp -r data/* /app/data/
+      - |
+        cat > /app/bin/hermestv-launcher << 'ENDOFSCRIPT'
+        #!/bin/sh
+        # /app/lib öncelikli — runtime glibc korunur
+        export LD_LIBRARY_PATH="/app/lib"
+        # Host'un mpv/ffmpeg/pulse bağımlılıklarını ekle (glibc(dir) hariç!)
+        HOST_BASE="/run/host/usr/lib/x86_64-linux-gnu"
+        for d in "$HOST_BASE" "$HOST_BASE/blas" "$HOST_BASE/lapack" "$HOST_BASE/pulseaudio"; do
+          [ -d "$d" ] && export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$d"
+        done
+        # Host'un /usr/lib ve /lib64'ünü de ekle
+        [ -d "/run/host/usr/lib" ] && export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/run/host/usr/lib"
+        [ -d "/run/host/lib/x86_64-linux-gnu" ] && export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/run/host/lib/x86_64-linux-gnu"
+        [ -d "/run/host/lib64" ] && export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/run/host/lib64"
+        export PULSE_SERVER="unix:${XDG_RUNTIME_DIR}/pulse/native"
+        export PULSE_COOKIE_PATH="${XDG_RUNTIME_DIR}/pulse/cookie"
+        if [ -n "$WAYLAND_DISPLAY" ]; then
+          export GDK_BACKEND=wayland
+        fi
+        exec /app/bin/hermestv "$@"
+        ENDOFSCRIPT
+      - chmod +x /app/bin/hermestv-launcher
+      - cp com.iptv.iptv_player.desktop /app/share/applications/com.iptv.iptv_player.desktop
+      - cp com.iptv.iptv_player.metainfo.xml /app/share/applications/com.iptv.iptv_player.metainfo.xml
+      - cp com.iptv.iptv_player.png /app/share/icons/hicolor/256x256/apps/com.iptv.iptv_player.png
+      - desktop-file-edit --set-key=Exec --set-value="hermestv-launcher" /app/share/applications/com.iptv.iptv_player.desktop
+    sources:
+      - type: dir
+        path: ../flatpak-bundle

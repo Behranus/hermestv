@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hermestv/models/vod.dart';
 import 'package:hermestv/screens/vod_player_screen.dart';
 import 'package:hermestv/services/resume_service.dart';
+import 'package:hermestv/services/watchlist_service.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
 
@@ -120,9 +121,18 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Oynat + Resume
+                  // Oynat + Resume + Listeme Ekle
                   if (playUrl != null)
                     _ResumeButton(movie: movie, playUrl: playUrl),
+                  const SizedBox(height: 8),
+                  _WatchlistButton(
+                    id: movie.id,
+                    title: movie.name,
+                    poster: movie.poster,
+                    description: plot,
+                    rating: rating,
+                    isMovie: true,
+                  ),
                   const SizedBox(height: 12),
                   // Yükleniyor
                   if (details == null)
@@ -277,5 +287,82 @@ class _ResumeButtonState extends State<_ResumeButton> {
         ],
       ],
     );
+  }
+}
+
+// ==================== Listeme Ekle Butonu ====================
+
+class _WatchlistButton extends StatefulWidget {
+  const _WatchlistButton({
+    required this.id,
+    required this.title,
+    this.poster,
+    this.description,
+    this.rating,
+    required this.isMovie,
+  });
+
+  final int id;
+  final String title;
+  final String? poster;
+  final String? description;
+  final String? rating;
+  final bool isMovie;
+
+  @override
+  State<_WatchlistButton> createState() => _WatchlistButtonState();
+}
+
+class _WatchlistButtonState extends State<_WatchlistButton> {
+  bool _inList = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkList();
+  }
+
+  Future<void> _checkList() async {
+    final inList = await WatchlistService.contains(widget.id);
+    if (mounted) setState(() => _inList = inList);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _toggleList,
+        icon: Icon(
+          _inList ? Icons.bookmark : Icons.bookmark_border,
+          size: 20,
+        ),
+        label: Text(_inList ? 'Listemden Çıkar' : 'Listeme Ekle'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          side: BorderSide(
+            color: _inList ? Colors.amber : Theme.of(context).colorScheme.outline,
+          ),
+          foregroundColor: _inList ? Colors.amber : null,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleList() async {
+    if (_inList) {
+      await WatchlistService.remove(widget.id);
+    } else {
+      await WatchlistService.add(WatchlistItem(
+        id: widget.id,
+        title: widget.title,
+        poster: widget.poster,
+        description: widget.description,
+        rating: widget.rating,
+        isMovie: widget.isMovie,
+        addedAt: DateTime.now(),
+      ));
+    }
+    _checkList();
   }
 }

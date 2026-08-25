@@ -3,10 +3,10 @@ import 'package:hermestv/l10n/app_localizations.dart';
 import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:hermestv/screens/channels_screen.dart';
 import 'package:hermestv/screens/donate_screen.dart';
-import 'package:hermestv/screens/editor_dashboard.dart';
 import 'package:hermestv/screens/favorites_screen.dart';
 import 'package:hermestv/screens/setup_screen.dart';
 import 'package:hermestv/screens/vod_screen.dart';
+import 'package:hermestv/screens/watchlist_screen.dart';
 import 'package:provider/provider.dart';
 
 /// Ana kabuk: geniş ekranda (TV/Box) solda NavigationRail,
@@ -35,15 +35,15 @@ class _HomeShellState extends State<HomeShell> {
     final locale = context.watch<LocaleProvider>();
     final loc = locale.loc;
 
-    final titles = [loc.channels, loc.vod, loc.editor, loc.favorites, loc.donate, loc.setup];
-    final icons = [Icons.live_tv, Icons.movie, Icons.auto_awesome, Icons.star, Icons.favorite, Icons.settings];
+    final titles = [loc.channels, loc.vod, 'Listem', loc.favorites, loc.donate, loc.setup];
+    final icons = [Icons.live_tv, Icons.movie, Icons.star, Icons.bookmark, Icons.favorite, Icons.settings];
 
     final placeholders = List<Widget>.generate(6, (i) {
       if (!_visited.contains(i)) return const SizedBox.shrink();
       return switch (i) {
         0 => ChannelsScreen(onGoToSetup: () => _select(5)),
         1 => VodScreen(onGoToSetup: () => _select(5)),
-        2 => const EditorDashboard(),
+        2 => const WatchlistScreen(),
         3 => const FavoritesScreen(),
         4 => const DonateScreen(),
         _ => const SetupScreen(),
