@@ -21,6 +21,16 @@ finish-args:
   - --filesystem=xdg-run/wayland-0
 
 modules:
+  - name: flutter-sdk
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/flutter-sdk
+      - cp -r ./* /app/flutter-sdk/
+    sources:
+      - type: archive
+        url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
+        sha256: a7c82f551a9eae018e078f6bb186171e5a77920d35a3d75a61d9a593d0a9e4ae
+
   - name: hermestv
     buildsystem: simple
     build-options:
