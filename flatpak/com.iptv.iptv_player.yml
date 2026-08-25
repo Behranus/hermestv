@@ -26,7 +26,7 @@ modules:
     build-commands:
       - mkdir -p /app/flutter-sdk
       - cp -r ./* /app/flutter-sdk/
-      - cd /app/flutter-sdk && git init && git add -A && git commit -m "init" --allow-empty
+      - cd /app/flutter-sdk && git init && git config user.email "build@flatpak" && git config user.name "Build" && git add -A && git commit -m "init" --allow-empty
     sources:
       - type: archive
         url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
