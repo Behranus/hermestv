@@ -128,16 +128,27 @@ class AppState extends ChangeNotifier {
   }
 
   /// Varsayılan olarak Türkçe ücretsiz kanalları yükler.
+  /// Günlük önbellekleme ile: ilk açılışta indirir, sonraki açılışlarda diskten okur.
   Future<void> _loadDefaultTurkishChannels() async {
     try {
       isLoading = true;
       notifyListeners();
-      // iptv-org'dan Türkiye kanallarını çek
       final url = 'https://iptv-org.github.io/iptv/countries/tr.m3u';
       source = PlaylistSource(PlaylistSourceType.url, url);
       _testSource = false;
-      final channels = await PlaylistService.load(source!);
-      _channels = channels;
+      // Önce önbelleğe bak (günlük yenileme)
+      final cached = await PlaylistService.loadCached(source!);
+      if (cached != null && cached.isNotEmpty) {
+        _channels = cached;
+        isLoading = false;
+        error = null;
+        selectedGroup = 'all';
+        notifyListeners();
+        return;
+      }
+      // Önbellek yoksa veya bayatsa indir
+      _channels = await PlaylistService.load(source!);
+      await PlaylistService.saveCache(source!, _channels);
       selectedGroup = 'all';
       isLoading = false;
       error = null;
