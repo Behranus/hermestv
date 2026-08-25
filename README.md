@@ -12,7 +12,7 @@
 
 ## ✨ Features
 
-- 📺 **Live TV** — 7,000+ free & legal world channels via iptv-org
+- 📺 **Live TV** — 7,000+ free & legal world channels via iptv-org (🇹🇷 Türkçe kanallar varsayılan olarak yüklenir!)
 - 🎬 **VOD** — Movies & TV series with poster art and IMDb ratings
 - 📝 **Subtitles** — HLS embedded + external SRT/VTT/ASS + OpenSubtitles
 - 🔊 **Multi-audio** — Language track selection

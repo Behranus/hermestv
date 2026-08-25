@@ -105,7 +105,6 @@ class AppState extends ChangeNotifier {
 
   /// Uygulama açılışında kaydedilmiş kaynağı yükler.
   Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
     // Eski cache dosyalarını temizle (playlist_*.json).
     try {
       final dir = await getApplicationDocumentsDirectory();
@@ -122,6 +121,31 @@ class AppState extends ChangeNotifier {
     final saved = await PlaylistService.restoreSource();
     if (saved != null) {
       unawaited(loadFromSource(saved));
+    } else {
+      // Hiçbir kaynak kaydedilmemişse Türkçe kanalları otomatik yükle
+      unawaited(_loadDefaultTurkishChannels());
+    }
+  }
+
+  /// Varsayılan olarak Türkçe ücretsiz kanalları yükler.
+  Future<void> _loadDefaultTurkishChannels() async {
+    try {
+      isLoading = true;
+      notifyListeners();
+      // iptv-org'dan Türkiye kanallarını çek
+      final url = 'https://iptv-org.github.io/iptv/countries/tr.m3u';
+      source = PlaylistSource(PlaylistSourceType.url, url);
+      _testSource = false;
+      final channels = await PlaylistService.load(source!);
+      _channels = channels;
+      selectedGroup = 'all';
+      isLoading = false;
+      error = null;
+      notifyListeners();
+    } catch (e) {
+      isLoading = false;
+      error = 'Türkçe kanallar yüklenemedi: $e';
+      notifyListeners();
     }
   }
 

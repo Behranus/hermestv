@@ -106,6 +106,7 @@ class FreeTvService {
   ];
 
   static const countries = <FreeTvCountry>[
+    FreeTvCountry('tr', 'Türkiye', '🇹🇷'),
     FreeTvCountry('us', 'ABD', '🇺🇸'),
     FreeTvCountry('gb', 'İngiltere', '🇬🇧'),
     FreeTvCountry('de', 'Almanya', '🇩🇪'),
