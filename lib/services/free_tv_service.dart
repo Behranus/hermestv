@@ -222,4 +222,57 @@ class FreeTvService {
     }
     return M3uParser.parse(utf8.decode(resp.bodyBytes));
   }
+
+  /// Kategorili Türkçe kanal listesi: Ulusal → Haber → Spor → Belgesel → Sinema
+  /// En çok izlenen ulusal kanallar en başta.
+  static const curatedTurkishChannels = <(
+    String category,
+    String name,
+    String url,
+  )>[
+    // ── ULUSAL KANALLAR (en çok izlenen) ──
+    ('📺 Ulusal', 'TRT 1', 'https://tv-trt1.medya.trt.com.tr/master.m3u8'),
+    ('📺 Ulusal', 'ATV', 'https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/atv/atv_1080p.m3u8'),
+    ('📺 Ulusal', 'Kanal D', 'https://demiroren.daioncdn.net/kanald/kanald.m3u8?app=kanald_web&ce=32c97d0518e2ea74c8ea70f8075ac150'),
+    ('📺 Ulusal', 'Star TV', 'https://dogus.daioncdn.net/startv/startv_720p.m3u8?app=a20ac41e-bdc3-4aa1-934d-2ee97828304d'),
+    ('📺 Ulusal', 'A2TV', 'https://tvnet-live.daioncdn.net/a2tv/a2tv_1080p.m3u8?app=a2tv_web'),
+    ('📺 Ulusal', 'Beyaz TV', 'https://beyaztv-live.daioncdn.net/beyaz/beyaz.m3u8'),
+    ('📺 Ulusal', 'TV8', 'https://tv8-live.daioncdn.net/tv8/tv8.m3u8'),
+    // ── HABER KANALLARI ──
+    ('📰 Haber', 'NTV', 'https://dogus.daioncdn.net/ntv/ntv.m3u8?app=ntv_web'),
+    ('📰 Haber', 'A Haber', 'https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/ahaber/ahaber.m3u8'),
+    ('📰 Haber', 'Habertürk TV', 'https://tv.ensonhaber.com/haberturk/haberturk.m3u8'),
+    ('📰 Haber', 'TRT Haber', 'https://tv-trthaber.medya.trt.com.tr/master.m3u8'),
+    ('📰 Haber', 'BloombergHT', 'https://ciner-live.daioncdn.net/bloomberght/bloomberght.m3u8'),
+    ('📰 Haber', '360 TV', 'https://turkmedya-live.ercdn.net/tv360/tv360.m3u8'),
+    ('📰 Haber', 'TGRT Haber', 'https://canli.tgrthaber.com/tgrt.m3u8'),
+    ('📰 Haber', 'Haber Global', 'https://tv.ensonhaber.com/haberglobal/haberglobal.m3u8'),
+    // ── SPOR KANALLARI ──
+    ('⚽ Spor', 'TRT Spor', 'https://corestream.siteyaptim.live/trt-spor/index.m3u8'),
+    ('⚽ Spor', 'A Spor', 'https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/aspor/aspor.m3u8'),
+    ('⚽ Spor', 'FB TV', 'http://1hskrdto.rocketcdn.com/fenerbahcetv.smil/playlist.m3u8'),
+    // ── BELGESEL KANALLARI ──
+    ('📚 Belgesel', 'BBC Earth Türkiye', 'https://nord.ayakkabiparti.lol/bbc/index.m3u8'),
+    ('📚 Belgesel', 'National Geographic', 'https://saran-live.ercdn.net/natgeohd/index.m3u8'),
+    ('📚 Belgesel', 'GZT', 'https://gzttv-live.lg.mncdn.com/gzttv/gzttv/playlist.m3u8'),
+    // ── SİNEMA KANALLARI ──
+    ('🎬 Sinema', 'beIN Movies Stars', 'https://nord.ayakkabiparti.lol/bsaction1/index.m3u8'),
+    ('🎬 Sinema', 'beIN Movies Turk', 'https://nord.ayakkabiparti.lol/bsturk/index.m3u8'),
+    ('🎬 Sinema', 'FilmBox', 'http://46.149.191.219:9100/play/a015'),
+  ];
+
+  /// Kategorili Türkçe kanalları yükle.
+  static Future<List<Channel>> loadCuratedTurkish() async {
+    final channels = <Channel>[];
+    for (final entry in curatedTurkishChannels) {
+      final (category, name, url) = entry;
+      channels.add(Channel(
+        name: name,
+        url: url,
+        group: category,
+        logo: '',
+      ));
+    }
+    return channels;
+  }
 }

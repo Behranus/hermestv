@@ -9,6 +9,7 @@ import 'package:hermestv/models/vod.dart';
 import 'package:hermestv/services/channel_probe_service.dart';
 import 'package:hermestv/services/epg_service.dart';
 import 'package:hermestv/services/favorites_service.dart';
+import 'package:hermestv/services/free_tv_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:hermestv/services/playlist_service.dart';
 import 'package:hermestv/services/test_server_service.dart';
@@ -127,28 +128,14 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Varsayılan olarak Türkçe ücretsiz kanalları yükler.
-  /// Günlük önbellekleme ile: ilk açılışta indirir, sonraki açılışlarda diskten okur.
+  /// Varsayılan olarak kategorili Türkçe kanalları yükler.
+  /// Ulusal → Haber → Spor → Belgesel → Sinema sıralamasında.
   Future<void> _loadDefaultTurkishChannels() async {
     try {
       isLoading = true;
       notifyListeners();
-      final url = 'https://iptv-org.github.io/iptv/countries/tr.m3u';
-      source = PlaylistSource(PlaylistSourceType.url, url);
+      _channels = await FreeTvService.loadCuratedTurkish();
       _testSource = false;
-      // Önce önbelleğe bak (günlük yenileme)
-      final cached = await PlaylistService.loadCached(source!);
-      if (cached != null && cached.isNotEmpty) {
-        _channels = cached;
-        isLoading = false;
-        error = null;
-        selectedGroup = 'all';
-        notifyListeners();
-        return;
-      }
-      // Önbellek yoksa veya bayatsa indir
-      _channels = await PlaylistService.load(source!);
-      await PlaylistService.saveCache(source!, _channels);
       selectedGroup = 'all';
       isLoading = false;
       error = null;
