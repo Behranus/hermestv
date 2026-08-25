@@ -104,6 +104,8 @@ class AppLocalizations {
       'off': 'Kapalı',
       'season': 'Sezon',
       'no_episodes': 'Bu dizi için bölüm bulunamadı.',
+      // ── Editor ──
+      'editor': 'Düzenleyici',
       // ── General ──
       'loading': 'Yükleniyor…',
       'error': 'Hata',
@@ -214,6 +216,7 @@ class AppLocalizations {
       'off': 'Off',
       'season': 'Season',
       'no_episodes': 'No episodes found for this series.',
+      'editor': 'Editor',
       'loading': 'Loading…',
       'error': 'Error',
       'no_channels': 'No channels found',
@@ -323,6 +326,7 @@ class AppLocalizations {
       'off': 'Girtî',
       'season': 'Dîrok',
       'no_episodes': 'Ji bo vê dîzîyê bêhn nehatin dîtin.',
+      'editor': 'Serasterek',
       'loading': 'Tê barkirin…',
       'error': 'Çewtî',
       'no_channels': 'Kanal nehat dîtin',
@@ -449,6 +453,7 @@ class AppLocalizations {
   String get close => _t('close');
   String get confirm => _t('confirm');
   String get copiedToClipboard => _t('copied_to_clipboard');
+  String get editor => _t('editor');
 }
 
 AppLocalizations loc(String lang) => AppLocalizations(lang);

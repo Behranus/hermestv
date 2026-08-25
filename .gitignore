@@ -56,3 +56,10 @@ app.*.map.json
 android/app/iptv-release.jks
 .flatpak-builder/
 ~/
+
+parts/
+prime/
+stage/
+build/
+.flatpak-builder/
+*.snap
