@@ -128,22 +128,41 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Varsayılan olarak kategorili Türkçe kanalları yükler.
-  /// Ulusal → Haber → Spor → Belgesel → Sinema sıralamasında.
+  /// Varsayılan premium IPTV kaynağı (iptvnow.nl)
+  static const _defaultPremiumUser = 'da7b864def';
+  static const _defaultPremiumPass = '6a40004f00c1';
+  static const _defaultPremiumHost = 'http://iptvnow.nl:80';
+
+  /// Varsayılan olarak premium Türkçe kanalları yükler.
+  /// Xtream Codes API ile conectar — 4K/HD Türkçe kanallar en başta.
   Future<void> _loadDefaultTurkishChannels() async {
     try {
       isLoading = true;
       notifyListeners();
-      _channels = await FreeTvService.loadCuratedTurkish();
-      _testSource = false;
-      selectedGroup = 'all';
-      isLoading = false;
-      error = null;
-      notifyListeners();
+      final creds = XtreamCredentials(
+        server: _defaultPremiumHost,
+        username: _defaultPremiumUser,
+        password: _defaultPremiumPass,
+      );
+      final xtreamSource = PlaylistSource(
+        PlaylistSourceType.xtream,
+        jsonEncode(creds.toJson()),
+      );
+      await loadFromSource(xtreamSource);
     } catch (e) {
-      isLoading = false;
-      error = 'Türkçe kanallar yüklenemedi: $e';
-      notifyListeners();
+      // Premium çalışmazsa ücretsiz listeye düş
+      try {
+        _channels = await FreeTvService.loadCuratedTurkish();
+        _testSource = false;
+        selectedGroup = 'all';
+        isLoading = false;
+        error = null;
+        notifyListeners();
+      } catch (e2) {
+        isLoading = false;
+        error = 'Kanallar yüklenemedi: $e2';
+        notifyListeners();
+      }
     }
   }
 
