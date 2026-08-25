@@ -76,8 +76,22 @@ class AppState extends ChangeNotifier {
     return ['all', ...list];
   }
 
-  /// Gruplar: alfabetik sıralı.
-  List<String> get sortedGroups => groups;
+  /// Gruplar: TR kategorileri en başta, sonra alfabetik.
+  List<String> get sortedGroups {
+    final list = groups.where((g) => g != 'all').toList();
+    final trGroups = <String>[];
+    final otherGroups = <String>[];
+    for (final g in list) {
+      if (g.toUpperCase().startsWith('TR') ||
+          g.toUpperCase().contains('TURK') ||
+          g.toUpperCase().contains('TÜRK')) {
+        trGroups.add(g);
+      } else {
+        otherGroups.add(g);
+      }
+    }
+    return ['all', ...trGroups, ...otherGroups..sort()];
+  }
 
   bool get hasChannels => _channels.isNotEmpty;
 
