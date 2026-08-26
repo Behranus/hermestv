@@ -14,7 +14,6 @@ void main() {
 
   // ---- fvp (libmdk/FFmpeg) video oynatıcı motoru ----
   // Sadece Linux/Windows/macOS'ta kullanılır.
-  // Android'de fvp ExoPlayer performansını düşürür, o yüzden aktif değil.
   if (!Platform.isAndroid) {
     fvp.registerWith();
   }
@@ -41,7 +40,6 @@ void main() {
 
 File? _crashLogFile;
 
-/// Çökme günlüğü dosyasını açar (uygulama veri klasöründe `crash.log`).
 Future<void> _initCrashLog() async {
   try {
     final dir = await getApplicationDocumentsDirectory();
@@ -71,97 +69,244 @@ class IptvApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ],
       child: MaterialApp(
-        title: 'hermestv',
+        title: 'HermesTV',
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.dark,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
+        darkTheme: _buildDarkTheme(),
         home: const HomeShell(),
       ),
     );
   }
 
-  /// TiviMate mavisi — koyu tema vurgu rengi.
-  static const _tiviMateBlue = Color(0xFF1E88E5);
+  // ── Zorin OS Renk Paleti ──
+  static const Color _zorinBgDeep      = Color(0xFF1A1B2E);  // En koyu arka plan
+  static const Color _zorinBgMain      = Color(0xFF1E2030);  // Ana arka plan
+  static const Color _zorinSurface     = Color(0xFF24263A);  // Kart yüzeyleri
+  static const Color _zorinSurfaceHigh = Color(0xFF2E3048);  // Vurgulu yüzey
+  static const Color _zorinSurfaceHov  = Color(0xFF363952);  // Hover durumu
+  static const Color _zorinBorder      = Color(0xFF3A3D56);  // Kenar çizgileri
+  static const Color _zorinAccent      = Color(0xFF3C8AFF);  // Ana vurgu (Zorin Mavi)
+  static const Color _zorinAccentSoft  = Color(0xFF2A5DB0);  // Yumuşak vurgu
+  static const Color _zorinText        = Color(0xFFE8E9F0);  // Ana metin
+  static const Color _zorinTextMid     = Color(0xFFA0A3B8);  // Orta metin
+  static const Color _zorinTextDim     = Color(0xFF6B6E85);  // Soluk metin
+  static const Color _zorinAccentRed   = Color(0xFFE54D6E);  // Kırmızı vurgu
+  static const Color _zorinAccentAmber = Color(0xFFF5A623);  // Amber/Sarı
+  static const Color _zorinAccentGreen = Color(0xFF40C057);  // Yeşil
+  static const Color _zorinSurfaceGlass = Color(0x1AFFFFFF);  // Şeffaf overlay
 
-  /// TiviMate koyu teması yüzey tonları.
-  static const _tiviMateDarkBg = Color(0xFF0D1117);
-  static const _tiviMateDarkSurface = Color(0xFF161B22);
-  static const _tiviMateDarkSurfaceHigh = Color(0xFF21262D);
-
-  ThemeData _buildTheme(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: _tiviMateBlue,
-      brightness: brightness,
+  static ThemeData _buildDarkTheme() {
+    const scheme = ColorScheme(
+      brightness: Brightness.dark,
+      primary: _zorinAccent,
+      onPrimary: Colors.white,
+      primaryContainer: _zorinAccentSoft,
+      onPrimaryContainer: Colors.white,
+      secondary: _zorinAccentRed,
+      onSecondary: Colors.white,
+      secondaryContainer: Color(0xFF6B2535),
+      onSecondaryContainer: Colors.white,
+      tertiary: _zorinAccentAmber,
+      onTertiary: Colors.black,
+      tertiaryContainer: Color(0xFF4A3500),
+      onTertiaryContainer: Colors.white,
+      error: Color(0xFFFF5555),
+      onError: Colors.white,
+      surface: _zorinSurface,
+      onSurface: _zorinText,
+      onSurfaceVariant: _zorinTextMid,
+      outline: _zorinBorder,
+      outlineVariant: Color(0xFF2A2C42),
+      shadow: Colors.black54,
+      surfaceContainerHighest: _zorinSurfaceHigh,
+      surfaceContainerHigh: _zorinSurface,
+      surfaceContainerLow: _zorinBgMain,
+      surfaceDim: _zorinBgDeep,
+      inverseSurface: _zorinText,
+      inversePrimary: _zorinAccent,
     );
-    final isDark = brightness == Brightness.dark;
+
     return ThemeData(
-      colorScheme: scheme,
       useMaterial3: true,
-      scaffoldBackgroundColor: isDark ? _tiviMateDarkBg : scheme.surface,
-      cardTheme: CardThemeData(
-        elevation: isDark ? 1 : 2,
-        color: isDark ? _tiviMateDarkSurface : scheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: isDark
-              ? BorderSide(color: Colors.white.withValues(alpha: 0.06))
-              : BorderSide(color: Colors.black.withValues(alpha: 0.04)),
-        ),
-      ),
+      colorScheme: scheme,
+      scaffoldBackgroundColor: _zorinBgDeep,
+
+      // ── AppBar ──
       appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? _tiviMateDarkBg : scheme.surface,
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          color: isDark ? Colors.white : scheme.onSurface,
-          fontSize: 20,
+          color: _zorinText,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+        ),
+        iconTheme: IconThemeData(color: _zorinTextMid),
+      ),
+
+      // ── Kartlar ──
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: _zorinSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: _zorinBorder.withValues(alpha: 0.4), width: 1),
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      ),
+
+      // ── Butonlar ──
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: _zorinAccent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _zorinText,
+          side: const BorderSide(color: _zorinBorder, width: 1.5),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: _zorinAccent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+
+      // ── Navigation Rail (Geniş ekran / TV) ──
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: _zorinBgMain,
+        indicatorColor: _zorinAccent.withValues(alpha: 0.2),
+        selectedIconTheme: IconThemeData(color: _zorinAccent, size: 24),
+        unselectedIconTheme: IconThemeData(color: _zorinTextDim, size: 22),
+        selectedLabelTextStyle: TextStyle(
+          color: _zorinAccent,
+          fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
+        unselectedLabelTextStyle: TextStyle(
+          color: _zorinTextDim,
+          fontSize: 11,
+        ),
+        labelType: NavigationRailLabelType.all,
+        minWidth: 80,
       ),
+
+      // ── Navigation Bar (Mobil) ──
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? _tiviMateDarkSurface : scheme.surface,
-        indicatorColor: scheme.primaryContainer,
-        height: 68,
+        backgroundColor: _zorinBgMain,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: _zorinAccent.withValues(alpha: 0.2),
+        elevation: 0,
+        height: 64,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
-      navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: isDark ? _tiviMateDarkSurface : scheme.surface,
-        indicatorColor: scheme.primaryContainer,
-        selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
-      ),
+
+      // ── Input ──
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark
-            ? _tiviMateDarkSurfaceHigh.withValues(alpha: 0.6)
-            : Colors.black.withValues(alpha: 0.03),
+        fillColor: _zorinSurfaceHigh,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _zorinBorder, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _zorinBorder, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: scheme.primary, width: 1.6),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _zorinAccent, width: 2),
         ),
+        hintStyle: TextStyle(color: _zorinTextDim, fontSize: 14),
+        labelStyle: TextStyle(color: _zorinTextMid, fontSize: 14),
+        prefixIconColor: _zorinTextMid,
       ),
+
+      // ── Chip ──
       chipTheme: ChipThemeData(
+        backgroundColor: _zorinSurfaceHigh,
+        selectedColor: _zorinAccent.withValues(alpha: 0.2),
+        side: BorderSide(color: _zorinBorder, width: 1),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
+        labelStyle: TextStyle(color: _zorinTextMid, fontSize: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       ),
-      dividerTheme: DividerThemeData(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.06)
-            : Colors.black.withValues(alpha: 0.06),
+
+      // ── Divider ──
+      dividerTheme: const DividerThemeData(
+        color: _zorinBorder,
+        thickness: 1,
+        space: 1,
       ),
+
+      // ── SnackBar ──
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        backgroundColor: _zorinSurfaceHigh,
+        contentTextStyle: const TextStyle(color: _zorinText),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
       ),
+
+      // ── Dialog ──
       dialogTheme: DialogThemeData(
-        backgroundColor: isDark ? _tiviMateDarkSurface : scheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: _zorinSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: _zorinBorder, width: 1),
+        ),
+      ),
+
+      // ── PopupMenu ──
+      popupMenuTheme: PopupMenuThemeData(
+        color: _zorinSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+
+      // ── ListTile ──
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+
+      // ── TabBar ──
+      tabBarTheme: TabBarThemeData(
+        labelColor: _zorinAccent,
+        unselectedLabelColor: _zorinTextDim,
+        indicatorColor: _zorinAccent,
+        indicatorSize: TabBarIndicatorSize.label,
+        labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 14),
       ),
     );
   }

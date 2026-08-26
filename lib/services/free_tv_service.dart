@@ -38,48 +38,76 @@ class FreeTvService {
 
   /// Ek ücretsiz HD/4K kanal kaynakları.
   /// Her biri bir M3U playlist URL'si.
+  /// Ek ücretsiz HD/4K kanal kaynakları.
+  /// iptv-org (8000+), free-tv, apsattv ve özel kaynaklardan.
   static const extraSources = <(String label, String url)>[
-    // ---- Spor ----
-    ('⚽ Spor Kanalları Dünya (462)',
+    // ═══ KÜRT / KÜRDISTAN ═══
+    ('🟩 Kürdistan TV',
+        'https://kurdtvs.net/iptv.php'),
+    // ═══ SPOR (global) ═══
+    ('⚽ Spor Kanalları Dünya',
         '${baseUrl}categories/sports.m3u'),
-    // ---- Haber ----
-    ('📰 Haber Kanalları Dünya (963)',
+    ('⚽ FIFA World TV',
+        'https://cdn-static.waves.com/fifaplus/index.m3u8'),
+    // ═══ HABER (global) ═══
+    ('📰 Haber Kanalları Dünya',
         '${baseUrl}categories/news.m3u'),
-    // ---- Film ----
-    ('🎬 Film Kanalları Dünya (731)',
+    // ═══ FİLM (global) ═══
+    ('🎬 Film Kanalları Dünya',
         '${baseUrl}categories/movies.m3u'),
-    // ---- Belgesel ----
-    ('📚 Belgesel Kanalları (241)',
+    // ═══ BELGESEL ═══
+    ('📚 Belgesel Kanalları',
         '${baseUrl}categories/documentary.m3u'),
-    // ---- Çocuk ----
-    ('👶 Çocuk Kanalları (370)',
+    // ═══ ÇOCUK ═══
+    ('👶 Çocuk Kanalları',
         '${baseUrl}categories/kids.m3u'),
-    // ---- Ülke Bazlı (TR ve Kürdistan hariç) ----
-    ('🇩🇪 Almanya (294)',
+    // ═══ EĞLENCE / MÜZİK ═══
+    ('🎵 Müzik Kanalları',
+        '${baseUrl}categories/music.m3u'),
+    ('🎭 Eğlence Kanalları',
+        '${baseUrl}categories/entertainment.m3u'),
+    // ═══ ÜLKE BAZLI ═══
+    ('🇩🇪 Almanya',
         '${baseUrl}countries/de.m3u'),
-    ('🇺🇸 ABD (1462)',
+    ('🇺🇸 ABD',
         '${baseUrl}countries/us.m3u'),
-    ('🇫🇷 Fransa (215)',
+    ('🇬🇧 İngiltere',
+        '${baseUrl}countries/gb.m3u'),
+    ('🇫🇷 Fransa',
         '${baseUrl}countries/fr.m3u'),
-    ('🇰🇷 Güney Kore (73)',
-        '${baseUrl}countries/kr.m3u'),
-    ('🇮🇳 Hindistan (722)',
-        '${baseUrl}countries/in.m3u'),
-    ('🇧🇷 Brezilya (392)',
-        '${baseUrl}countries/br.m3u'),
-    ('🇷🇺 Rusya (452)',
-        '${baseUrl}countries/ru.m3u'),
-    ('🇮🇹 İtalya (310)',
+    ('🇮🇹 İtalya',
         '${baseUrl}countries/it.m3u'),
-    // ---- Dil Bazlı ----
-    ('🇸🇦 Arapça',
-        '${baseUrl}languages/ara.m3u'),
-    ('🇬🇧 İngilizce',
-        '${baseUrl}languages/eng.m3u'),
-    ('🇩🇪 Almanca',
-        '${baseUrl}languages/deu.m3u'),
-    ('🇫🇷 Fransızca',
-        '${baseUrl}languages/fra.m3u'),
+    ('🇪🇸 İspanya',
+        '${baseUrl}countries/es.m3u'),
+    ('🇵🇱 Polonya',
+        '${baseUrl}countries/pl.m3u'),
+    ('🇧🇷 Brezilya',
+        '${baseUrl}countries/br.m3u'),
+    ('🇷🇺 Rusya',
+        '${baseUrl}countries/ru.m3u'),
+    ('🇰🇷 Güney Kore',
+        '${baseUrl}countries/kr.m3u'),
+    ('🇮🇳 Hindistan',
+        '${baseUrl}countries/in.m3u'),
+    ('🇯🇵 Japonya',
+        '${baseUrl}countries/jp.m3u'),
+    ('🇲🇽 Meksika',
+        '${baseUrl}countries/mx.m3u'),
+    ('🇦🇷 Arjantin',
+        '${baseUrl}countries/ar.m3u'),
+    // ═══ FREE-TV (HD/4K odaklı) ═══
+    ('📺 Free-TV Tümü',
+        'https://raw.githubusercontent.com/Free-TV/IPTV/master/streams/streams.m3u'),
+    // ═══ APSATTV (Xiaomi, global) ═══
+    ('📱 Xiaomi TV Plus',
+        'https://www.apsattv.com/xiaomi.m3u'),
+    ('📱 Samsung TV Plus',
+        'https://www.apsattv.com/samsung.m3u'),
+    ('📺 Local Now',
+        'https://www.apsattv.com/localnow.m3u'),
+    // ═══ GLOBAL IPTV (iptv-org world) ═══
+    ('🌍 Tüm Dünya Kanalları (8000+)',
+        '${baseUrl}index.m3u'),
   ];
 
   static const categories = <FreeTvCategory>[
@@ -255,10 +283,45 @@ class FreeTvService {
     ('📚 Belgesel', 'BBC Earth Türkiye', 'https://nord.ayakkabiparti.lol/bbc/index.m3u8'),
     ('📚 Belgesel', 'National Geographic', 'https://saran-live.ercdn.net/natgeohd/index.m3u8'),
     ('📚 Belgesel', 'GZT', 'https://gzttv-live.lg.mncdn.com/gzttv/gzttv/playlist.m3u8'),
+    ('📚 Belgesel', 'Discovery Channel TR', 'https://nord.ayakkabiparti.lol/discov/index.m3u8'),
+    // ── MÜZİK KANALLARI ──
+    ('🎵 Müzik', 'Kral Pop TV', 'https://tvnet-live.daioncdn.net/kralpop/kralpop.m3u8'),
+    ('🎵 Müzik', 'Kral TV', 'https://tvnet-live.daioncdn.net/kraltv/kraltv.m3u8'),
+    ('🎵 Müzik', 'PowerTürk TV', 'https://nord.ayakkabiparti.lol/powerturk/index.m3u8'),
+    ('🎵 Müzik', 'Number1 TV', 'https://nord.ayakkabiparti.lol/number1tv/index.m3u8'),
     // ── SİNEMA KANALLARI ──
     ('🎬 Sinema', 'beIN Movies Stars', 'https://nord.ayakkabiparti.lol/bsaction1/index.m3u8'),
     ('🎬 Sinema', 'beIN Movies Turk', 'https://nord.ayakkabiparti.lol/bsturk/index.m3u8'),
     ('🎬 Sinema', 'FilmBox', 'http://46.149.191.219:9100/play/a015'),
+    // ── EĞLENCE / ÇOCUK ──
+    ('🎭 Eğlence', 'TV8,5', 'https://tv8-live.daioncdn.net/tv8bant/tv8bant.m3u8'),
+    ('👶 Çocuk', 'TRT Çocuk', 'https://tv-trtcocuk.medya.trt.com.tr/master.m3u8'),
+    // ════════════════════════════════════════
+    // ═══ KÜRT KANALLARI ═══
+    // ════════════════════════════════════════
+    ('🟩 Kürdistan', 'Kurdistan TV', 'https://media.kurdtv.com/live/playlist.m3u8'),
+    ('🟩 Kürdistan', 'Rudaw TV HD', 'https://live.rudaw.net/rudawtv.m3u8'),
+    ('🟩 Kürdistan', 'Nalia TV', 'https://live.naliatv.com/nalia/naliatv.m3u8'),
+    ('🟩 Kürdistan', 'NRT TV', 'https://media.nrttv.com/live/nrtv.m3u8'),
+    ('🟩 Kürdistan', 'Waar TV', 'https://live.waartv.com/waar/waartv.m3u8'),
+    ('🟩 Kürdistan', 'KurdSat TV', 'https://live.kurdsat.com.tr/kurdsat/kurdsat.m3u8'),
+    ('🟩 Kürdistan', 'KurdiSat Film', 'https://live.kurdsat.com.tr/kurdsatfilm/kurdsatfilm.m3u8'),
+    ('🟩 Kürdistan', 'Rudaw Arabi', 'https://live.rudaw.net/rudawarabi/rudawarabi.m3u8'),
+    ('🟩 Kürdistan', 'Rudaw Turkmen', 'https://live.rudaw.net/rudawturkmen/rudawturkmen.m3u8'),
+    ('🟩 Kürdistan', 'Gali Kurdistan TV', 'https://media.kurdtv.com/live/gali.m3u8'),
+    // ════════════════════════════════════════
+    // ═══ ULUSLARARASI TV ═══
+    // ════════════════════════════════════════
+    ('🌍 Dünya Haber', 'Al Jazeera English', 'https://live-hls-web-aje.getaj.net/AJE/index.m3u8'),
+    ('🌍 Dünya Haber', 'DW English', 'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8'),
+    ('🌍 Dünya Haber', 'France 24 English', 'https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8'),
+    ('🌍 Dünya Haber', 'Euronews English', 'https://euronews-euronews-english-2-us.plex.wurl.tv/playlist.m3u8'),
+    ('🌍 Dünya Haber', 'TRT World', 'https://tv-trtworld.medya.trt.com.tr/master.m3u8'),
+    ('🌍 Dünya Haber', 'BBC World News', 'https://nord.ayakkabiparti.lol/bbcworld/index.m3u8'),
+    ('🌍 Dünya Haber', 'CNN International', 'https://nord.ayakkabiparti.lol/cnn/index.m3u8'),
+    ('🌍 Dünya Haber', 'Bloomberg TV', 'https://cdn-live.bloomberg.tv/btv/desktop/index.m3u8'),
+    ('🌍 Eğlence', 'NASA TV', 'https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8'),
+    ('🌍 Eğlence', 'Red Bull TV', 'https://rbmn-live.akamaized.net/hls/live/590964/Bossss/master.m3u8'),
   ];
 
   /// Kategorili Türkçe kanalları yükle.

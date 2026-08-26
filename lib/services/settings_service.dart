@@ -11,8 +11,8 @@ class PlayerSpeed {
   final String description;
 
   static const options = <PlayerSpeed>[
-    PlayerSpeed('Çok Hızlı', 0.3, 'Anlık geçiş, çok küçük tampon'),
-    PlayerSpeed('Hızlı', 0.5, 'Hızlı geçiş, küçük tampon'),
+    PlayerSpeed('Süper Hızlı', 0.1, 'Anlık geçiş, minimal tampon'),
+    PlayerSpeed('Çok Hızlı', 0.3, 'Çok hızlı geçiş, küçük tampon'),
     PlayerSpeed('Normal', 1.0, 'Dengeli geçiş hızı'),
     PlayerSpeed('Dengeli', 2.0, 'Daha akıcı, orta tampon'),
     PlayerSpeed('Geniş', 4.0, 'En akıcı, büyük tampon (yavaş ağlar)'),
@@ -28,8 +28,8 @@ class SettingsService {
   /// Kaydedilmiş bağlantı hızını döndürür (varsayılan: Normal 1 sn).
   static Future<PlayerSpeed> loadSpeed() async {
     final prefs = await SharedPreferences.getInstance();
-    final idx = prefs.getInt(_speedIndexKey) ?? 2;
-    if (idx < 0 || idx >= PlayerSpeed.options.length) return PlayerSpeed.options[2];
+    final idx = prefs.getInt(_speedIndexKey) ?? 0;
+    if (idx < 0 || idx >= PlayerSpeed.options.length) return PlayerSpeed.options[0];
     return PlayerSpeed.options[idx];
   }
 

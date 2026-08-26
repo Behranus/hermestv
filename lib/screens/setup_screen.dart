@@ -7,12 +7,10 @@ import 'package:hermestv/screens/free_tv_screen.dart';
 import 'package:hermestv/services/playlist_service.dart';
 import 'package:hermestv/services/settings_service.dart';
 import 'package:hermestv/state/app_state.dart';
-import 'package:provider/provider.dart';
 
-/// Kaynak ekleme ekranı: URL + Xtream Codes + dosya + test yayınları + ücretsiz kanallar + EPG.
+/// Ayarlar / Kaynak ekleme ekrani - modern Zorin OS tema
 class SetupScreen extends StatefulWidget {
   const SetupScreen({super.key});
-
   @override
   State<SetupScreen> createState() => _SetupScreenState();
 }
@@ -28,8 +26,6 @@ class _SetupScreenState extends State<SetupScreen> {
   String? _xtreamError;
   PlayerSpeed? _speed;
   AppLocalizations get loc => context.read<LocaleProvider>().loc;
-
-
 
   @override
   void initState() {
@@ -47,24 +43,11 @@ class _SetupScreenState extends State<SetupScreen> {
     await SettingsService.saveSpeed(speed);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Bağlantı hızı: ${speed.label} (${speed.description})')),
+      SnackBar(content: Text('Baglanti hizi: ${speed.label} (${speed.description})')),
     );
   }
 
-  @override
-  void dispose() {
-    _urlController.dispose();
-    _epgController.dispose();
-    _xtreamServer.dispose();
-    _xtreamUser.dispose();
-    _xtreamPass.dispose();
-    super.dispose();
-  }
-
-  /// Klavyeyi/kutucuğu kapatır — kumanda tuşları tekrar navigasyona döner.
-  void _closeKeyboard() {
-    FocusManager.instance.primaryFocus?.unfocus();
-  }
+  void _closeKeyboard() => FocusManager.instance.primaryFocus?.unfocus();
 
   Future<void> _loadUrl() async {
     _closeKeyboard();
@@ -77,9 +60,7 @@ class _SetupScreenState extends State<SetupScreen> {
     if (state.error != null) {
       messenger.showSnackBar(SnackBar(content: Text('Hata: ${state.error}')));
     } else {
-      messenger.showSnackBar(
-        SnackBar(content: Text('${state.channels.length} kanal yüklendi.')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('${state.channels.length} kanal yuklendi.')));
     }
   }
 
@@ -95,16 +76,11 @@ class _SetupScreenState extends State<SetupScreen> {
     await state.loadFromFile(path);
     if (!mounted) return;
     if (state.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata: ${state.error}')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: ${state.error}')));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${state.channels.length} kanal yüklendi.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${state.channels.length} kanal yuklendi.')));
     }
   }
-
 
   Future<void> _loginXtream() async {
     _closeKeyboard();
@@ -113,7 +89,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final username = _xtreamUser.text.trim();
     final password = _xtreamPass.text.trim();
     if (server.isEmpty || username.isEmpty || password.isEmpty) {
-      setState(() => _xtreamError = loc.server + ', ' + loc.username + ', ' + loc.password);
+      setState(() => _xtreamError = loc.server + ', ' + loc.username + ' ve ' + loc.password + ' gerekli');
       return;
     }
     setState(() {
@@ -122,22 +98,14 @@ class _SetupScreenState extends State<SetupScreen> {
     });
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await state.loginXtream(
-        server: server,
-        username: username,
-        password: password,
-      );
+      await state.loginXtream(server: server, username: username, password: password);
       if (!mounted) return;
       if (state.error != null) {
         messenger.showSnackBar(SnackBar(content: Text('Hata: ${state.error}')));
       } else {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Bağlandı: ${state.channels.length} kanal, ${state.vodMovies.length} film, ${state.vodSeries.length} dizi.',
-            ),
-          ),
-        );
+        messenger.showSnackBar(SnackBar(
+          content: Text('Baglandi: ${state.channels.length} kanal, ${state.vodMovies.length} film, ${state.vodSeries.length} dizi.'),
+        ));
       }
     } catch (e) {
       if (mounted) {
@@ -149,428 +117,323 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
-  /// Bölüm başlığı — ayarları derli toplu gruplar.
-  Widget _sectionHeader(ThemeData theme, IconData icon, String title,
-      [String? subtitle]) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (subtitle != null)
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _urlController.dispose();
+    _epgController.dispose();
+    _xtreamServer.dispose();
+    _xtreamUser.dispose();
+    _xtreamPass.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final theme = Theme.of(context);
-    final loc = context.watch<LocaleProvider>().loc;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.watch<LocaleProvider>().loc.setup)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      backgroundColor: Colors.transparent,
+      body: Column(
         children: [
-          // ---- Bölüm 1: Kaynak Ekle ----
-          _sectionHeader(
-            theme,
-            Icons.add_circle_outline,
-            loc.addSource,
-            'URL, Xtream Codes, ' + loc.pickFileSub,
-          ),
-
-          // URL + Xtream yan yana (geniş ekran) / alt alta (telefon)
-          LayoutBuilder(builder: (context, constraints) {
-            final urlCard = _urlCard(theme, state);
-            final xtreamCard = _xtreamCard(theme, state);
-            if (constraints.maxWidth >= 720) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: urlCard),
-                  const SizedBox(width: 12),
-                  Expanded(child: xtreamCard),
-                ],
-              );
-            }
-            return Column(
+          // Ust bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              border: Border(
+                bottom: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
+              ),
+            ),
+            child: Row(
               children: [
-                urlCard,
-                const SizedBox(height: 12),
-                xtreamCard,
-              ],
-            );
-          }),
-
-          const SizedBox(height: 12),
-
-          // Dosya ile M3U yükleme
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.folder_open),
-              title: Text(context.watch<LocaleProvider>().loc.pickFile),
-              subtitle: Text(context.watch<LocaleProvider>().loc.pickFileSub),
-              onTap: _pickFile,
-            ),
-          ),
-
-          // ---- Bölüm 2: Ücretsiz Kanallar ----
-          _sectionHeader(
-            theme,
-            Icons.public,
-            loc.freeTv + ' ',
-            loc.freeLegalSub,
-          ),
-
-          // Ücretsiz ve yasal kanallar
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.public),
-              title: Text(context.watch<LocaleProvider>().loc.freeLegal),
-              subtitle: const Text('iptv-org kataloğundan ülke → kategori seç (Türkiye ilk sırada)'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FreeTvScreen()),
-              ),
-            ),
-          ),
-
-          // ---- Bölüm 3: Oynatıcı ----
-          _sectionHeader(
-            theme,
-            Icons.speed,
-            loc.player,
-            loc.speedDesc,
-          ),
-
-          // Bağlantı hızı (kanal geçişi)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(loc.connectionSpeed, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    loc.speedDesc,
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final speed in PlayerSpeed.options)
-                        ChoiceChip(
-                          label: Text(speed.label),
-                          tooltip: speed.description,
-                          selected: _speed?.bufferSecs == speed.bufferSecs,
-                          onSelected: (_) => _setSpeed(speed),
-                        ),
-                    ],
-                  ),
-                  if (_speed != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _speed!.description,
-                      style: TextStyle(color: theme.colorScheme.primary, fontSize: 12),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-
-          // ---- Bölüm 4: Rehber ----
-          _sectionHeader(
-            theme,
-            Icons.calendar_month,
-            loc.epg,
-            'EPG',
-          ),
-
-          // EPG
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(loc.epg, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    state.epg != null
-                        ? '${state.epg!.channelCount} kanal için program yüklendi.'
-                        : loc.epgDesc,
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _epgController,
-                    keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.done,
-                    onTapOutside: (_) => _closeKeyboard(),
-                    decoration: InputDecoration(
-                      labelText: loc.epgUrl + ':',
-                      hintText: 'https://ornek.com/epg.xml.gz',
-                      prefixIcon: Icon(Icons.calendar_month),
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (v) {
-                      _closeKeyboard();
-                      if (v.trim().isNotEmpty) state.loadEpg(v.trim());
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () {
-                          final v = _epgController.text;
-                          if (v.trim().isNotEmpty) state.loadEpg(v.trim());
-                        },
-                        icon: const Icon(Icons.download),
-                        label: Text(context.watch<LocaleProvider>().loc.loadEpg),
+                  child: Icon(Icons.settings_rounded, color: colors.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  context.watch<LocaleProvider>().loc.setup,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
                       ),
-                      if (state.epg != null || state.epgUrl != null) ...[
-                        const SizedBox(width: 12),
-                        OutlinedButton.icon(
-                          onPressed: state.clearEpg,
-                          icon: const Icon(Icons.delete_outline),
-                          label: Text(context.watch<LocaleProvider>().loc.remove),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (state.epgLoading) ...[
-                    const SizedBox(height: 12),
-                    const LinearProgressIndicator(),
-                  ],
-                  if (state.epgError != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'EPG hatası: ${state.epgError}',
-                      style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
-                    ),
-                  ],
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 
-          // ---- Bölüm 5: Durum ----
-          if (state.source != null) ...[
-            _sectionHeader(
-              theme,
-              Icons.info_outline,
-              loc.status,
-              'IP',
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: Text(context.watch<LocaleProvider>().loc.savedSource),
-                subtitle: Text(
-                  '${_sourceLabel(state.source!)} • ${state.channels.length} kanal',
+          // Icerik
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // ── Kaynak Ekle ──
+                _SectionHeader(
+                  icon: Icons.link_rounded,
+                  title: loc.addSource,
+                  subtitle: 'URL, Xtream Codes, ' + loc.pickFileSub,
                 ),
-                trailing: IconButton(
-                  tooltip: loc.remove,
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: state.clearPlaylist,
-                ),
-              ),
-            ),
-          ],
 
-          if (state.error != null)
-            Card(
-              color: theme.colorScheme.errorContainer,
-              child: ListTile(
-                leading: Icon(Icons.error_outline, color: theme.colorScheme.error),
-                title: Text(context.watch<LocaleProvider>().loc.error),
-                subtitle: Text(state.error!, maxLines: 3),
-              ),
-            ),
-          if (state.isLoading)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          // Ücretsiz/test kanalları doğrulanıyor (günlük yenileme).
-          if (state.testProbeActive)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    loc.verified + ' '
-                    '${state.testProbeDone}/${state.testProbeTotal}'
-                    ' (yalnızca açılanlar listelenir)',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.colorScheme.onSurfaceVariant,
+                // URL + Xtream
+                LayoutBuilder(builder: (context, constraints) {
+                  final urlCard = _UrlCard(
+                    controller: _urlController,
+                    isLoading: state.isLoading,
+                    onSubmit: _loadUrl,
+                    loc: loc,
+                  );
+                  final xtreamCard = _XtreamCard(
+                    server: _xtreamServer,
+                    user: _xtreamUser,
+                    pass: _xtreamPass,
+                    error: _xtreamError,
+                    busy: _xtreamBusy,
+                    onSubmit: _loginXtream,
+                    loc: loc,
+                  );
+                  if (constraints.maxWidth >= 720) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: urlCard),
+                        const SizedBox(width: 12),
+                        Expanded(child: xtreamCard),
+                      ],
+                    );
+                  }
+                  return Column(children: [urlCard, const SizedBox(height: 12), xtreamCard]);
+                }),
+
+                const SizedBox(height: 12),
+
+                // Dosya yukleme
+                _SettingsCard(
+                  child: ListTile(
+                    leading: Icon(Icons.folder_open_rounded, color: colors.primary),
+                    title: Text(loc.pickFile),
+                    subtitle: Text(loc.pickFileSub, style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+                    trailing: Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
+                    onTap: _pickFile,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Ucretsiz Kanallar ──
+                _SectionHeader(
+                  icon: Icons.public_rounded,
+                  title: loc.freeTv,
+                  subtitle: loc.freeLegalSub,
+                ),
+
+                _SettingsCard(
+                  child: ListTile(
+                    leading: Icon(Icons.public_rounded, color: colors.tertiary),
+                    title: Text(loc.freeLegal),
+                    subtitle: Text('Ulke, kanal ve kategori sec', style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+                    trailing: Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FreeTvScreen())),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Oynatici ──
+                _SectionHeader(
+                  icon: Icons.speed_rounded,
+                  title: loc.player,
+                  subtitle: loc.speedDesc,
+                ),
+
+                _SettingsCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.speed_rounded, size: 18, color: colors.primary),
+                            const SizedBox(width: 8),
+                            Text(loc.connectionSpeed, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(loc.speedDesc, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final speed in PlayerSpeed.options)
+                              ChoiceChip(
+                                label: Text(speed.label, style: const TextStyle(fontSize: 12)),
+                                tooltip: speed.description,
+                                selected: _speed?.bufferSecs == speed.bufferSecs,
+                                onSelected: (_) => _setSpeed(speed),
+                              ),
+                          ],
+                        ),
+                        if (_speed != null) ...[
+                          const SizedBox(height: 8),
+                          Text(_speed!.description, style: TextStyle(color: colors.primary, fontSize: 12)),
+                        ],
+                      ],
                     ),
                   ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── EPG ──
+                _SectionHeader(
+                  icon: Icons.calendar_month_rounded,
+                  title: loc.epg,
+                  subtitle: 'Elektronik Program Kilavuzu',
+                ),
+
+                _SettingsCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_month_rounded, size: 18, color: colors.primary),
+                            const SizedBox(width: 8),
+                            Text(loc.epg, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (state.epg != null)
+                          Text('${state.epg!.channelCount} kanal icin program yuklendi.',
+                              style: TextStyle(color: colors.tertiary, fontSize: 13))
+                        else
+                          Text(loc.epgDesc, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _epgController,
+                          keyboardType: TextInputType.url,
+                          textInputAction: TextInputAction.done,
+                          onTapOutside: (_) => _closeKeyboard(),
+                          decoration: InputDecoration(
+                            hintText: 'https://ornek.com/epg.xml.gz',
+                            prefixIcon: const Icon(Icons.calendar_month, size: 18),
+                          ),
+                          onSubmitted: (v) {
+                            _closeKeyboard();
+                            if (v.trim().isNotEmpty) state.loadEpg(v.trim());
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            FilledButton.icon(
+                              onPressed: () {
+                                final v = _epgController.text;
+                                if (v.trim().isNotEmpty) state.loadEpg(v.trim());
+                              },
+                              icon: const Icon(Icons.download_rounded, size: 18),
+                              label: Text(loc.loadEpg),
+                            ),
+                            if (state.epg != null || state.epgUrl != null) ...[
+                              const SizedBox(width: 12),
+                              OutlinedButton.icon(
+                                onPressed: state.clearEpg,
+                                icon: const Icon(Icons.delete_outline, size: 18),
+                                label: Text(loc.remove),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (state.epgLoading) ...[
+                          const SizedBox(height: 12),
+                          const LinearProgressIndicator(),
+                        ],
+                        if (state.epgError != null) ...[
+                          const SizedBox(height: 12),
+                          Text('EPG hatasi: ${state.epgError!}',
+                              style: TextStyle(color: colors.error, fontSize: 13)),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── Durum ──
+                if (state.source != null) ...[
                   const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: state.testProbeTotal > 0
-                        ? state.testProbeDone / state.testProbeTotal
-                        : null,
+                  _SectionHeader(
+                    icon: Icons.info_outline,
+                    title: loc.status,
+                    subtitle: 'IP baglantisi',
+                  ),
+                  _SettingsCard(
+                    child: ListTile(
+                      leading: Icon(Icons.info_outline_rounded, color: colors.onSurfaceVariant),
+                      title: Text(loc.savedSource),
+                      subtitle: Text('${_sourceLabel(state.source!)} - ${state.channels.length} kanal'),
+                      trailing: IconButton(
+                        tooltip: loc.remove,
+                        icon: Icon(Icons.delete_outline_rounded, color: colors.error),
+                        onPressed: state.clearPlaylist,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
                   ),
                 ],
-              ),
+
+                if (state.error != null)
+                  _SettingsCard(
+                    color: colors.errorContainer,
+                    child: ListTile(
+                      leading: Icon(Icons.error_outline_rounded, color: colors.error),
+                      title: Text(loc.error),
+                      subtitle: Text(state.error!, maxLines: 3),
+                    ),
+                  ),
+
+                if (state.isLoading)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+
+                if (state.testProbeActive)
+                  _SettingsCard(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${loc.verified} ${state.testProbeDone}/${state.testProbeTotal}',
+                            style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 8),
+                          LinearProgressIndicator(
+                            value: state.testProbeTotal > 0
+                                ? state.testProbeDone / state.testProbeTotal
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 32),
+              ],
             ),
-          const SizedBox(height: 24),
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _urlCard(ThemeData theme, AppState state) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(loc.urlPlaylist, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              'M3U/M3U8 URL',
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _urlController,
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.done,
-              onTapOutside: (_) => _closeKeyboard(),
-              decoration: InputDecoration(
-                labelText: loc.urlPlaylist + ':',
-                hintText: 'https://ornek.com/playlist.m3u8',
-                prefixIcon: Icon(Icons.link),
-                border: OutlineInputBorder(),
-              ),
-              onSubmitted: (_) => _loadUrl(),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: state.isLoading ? null : _loadUrl,
-                icon: const Icon(Icons.download),
-                label: Text(context.watch<LocaleProvider>().loc.loadUrl),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _xtreamCard(ThemeData theme, AppState state) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Xtream Codes', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Portal + ' + loc.username + ' + ' + loc.password,
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _xtreamServer,
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.next,
-              onTapOutside: (_) => _closeKeyboard(),
-              decoration: InputDecoration(
-                labelText: loc.server,
-                hintText: 'http://sunucu:8080',
-                prefixIcon: Icon(Icons.dns),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _xtreamUser,
-              textInputAction: TextInputAction.next,
-              onTapOutside: (_) => _closeKeyboard(),
-              decoration: InputDecoration(
-                labelText: loc.username,
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _xtreamPass,
-              obscureText: true,
-              textInputAction: TextInputAction.done,
-              onTapOutside: (_) => _closeKeyboard(),
-              onSubmitted: (_) => _loginXtream(),
-              decoration: InputDecoration(
-                labelText: loc.password,
-                prefixIcon: Icon(Icons.lock),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-            if (_xtreamError != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _xtreamError!,
-                style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
-              ),
-            ],
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _xtreamBusy ? null : _loginXtream,
-                icon: _xtreamBusy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.login),
-                label: Text(_xtreamBusy ? loc.connecting : loc.login),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -582,5 +445,234 @@ class _SetupScreenState extends State<SetupScreen> {
       PlaylistSourceType.demo => 'Demo',
       PlaylistSourceType.xtream => 'Xtream',
     };
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Widget Yardimcilari
+// ═══════════════════════════════════════════════════════
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Icon(icon, size: 16, color: colors.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, fontSize: 15)),
+                if (subtitle != null)
+                  Text(subtitle!, style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  const _SettingsCard({required this.child, this.color});
+  final Widget child;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: color ?? colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.outline.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _UrlCard extends StatelessWidget {
+  const _UrlCard({
+    required this.controller,
+    required this.isLoading,
+    required this.onSubmit,
+    required this.loc,
+  });
+
+  final TextEditingController controller;
+  final bool isLoading;
+  final VoidCallback onSubmit;
+  final AppLocalizations loc;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return _SettingsCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.link_rounded, size: 18, color: colors.primary),
+                const SizedBox(width: 8),
+                Text(loc.urlPlaylist, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('M3U/M3U8 URL', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              decoration: InputDecoration(
+                hintText: 'https://ornek.com/playlist.m3u8',
+                prefixIcon: const Icon(Icons.link, size: 18),
+              ),
+              onSubmitted: (_) => onSubmit(),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: isLoading ? null : onSubmit,
+                icon: isLoading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.download_rounded, size: 18),
+                label: Text(isLoading ? 'Yukleniyor...' : loc.loadUrl),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _XtreamCard extends StatelessWidget {
+  const _XtreamCard({
+    required this.server,
+    required this.user,
+    required this.pass,
+    required this.error,
+    required this.busy,
+    required this.onSubmit,
+    required this.loc,
+  });
+
+  final TextEditingController server, user, pass;
+  final String? error;
+  final bool busy;
+  final VoidCallback onSubmit;
+  final AppLocalizations loc;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return _SettingsCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.dns_rounded, size: 18, color: colors.tertiary),
+                const SizedBox(width: 8),
+                Text('Xtream Codes', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('Portal + ' + loc.username + ' + ' + loc.password,
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: server,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.next,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              decoration: InputDecoration(
+                hintText: 'http://sunucu:8080',
+                prefixIcon: const Icon(Icons.dns, size: 18),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: user,
+              textInputAction: TextInputAction.next,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              decoration: InputDecoration(
+                hintText: loc.username,
+                prefixIcon: const Icon(Icons.person_outline, size: 18),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: pass,
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              onSubmitted: (_) => onSubmit(),
+              decoration: InputDecoration(
+                hintText: loc.password,
+                prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                isDense: true,
+              ),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 10),
+              Text(error!, style: TextStyle(color: colors.error, fontSize: 13)),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: busy ? null : onSubmit,
+                icon: busy
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.login_rounded, size: 18),
+                label: Text(busy ? loc.connecting : loc.login),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

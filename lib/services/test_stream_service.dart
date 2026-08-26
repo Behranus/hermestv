@@ -50,6 +50,22 @@ class TestStreamService {
       'https://cdn.livepeer.com/hls/index.m3u8',
       live: true,
     ),
+    // ---- Ekstra Haber Kanalları ----
+    TestStreamCandidate(
+      'Sky News Live',
+      'https://edge-audio-03-gos2.shadмеда.net/skynews/skynews_main_sdl_hls.smil/playlist.m3u8',
+      live: true,
+    ),
+    TestStreamCandidate(
+      'NHK World Japan',
+      'https://nhkwlive-ojp.akamaized.net/hls/live/2003459/nhkwjp-ojp-en/index.m3u8',
+      live: true,
+    ),
+    TestStreamCandidate(
+      'CGTN English',
+      'https://english.cctv.com/live/cctv_English/index.m3u8',
+      live: true,
+    ),
     // ---- 4K Test Akışları ----
     TestStreamCandidate(
       '4K Demo (Akamai)',
@@ -59,6 +75,11 @@ class TestStreamService {
     TestStreamCandidate(
       '4K Tears of Steel',
       'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+      live: false,
+    ),
+    TestStreamCandidate(
+      '4K Sintel',
+      'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
       live: false,
     ),
     // ---- VOD / demo akışları ----
@@ -86,6 +107,21 @@ class TestStreamService {
       'Apple Bipbop Basic',
       'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear0/prog_index.m3u8',
       live: false,
+    ),
+    TestStreamCandidate(
+      'Big Buck Bunny (Bitmovin)',
+      'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
+      live: false,
+    ),
+    TestStreamCandidate(
+      'Elephant Dream',
+      'https://download.blender.org/edBigBuckBunny/bigbuckbunny_machine-260216.mp4',
+      live: false,
+    ),
+    TestStreamCandidate(
+      'HLS Test (Wowza)',
+      'https://demo.streamcast.tech/live/live.stream/playlist.m3u8',
+      live: true,
     ),
   ];
 

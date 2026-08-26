@@ -76,21 +76,58 @@ class AppState extends ChangeNotifier {
     return ['all', ...list];
   }
 
-  /// Gruplar: TR kategorileri en başta, sonra alfabetik.
+  /// Gruplar: Türkçe en başta, Kürtçe ikinci, sonra alfabetik.
   List<String> get sortedGroups {
     final list = groups.where((g) => g != 'all').toList();
     final trGroups = <String>[];
+    final kurdGroups = <String>[];
     final otherGroups = <String>[];
     for (final g in list) {
-      if (g.toUpperCase().startsWith('TR') ||
-          g.toUpperCase().contains('TURK') ||
-          g.toUpperCase().contains('TÜRK')) {
+      final upper = g.toUpperCase();
+      if (upper.startsWith('TR') || upper.contains('TURK') ||
+          upper.contains('TÜRK') || upper.contains('ULUSAL') ||
+          upper.contains('HABER') || upper.contains('SPOR') ||
+          upper.contains('BELGESEL') || upper.contains('SİNEMA') ||
+          upper.contains('MÜZİK') || upper.contains('EĞLENCE') ||
+          upper.contains('ÇOCUK')) {
         trGroups.add(g);
+      } else if (upper.contains('KÜRT') || upper.contains('KURD') ||
+                 g.startsWith('🟩')) {
+        kurdGroups.add(g);
       } else {
         otherGroups.add(g);
       }
     }
-    return ['all', ...trGroups, ...otherGroups..sort()];
+    return ['all', ...trGroups, ...kurdGroups, ...otherGroups..sort()];
+  }
+
+  /// Kanalları sırala: Türkçe en başta, Kürtçe ikincide, geri kalan alfabetik.
+  List<Channel> _sortChannels(List<Channel> channels) {
+    final turkish = <Channel>[];
+    final kurdish = <Channel>[];
+    final others = <Channel>[];
+    for (final c in channels) {
+      final g = c.displayGroup.toUpperCase();
+      final n = c.name.toUpperCase();
+      if (g.startsWith('TR') || g.contains('TURK') || g.contains('TÜRK') ||
+          g.contains('ULUSAL') || g.contains('HABER') || g.contains('SPOR') ||
+          g.contains('BELGESEL') || g.contains('SİNEMA') || g.contains('MÜZİK') ||
+          g.contains('EĞLENCE') || g.contains('ÇOCUK') ||
+          n.contains('TRT') || n.contains('ATV') || n.contains('KANAL D') ||
+          n.contains('STAR TV') || n.contains('TV8') || n.contains('NTV') ||
+          n.contains('A HABER') || n.contains('SHOW TV')) {
+        turkish.add(c);
+      } else if (g.contains('KÜRT') || g.contains('KURD') ||
+                 g.startsWith('🟩') ||
+                 n.contains('KURD') || n.contains('RUDAW') ||
+                 n.contains('NRT') || n.contains('WAAR') ||
+                 n.contains('NALIA') || n.contains('KURDSAT')) {
+        kurdish.add(c);
+      } else {
+        others.add(c);
+      }
+    }
+    return [...turkish, ...kurdish, ...others];
   }
 
   bool get hasChannels => _channels.isNotEmpty;
@@ -112,11 +149,11 @@ class AppState extends ChangeNotifier {
     if (q.isNotEmpty) {
       list = list.where((c) => c.name.toLowerCase().contains(q)).toList();
     }
-    return list;
+    return _sortChannels(list);
   }
 
-  List<Channel> get favoriteChannels =>
-      _channels.where((c) => _favorites.contains(c.url)).toList();
+  List<Channel> get favoriteChannels => _sortChannels(
+    _channels.where((c) => _favorites.contains(c.url)).toList());
 
   /// Uygulama açılışında kaydedilmiş kaynağı yükler.
   Future<void> init() async {

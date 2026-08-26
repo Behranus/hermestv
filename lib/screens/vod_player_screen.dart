@@ -554,11 +554,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
                     ),
                   ),
                 ),
-              if (_buffering && _error == null)
-                const ColoredBox(
-                  color: Colors.black54,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
+              // Buffering göstergesi kaldırıldı — sadece üstte küçük text
               if (_error != null)
                 ColoredBox(
                   color: Colors.black.withValues(alpha: 0.85),

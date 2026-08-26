@@ -4,7 +4,7 @@ import 'package:hermestv/screens/movie_detail_screen.dart';
 import 'package:hermestv/screens/series_detail_screen.dart';
 import 'package:hermestv/services/watchlist_service.dart';
 
-/// Kişisel izleme listesi ekranı (My List).
+/// Kisisel izleme listesi ekrani - modern Zorin OS tema
 class WatchlistScreen extends StatefulWidget {
   const WatchlistScreen({super.key});
 
@@ -33,45 +33,98 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.bookmark_border, size: 64, color: theme.colorScheme.outline),
-            const SizedBox(height: 16),
-            Text('Liste boş', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(
-              'İzlemek istediğin filmleri ve dizileri buraya ekle',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Column(
+        children: [
+          // Ust bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              border: Border(
+                bottom: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
               ),
             ),
-          ],
-        ),
-      );
-    }
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C5CE7).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.bookmark_rounded, color: Color(0xFF6C5CE7), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Listem',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                  ),
+                ),
+                if (_items.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_items.length} icerik',
+                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+                  ),
+                ],
+              ],
+            ),
+          ),
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _items.length,
-      itemBuilder: (context, index) {
-        final item = _items[index];
-        return _WatchlistTile(
-          item: item,
-          onTap: () => _openItem(item),
-          onRemove: () async {
-            await WatchlistService.remove(item.id);
-            _load();
-          },
-        );
-      },
+          // Icerik
+          Expanded(
+            child: _items.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bookmark_border_rounded,
+                            size: 72, color: colors.onSurfaceVariant.withValues(alpha: 0.3)),
+                        const SizedBox(height: 16),
+                        Text('Liste bos',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            )),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Izlemek istedigin filmleri ve dizileri\nburaya ekleyebilirsin.',
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _items.length,
+                    itemBuilder: (context, index) {
+                      final item = _items[index];
+                      return _WatchlistCard(
+                        item: item,
+                        onTap: () => _openItem(item),
+                        onRemove: () async {
+                          await WatchlistService.remove(item.id);
+                          _load();
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -108,8 +161,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   }
 }
 
-class _WatchlistTile extends StatelessWidget {
-  const _WatchlistTile({
+class _WatchlistCard extends StatelessWidget {
+  const _WatchlistCard({
     required this.item,
     required this.onTap,
     required this.onRemove,
@@ -122,103 +175,140 @@ class _WatchlistTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Row(
-          children: [
-            // Poster
-            if (item.poster != null)
-              SizedBox(
-                width: 80,
-                height: 120,
-                child: Image.network(
-                  item.poster!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    child: Icon(
-                      item.isMovie ? Icons.movie : Icons.tv,
-                      color: theme.colorScheme.outline,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colors.outline.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Row(
+              children: [
+                // Poster
+                if (item.poster != null)
+                  SizedBox(
+                    width: 80,
+                    height: 120,
+                    child: Image.network(
+                      item.poster!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: colors.surface,
+                        child: Icon(
+                          item.isMovie ? Icons.movie_rounded : Icons.tv,
+                          color: colors.onSurfaceVariant.withValues(alpha: 0.3),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: 80,
+                    height: 120,
+                    child: Container(
+                      color: colors.surface,
+                      child: Icon(
+                        item.isMovie ? Icons.movie_rounded : Icons.tv,
+                        color: colors.onSurfaceVariant.withValues(alpha: 0.3),
+                      ),
                     ),
                   ),
-                ),
-              )
-            else
-              SizedBox(
-                width: 80,
-                height: 120,
-                child: Container(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  child: Icon(
-                    item.isMovie ? Icons.movie : Icons.tv,
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-              ),
 
-            // Bilgiler
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                // Bilgiler
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: onRemove,
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.bookmark_remove_rounded,
+                                  size: 20,
+                                  color: colors.error.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (item.rating != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.star_rounded,
+                                  size: 14, color: const Color(0xFFF5A623)),
+                              const SizedBox(width: 4),
+                              Text(item.rating!,
+                                  style: theme.textTheme.bodySmall),
+                            ],
+                          ),
+                        ],
+                        if (item.description != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            item.description!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.bookmark_remove, size: 20),
-                          onPressed: onRemove,
-                          tooltip: 'Listeden çıkar',
+                        ],
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (item.isMovie
+                                    ? colors.primary
+                                    : const Color(0xFF6C5CE7))
+                                .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            item.isMovie ? 'Film' : 'Dizi',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: item.isMovie
+                                  ? colors.primary
+                                  : const Color(0xFF6C5CE7),
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    if (item.rating != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.star, size: 14, color: Colors.amber[600]),
-                          const SizedBox(width: 4),
-                          Text(item.rating!, style: theme.textTheme.bodySmall),
-                        ],
-                      ),
-                    ],
-                    if (item.description != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        item.description!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    Text(
-                      item.isMovie ? 'Film' : 'Dizi',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

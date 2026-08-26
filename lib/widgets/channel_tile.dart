@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hermestv/models/channel.dart';
 
-/// Kanal listesi satırı. Android TV / Box uzaktan kumandası (D-pad)
-/// odak navigasyonu için [Focus] kullanır.
+/// Modern kanal tile - TiviMate tarzi minimal tasarim
+/// Android TV / Box uzaktan kumandasi (D-pad) navigasyonu destekler
 class ChannelTile extends StatefulWidget {
   const ChannelTile({
     super.key,
@@ -23,11 +23,7 @@ class ChannelTile extends StatefulWidget {
   final VoidCallback onToggleFavorite;
   final bool autofocus;
   final bool showGroup;
-
-  /// EPG'den şu an oynayan program (varsa, satırda gösterilir).
   final String? nowPlaying;
-
-  /// Uzun basma (örn. program rehberini açmak için).
   final VoidCallback? onLongPress;
 
   @override
@@ -36,6 +32,7 @@ class ChannelTile extends StatefulWidget {
 
 class _ChannelTileState extends State<ChannelTile> {
   final _focusNode = FocusNode(debugLabel: 'channel-tile');
+  bool _hovered = false;
 
   @override
   void initState() {
@@ -48,8 +45,6 @@ class _ChannelTileState extends State<ChannelTile> {
     _focusNode.dispose();
     super.dispose();
   }
-
-  bool get _focused => _focusNode.hasFocus;
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -67,90 +62,120 @@ class _ChannelTileState extends State<ChannelTile> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final nowPlaying = widget.nowPlaying;
+    final ch = widget.channel;
+    final focused = _focusNode.hasFocus;
+    final highlighted = focused || _hovered;
 
-    return Focus(
-      focusNode: _focusNode,
-      autofocus: widget.autofocus,
-      onKeyEvent: _onKey,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: _focused ? colors.primaryContainer.withValues(alpha: 0.45) : null,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _focused ? colors.primary : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: InkWell(
-          onTap: widget.onTap,
-          onLongPress: widget.onLongPress,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Row(
-              children: [
-                _Logo(channel: widget.channel),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.channel.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: _focused ? FontWeight.bold : FontWeight.w500,
-                          color: _focused ? colors.onPrimaryContainer : colors.onSurface,
-                        ),
-                      ),
-                      if (widget.showGroup || widget.channel.group != null) ...[
-                        const SizedBox(height: 2),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Focus(
+        focusNode: _focusNode,
+        autofocus: widget.autofocus,
+        onKeyEvent: _onKey,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: highlighted
+                    ? colors.primary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: focused
+                      ? colors.primary.withValues(alpha: 0.6)
+                      : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Kanal logosi
+                  _ChannelAvatar(channel: ch, size: 44),
+                  const SizedBox(width: 12),
+
+                  // Kanal bilgileri
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          widget.channel.displayGroup,
+                          ch.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colors.onSurfaceVariant,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: focused ? FontWeight.w700 : FontWeight.w500,
+                            color: highlighted
+                                ? colors.onSurface
+                                : colors.onSurface.withValues(alpha: 0.9),
                           ),
                         ),
-                      ],
-                      if (nowPlaying != null && nowPlaying.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(Icons.schedule, size: 13, color: colors.primary),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                nowPlaying,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colors.primary,
-                                  fontWeight: FontWeight.w500,
+                        if (widget.nowPlaying != null && widget.nowPlaying!.isNotEmpty)
+                          Row(
+                            children: [
+                              Icon(Icons.play_circle_outline,
+                                  size: 13, color: colors.primary.withValues(alpha: 0.7)),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  widget.nowPlaying!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11, color: colors.primary.withValues(alpha: 0.8)),
                                 ),
                               ),
+                            ],
+                          )
+                        else if (widget.showGroup && ch.group != null)
+                          Text(
+                            ch.displayGroup,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colors.onSurfaceVariant.withValues(alpha: 0.7),
                             ),
-                          ],
-                        ),
+                          ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  onPressed: widget.onToggleFavorite,
-                  tooltip: widget.isFavorite ? 'Favorilerden çıkar' : 'Favorilere ekle',
-                  icon: Icon(
-                    widget.isFavorite ? Icons.star : Icons.star_border,
-                    color: widget.isFavorite ? Colors.amber : colors.onSurfaceVariant,
+
+                  // Favori yildizi
+                  GestureDetector(
+                    onTap: widget.onToggleFavorite,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        widget.isFavorite
+                            ? Icons.star_rounded
+                            : Icons.star_border_rounded,
+                        size: 20,
+                        color: widget.isFavorite
+                            ? const Color(0xFFF5A623)
+                            : colors.onSurfaceVariant.withValues(alpha: 0.4),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Icon(Icons.play_circle_outline, color: colors.onSurfaceVariant),
-              ],
+
+                  // Oynat ikonu
+                  if (highlighted)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Icon(
+                        Icons.play_circle_fill_rounded,
+                        size: 24,
+                        color: colors.primary.withValues(alpha: 0.8),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -159,48 +184,59 @@ class _ChannelTileState extends State<ChannelTile> {
   }
 }
 
-/// Kanal logosu; yoksa/hatalıysa baş harfli renkli daire gösterir.
-class _Logo extends StatelessWidget {
-  const _Logo({required this.channel});
-
+/// Kanal logosi; yoksa hataliysa bas harfli renkli kare gosterir
+class _ChannelAvatar extends StatelessWidget {
+  const _ChannelAvatar({required this.channel, this.size = 44});
   final Channel channel;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final logo = channel.logo;
+
     if (logo != null && logo.isNotEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(size * 0.2),
         child: Image.network(
           logo,
-          width: 44,
-          height: 44,
+          width: size,
+          height: size,
           fit: BoxFit.cover,
-          // Küçük boyutta çöz → 2GB RAM'li Box'larda bellek şişmesin.
-          cacheWidth: 88,
-          errorBuilder: (_, _, _) => _fallback(context),
-          loadingBuilder: (_, child, progress) =>
-              progress == null ? child : _fallback(context),
+          cacheWidth: (size * 2).round(),
+          errorBuilder: (_, __, ___) => _fallback(colors),
+          loadingBuilder: (_, child, p) => p == null ? child : _fallback(colors),
         ),
       );
     }
-    return _fallback(context);
+    return _fallback(colors);
   }
 
-  Widget _fallback(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+  Widget _fallback(ColorScheme colors) {
     final initial = channel.name.isNotEmpty ? channel.name[0].toUpperCase() : '?';
     return Container(
-      width: 44,
-      height: 44,
-      alignment: Alignment.center,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          colors: [
+            colors.primary.withValues(alpha: 0.3),
+            colors.primary.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(size * 0.2),
       ),
-      child: Text(
-        initial,
-        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colors.primary),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            fontSize: size * 0.38,
+            fontWeight: FontWeight.bold,
+            color: colors.primary,
+          ),
+        ),
       ),
     );
   }

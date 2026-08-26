@@ -4,8 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hermestv/models/channel.dart';
+import 'package:hermestv/services/parental_lock_service.dart';
+import 'package:hermestv/services/screenshot_service.dart';
 import 'package:hermestv/services/settings_service.dart';
 import 'package:hermestv/services/stream_player.dart';
+import 'package:hermestv/services/stream_stats_service.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -45,7 +48,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   double _volume = 1.0;
   bool _showVolumeHud = false;
   Timer? _volumeHudTimer;
-  double _bufferSecs = 0.5;
+  double _bufferSecs = 0.1;
 
   List<SubtitleInfo> _subtitleTracks = [];
   String? _activeSubtitleId;
@@ -65,6 +68,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // Ekran oranı
   BoxFit _boxFit = BoxFit.contain;
 
+  // Ağ istatistikleri
+  final _statsService = StreamStatsService();
+  StreamStats _currentStats = const StreamStats(
+    latencyMs: 0, bandwidthBps: 0, estimatedFps: 30);
+  bool _showStats = false;
+
+  // Ekran görüntüsü
+  final _screenshotKey = GlobalKey();
+
 
 
   Channel get _channel => widget.channels[_index];
@@ -77,6 +89,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _subscribe();
     WakelockPlus.enable();
     _loadSettings();
+    _startStats();
     _open(_channel);
     _buildPanelGroups();
   }
@@ -147,9 +160,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _overlayTimer?.cancel();
     _volumeHudTimer?.cancel();
     _retryTimer?.cancel();
+    _statsService.dispose();
     WakelockPlus.disable();
     unawaited(_player.dispose());
     super.dispose();
+  }
+
+  void _startStats() {
+    _statsService.stats.listen((s) {
+      if (mounted) setState(() => _currentStats = s);
+    });
+    _statsService.start(_channel.url);
   }
 
   void _subscribe() {
@@ -161,7 +182,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_errorRetries < 1) {
         _errorRetries++;
         _retryTimer?.cancel();
-        _retryTimer = Timer(const Duration(seconds: 3), () {
+        _retryTimer = Timer(const Duration(seconds: 1), () {
           if (mounted) _open(_channel);
         });
       } else {
@@ -220,6 +241,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = 'Akış açılamadı: $e');
     }
+    _statsService.stop();
+    _statsService.start(channel.url);
     _scheduleOverlayHide();
   }
 
@@ -230,7 +253,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _scheduleOverlayHide() {
     _overlayTimer?.cancel();
-    _overlayTimer = Timer(const Duration(seconds: 4), () {
+    _overlayTimer = Timer(const Duration(seconds: 2), () {
       if (mounted && _overlayVisible && !_buffering && _error == null && !_showPanel) {
         setState(() => _overlayVisible = false);
       }
@@ -399,6 +422,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 color: Colors.white70),
               title: Text('Ses: ${(_volume * 100).round()}%', style: const TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(ctx); },
+            ),
+            ListTile(
+              leading: Icon(_showStats ? Icons.analytics : Icons.analytics_outlined, color: Colors.white70),
+              title: Text('Ağ İstatistikleri: ${_showStats ? 'Açık' : 'Kapalı'}',
+                style: const TextStyle(color: Colors.white)),
+              onTap: () { setState(() => _showStats = !_showStats); Navigator.pop(ctx); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.screenshot, color: Colors.white70),
+              title: const Text('Ekran Görüntüsü Al', style: TextStyle(color: Colors.white)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final path = await ScreenshotService.capture(_screenshotKey);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(path != null ? 'Kaydedildi: $path' : 'Ekran görüntüsü alınamadı')),
+                  );
+                }
+              },
             ),
             const SizedBox(height: 16),
           ],
@@ -694,6 +736,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               // Ana içerik: her zaman tam ekran video (RepaintBoundary ile sarılı)
               RepaintBoundary(
+                key: _screenshotKey,
                 child: _player.buildVideo(fit: _boxFit),
               ),
 
@@ -796,10 +839,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 ),
 
-              // Yükleme / hata
-              if (_buffering && !_hasPlayed && _error == null)
-                const _BufferingIndicator()
-              else if (_error != null)
+              // Hata durumu
+              if (_error != null)
                 _ErrorOverlay(
                   message: _error!,
                   onRetry: () => _openUser(_channel),
@@ -870,6 +911,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
               if (_showVolumeHud)
                 _VolumeHud(volume: _volume),
+
+              // Ağ istatistikleri overlay (sağ üst)
+              if (_showStats && _overlayVisible && !_showPanel && _error == null)
+                Positioned(
+                  top: 80, right: 12,
+                  child: _NetworkStatsOverlay(stats: _currentStats, channelName: _channel.name),
+                ),
             ],
           ),
         ),
@@ -907,12 +955,50 @@ class _TiviMateChannelList extends StatefulWidget {
 
 class _TiviMateChannelListState extends State<_TiviMateChannelList> {
   late final ScrollController _scroll;
+  Set<String> _lockedChannels = {};
 
   @override
   void initState() {
     super.initState();
     _scroll = ScrollController();
+    _loadLocks();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+  }
+
+  Future<void> _loadLocks() async {
+    final locked = await ParentalLockService.getLockedChannels();
+    if (mounted) setState(() => _lockedChannels = locked.toSet());
+  }
+
+  Future<bool> _checkPin(String channelId) async {
+    final isLocked = await ParentalLockService.isLocked(channelId);
+    if (!isLocked) return true;
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final ctrl = TextEditingController();
+        return AlertDialog(
+          backgroundColor: const Color(0xFF161B22),
+          title: const Text('Kanal Kilitli', style: TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: ctrl, obscureText: true, keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white, fontSize: 24, letterSpacing: 8),
+            decoration: const InputDecoration(
+              hintText: 'PIN girin', hintStyle: TextStyle(color: Colors.white38),
+              border: OutlineInputBorder(),
+              focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF1E88E5))),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+            TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Tamam')),
+          ],
+        );
+      },
+    );
+    if (pin == null) return false;
+    return await ParentalLockService.verifyPin(pin);
   }
 
   @override
@@ -1100,15 +1186,26 @@ class _TiviMateChannelListState extends State<_TiviMateChannelList> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                c.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: selected ? Colors.white : Colors.white70,
-                                  fontSize: 13,
-                                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                                ),
+                              Row(
+                                children: [
+                                  if (_lockedChannels.contains(c.url))
+                                    const Padding(
+                                      padding: EdgeInsets.only(right: 4),
+                                      child: Icon(Icons.lock, color: Colors.orange, size: 12),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      c.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: selected ? Colors.white : Colors.white70,
+                                        fontSize: 13,
+                                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               Text(
                                 c.displayGroup,
@@ -1678,13 +1775,106 @@ class _ControlsOverlay extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ],
+            ),            ],
         ),
       ),
     );
   }
 }
+
+// ==================== Ağ İstatistikleri Overlay ====================
+
+class _NetworkStatsOverlay extends StatelessWidget {
+  const _NetworkStatsOverlay({required this.stats, required this.channelName});
+  final StreamStats stats;
+  final String channelName;
+
+  Color _latencyColor() {
+    if (stats.latencyMs < 100) return Colors.green;
+    if (stats.latencyMs < 300) return Colors.lightGreenAccent;
+    if (stats.latencyMs < 800) return Colors.orange;
+    return Colors.red;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.analytics, color: Colors.cyanAccent, size: 16),
+              const SizedBox(width: 6),
+              const Text('Ağ İstatistikleri',
+                style: TextStyle(color: Colors.cyanAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const Divider(height: 10, color: Colors.white24),
+          _StatRow(
+            icon: Icons.speed,
+            label: 'Gecikme',
+            value: stats.latencyDisplay,
+            color: _latencyColor(),
+          ),
+          _StatRow(
+            icon: Icons.download,
+            label: 'Bant Genişliği',
+            value: stats.bandwidthDisplay,
+            color: Colors.white70,
+          ),
+          _StatRow(
+            icon: Icons.slow_motion_video,
+            label: 'FPS',
+            value: stats.fpsDisplay,
+            color: Colors.white70,
+          ),
+          _StatRow(
+            icon: Icons.signal_cellular_alt,
+            label: 'Kalite',
+            value: stats.qualityLevel,
+            color: _latencyColor(),
+          ),
+          const SizedBox(height: 4),
+          Text(channelName, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  const _StatRow({required this.icon, required this.label, required this.value, required this.color});
+  final IconData icon;
+  final String label, value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+          const Spacer(),
+          Text(value, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+}
+
 
 /// TiviMate tarzı kontrol butonu
 class _CtrlBtn extends StatelessWidget {
@@ -1709,13 +1899,14 @@ class _CtrlBtn extends StatelessWidget {
             const SizedBox(height: 2),
             Text(label, style: TextStyle(
               color: focused ? Colors.amber : Colors.white70, fontSize: 9,
-              fontWeight: focused ? FontWeight.bold : FontWeight.normal)),
-          ],
+              fontWeight: focused ? FontWeight.bold : FontWeight.normal)),            ],
         ),
       ),
     );
   }
 }
+
+// ==================== Ağ İstatistikleri Overlay ====================
 
 // ==================== Volume HUD ====================
 
@@ -1889,10 +2080,12 @@ class _SubtitlesSheet extends StatelessWidget {
               title: const Text('Dosyadan altyazı yükle', style: TextStyle(color: Colors.white, fontSize: 14)),
               subtitle: const Text('SRT, VTT, ASS, SSA, SUB', style: TextStyle(color: Colors.white38, fontSize: 11)),
               onTap: () => Navigator.of(context).pop('file'),
-            ),
-          ],
+            ),            ],
         ),
       ),
     );
   }
 }
+
+// ==================== Ağ İstatistikleri Overlay ====================
+

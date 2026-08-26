@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:provider/provider.dart';
@@ -9,31 +8,26 @@ import 'package:hermestv/screens/series_detail_screen.dart';
 import 'package:hermestv/screens/vod_player_screen.dart';
 import 'package:hermestv/services/resume_service.dart';
 import 'package:hermestv/state/app_state.dart';
-import 'package:provider/provider.dart';
 
-/// Turkcell TV Plus tarzı VOD ekranı:
-/// - Üstte büyük hero banner
-/// - Kategori filtreleri (yatay scroll)
-/// - 5×4 ızgara düzeninde film/dizi kartları
-/// - Kumanda ile tam erişim
+/// Netflix / Turkcell TV Plus tarzi VOD ekrani:
+/// - Ustte buyuk hero banner
+/// - Film / Dizi sekmeleri
+/// - Kategori filtreleri
+/// - 5x4 izgara duzeninde poster kartlari
 class VodScreen extends StatefulWidget {
   const VodScreen({super.key, this.onGoToSetup});
-
   final VoidCallback? onGoToSetup;
 
   @override
   State<VodScreen> createState() => _VodScreenState();
 }
 
-class _VodScreenState extends State<VodScreen>
-    with SingleTickerProviderStateMixin {
+class _VodScreenState extends State<VodScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   String? _selectedCategoryId;
   bool _showSearch = false;
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  int _focusSection = 0; // 0=üst bar, 1=kategoriler, 2=grid
-  final _categoryScrollKey = GlobalKey();
 
   @override
   void initState() {
@@ -52,23 +46,21 @@ class _VodScreenState extends State<VodScreen>
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final colors = Theme.of(context).colorScheme;
 
     if (!state.hasVod) {
-      return Scaffold(
-        backgroundColor: const Color(0xFF0D0D1A),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.movie_filter_outlined, color: Colors.white24, size: 80),
-              const SizedBox(height: 16),
-              Text(context.watch<LocaleProvider>().loc.vodNeedsXtream,
-                style: TextStyle(color: Colors.white70, fontSize: 18)),
-              const SizedBox(height: 8),
-              Text(context.watch<LocaleProvider>().loc.vodXtreamHint,
-                style: TextStyle(color: Colors.white38, fontSize: 14)),
-            ],
-          ),
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.movie_filter_outlined, size: 72, color: colors.onSurfaceVariant.withValues(alpha: 0.3)),
+            const SizedBox(height: 16),
+            Text(context.watch<LocaleProvider>().loc.vodNeedsXtream,
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(context.watch<LocaleProvider>().loc.vodXtreamHint,
+                style: TextStyle(color: colors.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13)),
+          ],
         ),
       );
     }
@@ -77,171 +69,124 @@ class _VodScreenState extends State<VodScreen>
       autofocus: true,
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        final key = event.logicalKey;
-        // ESC: geri
-        if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
+        if (event.logicalKey == LogicalKeyboardKey.escape ||
+            event.logicalKey == LogicalKeyboardKey.goBack) {
           Navigator.of(context).pop();
-          return KeyEventResult.handled;
-        }
-        // Geri tuşu: bir önceki bölüme geç
-        if (key == LogicalKeyboardKey.arrowLeft && _focusSection > 0) {
-          setState(() => _focusSection--);
-          return KeyEventResult.handled;
-        }
-        // Sağ ok: bir sonraki bölüme geç
-        if (key == LogicalKeyboardKey.arrowRight && _focusSection < 2) {
-          setState(() => _focusSection++);
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0D0D1A),
-        body: Column(
-          children: [
-            // Üst bar
-            _TurkcellTopBar(
-              onBack: () => Navigator.of(context).pop(),
-              onRefresh: state.loadVod,
-              isLoading: state.vodLoading,
-              onSearchToggle: () => setState(() => _showSearch = !_showSearch),
-              showSearch: _showSearch,
-            ),
+      child: Column(
+        children: [
+          // ── Ust Bar ──
+          _VodTopBar(
+            showSearch: _showSearch,
+            isLoading: state.vodLoading,
+            onSearchToggle: () => setState(() => _showSearch = !_showSearch),
+            onRefresh: state.loadVod,
+          ),
 
-            // Arama kutusu
-            if (_showSearch)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Film veya dizi ara...',
-                    hintStyle: TextStyle(color: Colors.white38),
-                    prefixIcon: Icon(Icons.search, color: Colors.white54),
-                    filled: true,
-                    fillColor: const Color(0xFF161B22),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+          // ── Arama ──
+          if (_showSearch)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              color: colors.surfaceContainerLow,
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _searchQuery = v),
+                style: const TextStyle(fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: 'Film veya dizi ara...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
                 ),
               ),
+            ),
 
-            // Film / Dizi sekmeleri
-            Container(
-              color: const Color(0xFF0D0D1A),
-              child: Row(
-                children: [
-                  _TabChip('Filmler', _tabController.index == 0, () {
+          // ── Film / Dizi sekmeleri ──
+          Container(
+            color: colors.surfaceContainerLow,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _TabPill(
+                  label: 'Filmler',
+                  icon: Icons.movie_rounded,
+                  selected: _tabController.index == 0,
+                  onTap: () {
                     _tabController.animateTo(0);
                     setState(() => _selectedCategoryId = null);
-                  }),
-                  _TabChip('Diziler', _tabController.index == 1, () {
+                  },
+                ),
+                const SizedBox(width: 8),
+                _TabPill(
+                  label: 'Diziler',
+                  icon: Icons.tv_rounded,
+                  selected: _tabController.index == 1,
+                  onTap: () {
                     _tabController.animateTo(1);
                     setState(() => _selectedCategoryId = null);
-                  }),
-                ],
-              ),
+                  },
+                ),
+              ],
             ),
-
-            // Kategori filtreleri
-            _CategoryFilterBar(
-              key: _categoryScrollKey,
-              categories: state.vodCategories,
-              selectedId: _selectedCategoryId,
-              onSelect: (id) => setState(() => _selectedCategoryId = id),
-              isMovieTab: _tabController.index == 0,
-              movieCount: state.filteredVodMovies.length,
-              seriesCount: state.filteredVodSeries.length,
-            ),
-
-            // İçerik
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _TurkcellContentGrid(
-                    isMovies: true,
-                    state: state,
-                    selectedCategoryId: _selectedCategoryId,
-                    searchQuery: _searchQuery,
-                    onItemTap: (item) {
-                      final movie = state.filteredVodMovies.where((m) => m.id == item.id).firstOrNull;
-                      if (movie != null) Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: movie)),
-                      );
-                    },
-                  ),
-                  _TurkcellContentGrid(
-                    isMovies: false,
-                    state: state,
-                    selectedCategoryId: _selectedCategoryId,
-                    searchQuery: _searchQuery,
-                    onItemTap: (item) {
-                      final series = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
-                      if (series != null) Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: series)),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==================== Üst Bar ====================
-class _TurkcellTopBar extends StatelessWidget {
-  const _TurkcellTopBar({
-    required this.onBack,
-    required this.onRefresh,
-    required this.isLoading,
-    required this.onSearchToggle,
-    required this.showSearch,
-  });
-
-  final VoidCallback onBack, onRefresh, onSearchToggle;
-  final bool isLoading, showSearch;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 16, 6),
-      color: const Color(0xFF0D0D1A),
-      child: Row(
-        children: [
-          IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back, color: Colors.white)),
-          // Logo
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF0050),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: const Text('BBTV', style: TextStyle(
-              color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
           ),
-          const SizedBox(width: 12),
-          const Text('VOD', style: TextStyle(
-            color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const Spacer(),
-          IconButton(
-            onPressed: onSearchToggle,
-            icon: Icon(showSearch ? Icons.close : Icons.search, color: Colors.white54),
+
+          // ── Kategori filtreleri ──
+          _CategoryChips(
+            categories: state.vodCategories,
+            selectedId: _selectedCategoryId,
+            onSelect: (id) => setState(() => _selectedCategoryId = id),
+            isMovieTab: _tabController.index == 0,
+            movieCount: state.filteredVodMovies.length,
+            seriesCount: state.filteredVodSeries.length,
           ),
-          if (isLoading)
-            const SizedBox(width: 20, height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
-          IconButton(
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh, color: Colors.white54, size: 22),
+
+          // ── Icerik ──
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _VodGrid(
+                  isMovies: true,
+                  state: state,
+                  selectedCategoryId: _selectedCategoryId,
+                  searchQuery: _searchQuery,
+                  onItemTap: (item) {
+                    final movie = state.filteredVodMovies.where((m) => m.id == item.id).firstOrNull;
+                    if (movie != null) {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => MovieDetailScreen(movie: movie),
+                      ));
+                    }
+                  },
+                ),
+                _VodGrid(
+                  isMovies: false,
+                  state: state,
+                  selectedCategoryId: _selectedCategoryId,
+                  searchQuery: _searchQuery,
+                  onItemTap: (item) {
+                    final series = state.filteredVodSeries.where((s) => s.id == item.id).firstOrNull;
+                    if (series != null) {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => SeriesDetailScreen(series: series),
+                      ));
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -249,28 +194,127 @@ class _TurkcellTopBar extends StatelessWidget {
   }
 }
 
-// ==================== Tab Chip ====================
-class _TabChip extends StatefulWidget {
-  const _TabChip(this.label, this.selected, this.onTap);
+// ═══════════════════════════════════════════════════════
+// VOD Top Bar
+// ═══════════════════════════════════════════════════════
+class _VodTopBar extends StatelessWidget {
+  const _VodTopBar({
+    required this.showSearch,
+    required this.isLoading,
+    required this.onSearchToggle,
+    required this.onRefresh,
+  });
+
+  final bool showSearch;
+  final bool isLoading;
+  final VoidCallback onSearchToggle;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF3C8AFF), Color(0xFF6C5CE7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'HTV',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'VOD',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          _VodIconButton(
+            icon: showSearch ? Icons.close : Icons.search,
+            onTap: onSearchToggle,
+          ),
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          _VodIconButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+        ],
+      ),
+    );
+  }
+}
+
+class _VodIconButton extends StatelessWidget {
+  const _VodIconButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(icon, size: 22, color: colors.onSurfaceVariant),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Tab Pill (Filmler / Diziler)
+// ═══════════════════════════════════════════════════════
+class _TabPill extends StatefulWidget {
+  const _TabPill({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
   @override
-  State<_TabChip> createState() => _TabChipState();
+  State<_TabPill> createState() => _TabPillState();
 }
 
-class _TabChipState extends State<_TabChip> {
+class _TabPillState extends State<_TabPill> {
   bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Focus(
       onFocusChange: (f) => setState(() => _focused = f),
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.enter ||
-             event.logicalKey == LogicalKeyboardKey.select)) {
+                event.logicalKey == LogicalKeyboardKey.select)) {
           widget.onTap();
           return KeyEventResult.handled;
         }
@@ -278,26 +322,37 @@ class _TabChipState extends State<_TabChip> {
       },
       child: GestureDetector(
         onTap: widget.onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          margin: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: widget.selected ? const Color(0xFFFF0050) : const Color(0xFF161B22),
-            borderRadius: BorderRadius.circular(20),
-            border: _focused ? Border.all(color: Colors.white38, width: 2) : null,
+            color: widget.selected
+                ? colors.primary.withValues(alpha: 0.15)
+                : colors.surface.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: widget.selected || _focused
+                  ? (widget.selected ? colors.primary : colors.outline)
+                  : Colors.transparent,
+              width: 1.5,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                widget.label == 'Filmler' ? Icons.movie : Icons.tv,
-                color: Colors.white, size: 14),
-              const SizedBox(width: 4),
-              Text(widget.label, style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: (widget.selected || _focused) ? FontWeight.bold : FontWeight.normal,
-              )),
+              Icon(widget.icon,
+                  size: 16,
+                  color: widget.selected ? colors.primary : colors.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500,
+                  color: widget.selected ? colors.primary : colors.onSurfaceVariant,
+                ),
+              ),
             ],
           ),
         ),
@@ -306,10 +361,11 @@ class _TabChipState extends State<_TabChip> {
   }
 }
 
-// ==================== Kategori Filtre Barı ====================
-class _CategoryFilterBar extends StatelessWidget {
-  const _CategoryFilterBar({
-    super.key,
+// ═══════════════════════════════════════════════════════
+// Kategori Cipleri
+// ═══════════════════════════════════════════════════════
+class _CategoryChips extends StatelessWidget {
+  const _CategoryChips({
     required this.categories,
     required this.selectedId,
     required this.onSelect,
@@ -327,25 +383,31 @@ class _CategoryFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = isMovieTab ? movieCount : seriesCount;
-    return SizedBox(
-      height: 40,
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
+        ),
+      ),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         children: [
-          _FilterChip(
-            label: 'Tümü ($count)',
+          _FilterPill(
+            label: 'Tum ($count)',
             selected: selectedId == null,
             onTap: () => onSelect(null),
-            color: const Color(0xFFFF0050),
           ),
           ...categories.map((cat) {
             final (id, name) = cat;
-            return _FilterChip(
+            return _FilterPill(
               label: name,
               selected: selectedId == id,
               onTap: () => onSelect(id),
-              color: const Color(0xFF1E88E5),
             );
           }),
         ],
@@ -354,34 +416,33 @@ class _CategoryFilterBar extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatefulWidget {
-  const _FilterChip({
+class _FilterPill extends StatefulWidget {
+  const _FilterPill({
     required this.label,
     required this.selected,
     required this.onTap,
-    required this.color,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final Color color;
 
   @override
-  State<_FilterChip> createState() => _FilterChipState();
+  State<_FilterPill> createState() => _FilterPillState();
 }
 
-class _FilterChipState extends State<_FilterChip> {
+class _FilterPillState extends State<_FilterPill> {
   bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Focus(
       onFocusChange: (f) => setState(() => _focused = f),
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.enter ||
-             event.logicalKey == LogicalKeyboardKey.select)) {
+                event.logicalKey == LogicalKeyboardKey.select)) {
           widget.onTap();
           return KeyEventResult.handled;
         }
@@ -390,30 +451,39 @@ class _FilterChipState extends State<_FilterChip> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           margin: const EdgeInsets.symmetric(horizontal: 3),
           decoration: BoxDecoration(
-            color: widget.selected ? widget.color.withValues(alpha: 0.3) : const Color(0xFF161B22),
-            borderRadius: BorderRadius.circular(16),
+            color: widget.selected
+                ? colors.primary.withValues(alpha: 0.15)
+                : colors.surface.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: widget.selected ? widget.color : (_focused ? Colors.white38 : Colors.transparent),
-              width: _focused ? 2 : 1,
+              color: widget.selected || _focused
+                  ? (widget.selected ? colors.primary : colors.outline)
+                  : Colors.transparent,
+              width: 1,
             ),
           ),
-          child: Text(widget.label, style: TextStyle(
-            color: widget.selected ? Colors.white : Colors.white70,
-            fontSize: 11,
-            fontWeight: (widget.selected || _focused) ? FontWeight.bold : FontWeight.normal,
-          )),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: widget.selected || _focused ? FontWeight.w600 : FontWeight.normal,
+              color: widget.selected ? colors.primary : colors.onSurfaceVariant,
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// ==================== İçerik Izgarası ====================
-class _TurkcellContentGrid extends StatefulWidget {
-  const _TurkcellContentGrid({
+// ═══════════════════════════════════════════════════════
+// VOD Izgarasi
+// ═══════════════════════════════════════════════════════
+class _VodGrid extends StatefulWidget {
+  const _VodGrid({
     required this.isMovies,
     required this.state,
     required this.selectedCategoryId,
@@ -428,11 +498,10 @@ class _TurkcellContentGrid extends StatefulWidget {
   final void Function(dynamic) onItemTap;
 
   @override
-  State<_TurkcellContentGrid> createState() => _TurkcellContentGridState();
+  State<_VodGrid> createState() => _VodGridState();
 }
 
-class _TurkcellContentGridState extends State<_TurkcellContentGrid>
-    with AutomaticKeepAliveClientMixin {
+class _VodGridState extends State<_VodGrid> with AutomaticKeepAliveClientMixin {
   List<ResumeRecord> _resumeRecords = [];
 
   @override
@@ -454,11 +523,10 @@ class _TurkcellContentGridState extends State<_TurkcellContentGrid>
   Widget build(BuildContext context) {
     super.build(context);
     final state = widget.state;
-    final isMovies = widget.isMovies;
+    final colors = Theme.of(context).colorScheme;
 
-    // Tüm içerikleri topla
     final all = <_VodItem>[];
-    if (isMovies) {
+    if (widget.isMovies) {
       for (final m in state.filteredVodMovies) {
         final d = state.movieDetailsCached(m.id);
         all.add(_VodItem(
@@ -478,30 +546,28 @@ class _TurkcellContentGridState extends State<_TurkcellContentGrid>
       }
     }
 
-    // Filtreleme
     var filtered = all;
     if (widget.selectedCategoryId != null) {
       filtered = all.where((item) => item.categoryId == widget.selectedCategoryId).toList();
     }
     if (widget.searchQuery.isNotEmpty) {
-      filtered = filtered.where((item) =>
-        item.name.toLowerCase().contains(widget.searchQuery.toLowerCase())).toList();
+      filtered = all.where((item) =>
+          item.name.toLowerCase().contains(widget.searchQuery.toLowerCase())).toList();
     }
 
-    // Devam ettirme kayıtları
     final relevantResume = _resumeRecords
-        .where((r) => r.isMovie == isMovies && !r.isCompleted)
+        .where((r) => r.isMovie == widget.isMovies && !r.isCompleted)
         .toList()
       ..sort((a, b) => b.watchedAt.compareTo(a.watchedAt));
 
     if (filtered.isEmpty && !state.vodLoading && relevantResume.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off, color: Colors.white24, size: 64),
-            SizedBox(height: 8),
-            Text('İçerik bulunamadı', style: TextStyle(color: Colors.white54)),
+            Icon(Icons.search_off, size: 56, color: colors.onSurfaceVariant.withValues(alpha: 0.3)),
+            const SizedBox(height: 8),
+            Text('Icerik bulunamadi', style: TextStyle(color: colors.onSurfaceVariant)),
           ],
         ),
       );
@@ -512,42 +578,54 @@ class _TurkcellContentGridState extends State<_TurkcellContentGrid>
         // Hero Banner (ilk film)
         if (filtered.isNotEmpty && widget.selectedCategoryId == null && widget.searchQuery.isEmpty)
           SliverToBoxAdapter(
-            child: _TurkcellHeroBanner(
+            child: _HeroBanner(
               item: filtered.first,
               onTap: () => widget.onItemTap(filtered.first),
             ),
           ),
 
-        // Kaldığın Yerden Devam
+        // Kaldigin Yerden Devam
         if (relevantResume.isNotEmpty)
           SliverToBoxAdapter(
-            child: _ResumeRow(records: relevantResume, state: state),
+            child: _ResumeRow(records: relevantResume),
           ),
 
-        // Başlık
+        // Baslik
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text(
-              isMovies ? 'Tüm Filmler (${filtered.length})' : 'Tüm Diziler (${filtered.length})',
-              style: const TextStyle(
-                color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.isMovies ? 'Tum Filmler (${filtered.length})' : 'Tum Diziler (${filtered.length})',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: colors.onSurface),
+                ),
+              ],
             ),
           ),
         ),
 
-        // 5×4 Izgara
+        // 5x4 Izgara
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           sliver: SliverGrid(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 5,
-              childAspectRatio: 0.67,
+              childAspectRatio: 0.65,
               crossAxisSpacing: 8,
               mainAxisSpacing: 10,
             ),
             delegate: SliverChildBuilderDelegate(
-              (context, i) => _TurkcellPosterCard(
+              (context, i) => _PosterCard(
                 item: filtered[i],
                 onTap: () => widget.onItemTap(filtered[i]),
               ),
@@ -562,17 +640,19 @@ class _TurkcellContentGridState extends State<_TurkcellContentGrid>
   }
 }
 
-// ==================== Hero Banner ====================
-class _TurkcellHeroBanner extends StatefulWidget {
-  const _TurkcellHeroBanner({required this.item, required this.onTap});
+// ═══════════════════════════════════════════════════════
+// Hero Banner
+// ═══════════════════════════════════════════════════════
+class _HeroBanner extends StatefulWidget {
+  const _HeroBanner({required this.item, required this.onTap});
   final _VodItem item;
   final VoidCallback onTap;
 
   @override
-  State<_TurkcellHeroBanner> createState() => _TurkcellHeroBannerState();
+  State<_HeroBanner> createState() => _HeroBannerState();
 }
 
-class _TurkcellHeroBannerState extends State<_TurkcellHeroBanner> {
+class _HeroBannerState extends State<_HeroBanner> {
   final _focus = FocusNode();
   bool _focused = false;
 
@@ -592,13 +672,14 @@ class _TurkcellHeroBannerState extends State<_TurkcellHeroBanner> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final width = MediaQuery.of(context).size.width;
+    final colors = Theme.of(context).colorScheme;
 
     return Focus(
       focusNode: _focus,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.enter ||
-             event.logicalKey == LogicalKeyboardKey.select)) {
+                event.logicalKey == LogicalKeyboardKey.select)) {
           widget.onTap();
           return KeyEventResult.handled;
         }
@@ -608,98 +689,150 @@ class _TurkcellHeroBannerState extends State<_TurkcellHeroBanner> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          height: _focused ? 280 : 260,
+          height: _focused ? 290 : 270,
           margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: _focused ? [
-              BoxShadow(color: Colors.black54, blurRadius: 20, spreadRadius: 2),
-            ] : [],
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: _focused
+                ? [
+                    BoxShadow(
+                      color: colors.primary.withValues(alpha: 0.25),
+                      blurRadius: 24,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : [],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             child: Stack(
               fit: StackFit.expand,
               children: [
                 // Arka plan poster
                 if (item.poster != null && item.poster!.isNotEmpty)
-                  Image.network(item.poster!, fit: BoxFit.cover,
-                    cacheWidth: width.round(),
-                    errorBuilder: (_, _, _) => _placeholder(),
-                    loadingBuilder: (_, child, p) => p == null ? child : _placeholder())
+                  Image.network(item.poster!,
+                      fit: BoxFit.cover,
+                      cacheWidth: width.round(),
+                      errorBuilder: (_, __, ___) => _placeholder(),
+                      loadingBuilder: (_, child, p) =>
+                          p == null ? child : _placeholder())
                 else
                   _placeholder(),
 
                 // Gradient overlay
-                Container(
-                  decoration: const BoxDecoration(
+                const DecoratedBox(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.transparent, Colors.black87, Colors.black],
-                      stops: [0.0, 0.4, 0.7, 1.0],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.transparent,
+                        Colors.black87,
+                        Colors.black,
+                      ],
+                      stops: [0.0, 0.35, 0.65, 1.0],
                     ),
                   ),
                 ),
 
                 // Film/Dizi rozeti
                 Positioned(
-                  top: 12, left: 12,
+                  top: 12,
+                  left: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF0050),
-                      borderRadius: BorderRadius.circular(4),
+                      color: item.isMovie
+                          ? colors.primary
+                          : const Color(0xFF6C5CE7),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      item.isMovie ? 'FİLM' : 'DİİZ',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      item.isMovie ? 'FILM' : 'DIZI',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
 
                 // Alt bilgi
                 Positioned(
-                  left: 14, right: 14, bottom: 14,
+                  left: 14,
+                  right: 14,
+                  bottom: 14,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold,
-                          shadows: [Shadow(blurRadius: 8, color: Colors.black)])),
+                      Text(item.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              shadows: [
+                                Shadow(blurRadius: 8, color: Colors.black)
+                              ])),
                       const SizedBox(height: 4),
                       Row(children: [
                         if (item.rating != null && item.rating!.isNotEmpty) ...[
-                          const Icon(Icons.star, color: Color(0xFFFFB300), size: 16),
+                          const Icon(Icons.star_rounded,
+                              color: Color(0xFFF5A623), size: 18),
                           const SizedBox(width: 4),
-                          Text(item.rating!, style: const TextStyle(color: Color(0xFFFFB300),
-                            fontSize: 14, fontWeight: FontWeight.bold)),
+                          Text(item.rating!,
+                              style: const TextStyle(
+                                  color: Color(0xFFF5A623),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold)),
                           const SizedBox(width: 12),
                         ],
                         if (item.genre != null && item.genre!.isNotEmpty)
-                          Expanded(child: Text(item.genre!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                          Expanded(
+                              child: Text(item.genre!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      color: Colors.white70, fontSize: 12))),
                       ]),
                       if (item.plot != null && item.plot!.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(item.plot!, maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white54, fontSize: 11, height: 1.3)),
+                        Text(item.plot!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 11,
+                                height: 1.3)),
                       ],
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Row(children: [
-                        _HeroButton(icon: Icons.play_arrow, label: 'İzle', primary: true, onTap: widget.onTap),
+                        _HeroBtn(
+                            icon: Icons.play_arrow_rounded,
+                            label: 'Izle',
+                            primary: true,
+                            onTap: widget.onTap),
                         const SizedBox(width: 8),
-                        _HeroButton(icon: Icons.info_outline, label: 'Bilgi', primary: false, onTap: widget.onTap),
+                        _HeroBtn(
+                            icon: Icons.info_outline,
+                            label: 'Bilgi',
+                            primary: false,
+                            onTap: widget.onTap),
                       ]),
                     ],
                   ),
                 ),
 
-                // Odak göstergesi
+                // Odak cercevesi
                 if (_focused)
                   Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFF1E88E5), width: 3),
-                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: colors.primary.withValues(alpha: 0.8),
+                          width: 3),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
               ],
@@ -711,13 +844,22 @@ class _TurkcellHeroBannerState extends State<_TurkcellHeroBanner> {
   }
 
   Widget _placeholder() {
-    return Container(color: const Color(0xFF1A1A2E),
-      child: const Center(child: Icon(Icons.movie_creation_outlined, color: Colors.white12, size: 80)));
+    return Container(
+      color: const Color(0xFF1E2030),
+      child: const Center(
+          child: Icon(Icons.movie_creation_outlined,
+              color: Colors.white12, size: 80)),
+    );
   }
 }
 
-class _HeroButton extends StatelessWidget {
-  const _HeroButton({required this.icon, required this.label, required this.primary, required this.onTap});
+class _HeroBtn extends StatelessWidget {
+  const _HeroBtn(
+      {required this.icon,
+      required this.label,
+      required this.primary,
+      required this.onTap});
+
   final IconData icon;
   final String label;
   final bool primary;
@@ -725,20 +867,27 @@ class _HeroButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: primary ? const Color(0xFFFF0050) : Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(6),
+          color: primary
+              ? colors.primary
+              : Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: Colors.white, size: 18),
             const SizedBox(width: 4),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -746,17 +895,19 @@ class _HeroButton extends StatelessWidget {
   }
 }
 
-// ==================== Poster Kartı (5×4 ızgara) ====================
-class _TurkcellPosterCard extends StatefulWidget {
-  const _TurkcellPosterCard({required this.item, required this.onTap});
+// ═══════════════════════════════════════════════════════
+// Poster Karti (5x4 Izgara)
+// ═══════════════════════════════════════════════════════
+class _PosterCard extends StatefulWidget {
+  const _PosterCard({required this.item, required this.onTap});
   final _VodItem item;
   final VoidCallback onTap;
 
   @override
-  State<_TurkcellPosterCard> createState() => _TurkcellPosterCardState();
+  State<_PosterCard> createState() => _PosterCardState();
 }
 
-class _TurkcellPosterCardState extends State<_TurkcellPosterCard> {
+class _PosterCardState extends State<_PosterCard> {
   final _focus = FocusNode();
   bool _focused = false;
 
@@ -775,13 +926,14 @@ class _TurkcellPosterCardState extends State<_TurkcellPosterCard> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
+    final colors = Theme.of(context).colorScheme;
 
     return Focus(
       focusNode: _focus,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.enter ||
-             event.logicalKey == LogicalKeyboardKey.select)) {
+                event.logicalKey == LogicalKeyboardKey.select)) {
           widget.onTap();
           return KeyEventResult.handled;
         }
@@ -792,12 +944,23 @@ class _TurkcellPosterCardState extends State<_TurkcellPosterCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: const Color(0xFF161B22),
-            borderRadius: BorderRadius.circular(8),
-            border: _focused ? Border.all(color: const Color(0xFF1E88E5), width: 2) : null,
-            boxShadow: _focused ? [
-              BoxShadow(color: Colors.black54, blurRadius: 12, spreadRadius: 1),
-            ] : [],
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _focused
+                  ? colors.primary.withValues(alpha: 0.8)
+                  : colors.outline.withValues(alpha: 0.3),
+              width: _focused ? 2 : 1,
+            ),
+            boxShadow: _focused
+                ? [
+                    BoxShadow(
+                      color: colors.primary.withValues(alpha: 0.2),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -805,60 +968,77 @@ class _TurkcellPosterCardState extends State<_TurkcellPosterCard> {
               // Poster
               Expanded(
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(9)),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
                       if (item.poster != null && item.poster!.isNotEmpty)
-                        Image.network(item.poster!, fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => _posterPlaceholder())
+                        Image.network(item.poster!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _posterPlaceholder())
                       else
                         _posterPlaceholder(),
 
-                      // IMDb puanı (sağ üst)
+                      // IMDb puani
                       if (item.rating != null && item.rating!.isNotEmpty)
                         Positioned(
-                          top: 4, right: 4,
+                          top: 4,
+                          right: 4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.7),
+                              color: Colors.black.withValues(alpha: 0.75),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.star, color: Color(0xFFFFB300), size: 10),
+                                const Icon(Icons.star_rounded,
+                                    color: Color(0xFFF5A623), size: 10),
                                 const SizedBox(width: 2),
-                                Text(item.rating!, style: const TextStyle(
-                                  color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                Text(item.rating!,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),
                         ),
 
-                      // Film/Dizi rozeti (sol üst)
+                      // Film/Dizi etiketi
                       Positioned(
-                        top: 4, left: 4,
+                        top: 4,
+                        left: 4,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 1),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF0050),
-                            borderRadius: BorderRadius.circular(3),
+                            color: item.isMovie
+                                ? colors.primary
+                                : const Color(0xFF6C5CE7),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            item.isMovie ? 'FİLM' : 'DİİZ',
-                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                            item.isMovie ? 'F' : 'D',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
 
-                      // Hover overlay
+                      // Odak overlay
                       if (_focused)
                         Container(
                           color: Colors.black.withValues(alpha: 0.3),
-                          child: const Center(
-                            child: Icon(Icons.play_circle_fill, color: Colors.white70, size: 48),
+                          child: Center(
+                            child: Icon(Icons.play_circle_fill_rounded,
+                                color: Colors.white.withValues(alpha: 0.85),
+                                size: 44),
                           ),
                         ),
                     ],
@@ -872,15 +1052,25 @@ class _TurkcellPosterCardState extends State<_TurkcellPosterCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _focused ? Colors.white : Colors.white70,
-                        fontSize: 11,
-                        fontWeight: _focused ? FontWeight.bold : FontWeight.normal,
-                      )),
+                    Text(item.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _focused ? colors.onSurface : colors.onSurfaceVariant,
+                          fontSize: 11,
+                          fontWeight: _focused ? FontWeight.w600 : FontWeight.w500,
+                          height: 1.2,
+                        )),
                     if (item.genre != null && item.genre!.isNotEmpty)
-                      Text(item.genre!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(item.genre!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: colors.onSurfaceVariant.withValues(alpha: 0.6),
+                                fontSize: 9)),
+                      ),
                   ],
                 ),
               ),
@@ -893,30 +1083,49 @@ class _TurkcellPosterCardState extends State<_TurkcellPosterCard> {
 
   Widget _posterPlaceholder() {
     return Container(
-      color: const Color(0xFF1A1A2E),
-      child: const Center(child: Icon(Icons.movie, color: Colors.white12, size: 32)),
+      color: const Color(0xFF1E2030),
+      child: Center(
+        child: Icon(Icons.movie_rounded,
+            color: Colors.white.withValues(alpha: 0.1), size: 32),
+      ),
     );
   }
 }
 
-// ==================== Devam Et Satırı ====================
+// ═══════════════════════════════════════════════════════
+// Devam Et Satiri
+// ═══════════════════════════════════════════════════════
 class _ResumeRow extends StatelessWidget {
-  const _ResumeRow({required this.records, required this.state});
+  const _ResumeRow({required this.records});
   final List<ResumeRecord> records;
-  final AppState state;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text('Kaldığın Yerden Devam', style: TextStyle(
-            color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: colors.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('Kaldigin Yerden Devam',
+                  style: TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700)),
+            ],
+          ),
         ),
         SizedBox(
-          height: 140,
+          height: 145,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -925,13 +1134,17 @@ class _ResumeRow extends StatelessWidget {
             itemBuilder: (context, i) {
               final r = records[i];
               final progress = r.duration.inSeconds > 0
-                  ? r.position.inSeconds / r.duration.inSeconds : 0.0;
+                  ? r.position.inSeconds / r.duration.inSeconds
+                  : 0.0;
               return GestureDetector(
                 onTap: () {
                   Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => VodPlayerScreen(
-                      url: r.url, title: r.title, mediaId: r.id,
-                      poster: r.poster, isMovie: r.isMovie,
+                      url: r.url,
+                      title: r.title,
+                      mediaId: r.id,
+                      poster: r.poster,
+                      isMovie: r.isMovie,
                       resumePosition: r.position,
                     ),
                   ));
@@ -942,24 +1155,31 @@ class _ResumeRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
                           height: 80,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
                               if (r.poster != null)
-                                Image.network(r.poster!, fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Container(color: const Color(0xFF1A1A2E)))
+                                Image.network(r.poster!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        Container(color: colors.surface))
                               else
-                                Container(color: const Color(0xFF1A1A2E)),
+                                Container(color: colors.surface),
                               Positioned(
-                                bottom: 0, left: 0, right: 0,
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
                                 child: LinearProgressIndicator(
-                                  value: progress, minHeight: 3,
+                                  value: progress,
+                                  minHeight: 3,
                                   backgroundColor: Colors.white24,
                                   valueColor: AlwaysStoppedAnimation(
-                                    progress > 0.9 ? Colors.green : const Color(0xFF1E88E5)),
+                                      progress > 0.9
+                                          ? colors.tertiary
+                                          : colors.primary),
                                 ),
                               ),
                             ],
@@ -967,8 +1187,11 @@ class _ResumeRow extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                      Text(r.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: colors.onSurfaceVariant, fontSize: 11)),
                     ],
                   ),
                 ),
@@ -981,7 +1204,9 @@ class _ResumeRow extends StatelessWidget {
   }
 }
 
-// ==================== VodItem Model ====================
+// ═══════════════════════════════════════════════════════
+// VodItem Model
+// ═══════════════════════════════════════════════════════
 class _VodItem {
   final int id;
   final String name;
@@ -989,7 +1214,13 @@ class _VodItem {
   final bool isMovie;
 
   _VodItem({
-    required this.id, required this.name, this.poster, this.rating,
-    this.categoryId, this.plot, this.genre, required this.isMovie,
+    required this.id,
+    required this.name,
+    this.poster,
+    this.rating,
+    this.categoryId,
+    this.plot,
+    this.genre,
+    required this.isMovie,
   });
 }

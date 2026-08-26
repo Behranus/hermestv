@@ -3,11 +3,10 @@ import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 
-/// Donate / Bağış ekranı — HermesTV'nin gelişimine destek olmak için.
+/// Donate / Destek ekrani - modern Zorin OS tema
 class DonateScreen extends StatelessWidget {
   const DonateScreen({super.key});
 
-  // ── GitHub Sponsors ──
   static const String _githubUsername = 'Behranus';
   static const String _sponsorUrl = 'https://github.com/sponsors/$_githubUsername';
 
@@ -17,209 +16,242 @@ class DonateScreen extends StatelessWidget {
     final colors = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.watch<LocaleProvider>().loc.support)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      backgroundColor: Colors.transparent,
+      body: Column(
         children: [
-          // Üst başlık kartı
+          // Ust bar
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  colors.primaryContainer,
-                  colors.primaryContainer.withValues(alpha: 0.4),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+              color: colors.surfaceContainerLow,
+              border: Border(
+                bottom: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
               ),
-              borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
+            child: Row(
               children: [
-                Icon(Icons.favorite, size: 48, color: colors.primary),
-                const SizedBox(height: 12),
-                Text(
-                  context.watch<LocaleProvider>().loc.supportTitle,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE54D6E).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: const Icon(Icons.favorite_rounded, color: Color(0xFFE54D6E), size: 20),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(width: 12),
                 Text(
-                  'HermesTV tamamen ücretsiz ve reklamsızdır.\n'
-                  'Geliştirmeye devam etmemiz için destekleriniz çok değerli.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 14,
-                    height: 1.5,
+                  context.watch<LocaleProvider>().loc.support,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
                   ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 28),
-
-          // ── GitHub Sponsors Kartı ──
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+          // Icerik
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Baslik karti
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        colors.primary.withValues(alpha: 0.2),
+                        const Color(0xFF6C5CE7).withValues(alpha: 0.15),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: colors.outline.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
                     children: [
                       Container(
-                        width: 44,
-                        height: 44,
+                        width: 64,
+                        height: 64,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6e40c9).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.code,
-                          color: Color(0xFF6e40c9),
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'GitHub Sponsors',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Açık kaynak geliştirmeyi destekle',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colors.onSurfaceVariant,
-                              ),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF3C8AFF), Color(0xFF6C5CE7)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF3C8AFF).withValues(alpha: 0.3),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
                           ],
+                        ),
+                        child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 32),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.watch<LocaleProvider>().loc.supportTitle,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'HermesTV tamamen ucretsiz ve reklamsizdir.\nGelistirmeye devam etmemiz icin destekleriniz cok degerli.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontSize: 14,
+                          height: 1.5,
                         ),
                       ),
                     ],
                   ),
+                ),
 
-                  const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-                  // GitHub profil kutusu
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(10),
+                // GitHub Sponsors karti
+                Container(
+                  decoration: BoxDecoration(
+                    color: colors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colors.outline.withValues(alpha: 0.3),
+                      width: 1,
                     ),
-                    child: Row(
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Color(0xFF6e40c9),
-                          child: Icon(Icons.person, color: Colors.white, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _githubUsername,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: colors.onSurface,
-                                ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6e40c9).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              Text(
-                                _sponsorUrl,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                  color: colors.onSurfaceVariant,
+                              child: const Icon(Icons.code_rounded, color: Color(0xFF6e40c9), size: 24),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('GitHub Sponsors',
+                                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 2),
+                                  Text('Acik kaynak gelistirmeyi destekle',
+                                      style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // GitHub profil kutusu
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const CircleAvatar(
+                                radius: 18,
+                                backgroundColor: Color(0xFF6e40c9),
+                                child: Icon(Icons.person_rounded, color: Colors.white, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(_githubUsername,
+                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: colors.onSurface)),
+                                    Text(_sponsorUrl,
+                                        style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: colors.onSurfaceVariant),
+                                        overflow: TextOverflow.ellipsis),
+                                  ],
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Sponsor ol butonu
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: _sponsorUrl));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Link kopyalandi: $_sponsorUrl'),
+                                  duration: const Duration(seconds: 3),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.open_in_new_rounded),
+                            label: Text(context.watch<LocaleProvider>().loc.supportOnGithub),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF6e40c9),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: _sponsorUrl));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Link kopyalandi: $_sponsorUrl'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.copy_rounded, size: 14),
+                            label: Text(context.watch<LocaleProvider>().loc.copyLink),
+                            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                           ),
                         ),
                       ],
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
-                  // Sponsor ol butonu
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: _sponsorUrl));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Link kopyalandı: $_sponsorUrl'),
-                            duration: const Duration(seconds: 3),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.open_in_new),
-                      label: Text(context.watch<LocaleProvider>().loc.supportOnGithub),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF6e40c9),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // Kopyala butonu
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: _sponsorUrl));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Link kopyalandı: $_sponsorUrl'),
-                            duration: const Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.copy, size: 14),
-                      label: Text(context.watch<LocaleProvider>().loc.copyLink),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          // Teşekkür mesajı
-          Text(
-            'Bu uygulamayı beğendiyseniz, bir yıldız vermeyi unutmayın!\n'
-            'Tüm destekleriniz gelecek sürümler için motivasyon kaynağı.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: colors.onSurfaceVariant,
-              height: 1.6,
+                Text(
+                  'Bu uygulamayi begendiysemiz, bir yildiz vermeyi unutmayin!\n'
+                  'Tum destekleriniz gelecek surumler icin motivasyon kaynagi.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant, height: 1.6),
+                ),
+              ],
             ),
           ),
         ],
