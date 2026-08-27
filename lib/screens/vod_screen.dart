@@ -144,7 +144,7 @@ class _VodScreenState extends State<VodScreen> with SingleTickerProviderStateMix
 
           // ── Kategori filtreleri ──
           _CategoryChips(
-            categories: state.vodCategories,
+            categories: state.filteredVodCategories,
             selectedId: _selectedCategoryId,
             onSelect: (id) => setState(() => _selectedCategoryId = id),
             isMovieTab: _tabController.index == 0,

@@ -16,7 +16,7 @@ class DonateScreen extends StatelessWidget {
     final colors = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0D0D1A),
       body: Column(
         children: [
           // Ust bar

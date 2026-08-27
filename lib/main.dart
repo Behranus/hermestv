@@ -8,12 +8,28 @@ import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Window manager başlat (Linux pencere ayarları)
+  if (!Platform.isAndroid) {
+    await windowManager.ensureInitialized();
+    const windowOptions = WindowOptions(
+      size: Size(1280, 720),
+      center: true,
+      backgroundColor: Color(0xFF0D0D1A),
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: true,
+    );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+
   // ---- fvp (libmdk/FFmpeg) video oynatıcı motoru ----
-  // Sadece Linux/Windows/macOS'ta kullanılır.
   if (!Platform.isAndroid) {
     fvp.registerWith();
   }
@@ -120,7 +136,7 @@ class IptvApp extends StatelessWidget {
       shadow: Colors.black54,
       surfaceContainerHighest: _zorinSurfaceHigh,
       surfaceContainerHigh: _zorinSurface,
-      surfaceContainerLow: _zorinBgMain,
+      surfaceContainerLow: _zorinBgDeep,
       surfaceDim: _zorinBgDeep,
       inverseSurface: _zorinText,
       inversePrimary: _zorinAccent,

@@ -75,7 +75,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     final channels = state.filteredChannels;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0D0D1A),
       body: Column(
         children: [
           // ── Üst Bar: Arama + Başlık ──
@@ -230,7 +230,7 @@ class _ChannelsTopBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
+        color: const Color(0xFF0D0D1A),
         border: Border(
           bottom: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
         ),
@@ -779,7 +779,7 @@ class _CategoryChipsBar extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
+        color: const Color(0xFF0D0D1A),
         border: Border(
           bottom: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
         ),

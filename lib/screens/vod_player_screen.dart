@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:http/http.dart' as http;
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -58,6 +60,12 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
   List<AudioTrackInfo> _audioTrackList = [];
   String? _activeAudioTrackId;
   String? _activeSubtitleId;
+
+  // Gemini altyazı çevirisi
+  bool _geminiTranslate = true;
+  String? _translatedSubtitleText;
+  String _translateTargetLang = 'tr';
+  Timer? _subtitleTranslateTimer;
 
   // Alt kontrol odağı: 0=Altyazı, 1=Hız, 2=Oynat, 3=Geri10, 4=İleri10
   int _controlFocus = 2;
@@ -195,7 +203,10 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     });
     // Ekran üstü altyazı (SRT/VTT).
     _player.subtitleText.listen((text) {
-      if (mounted) setState(() => _subtitleText = text);
+      if (mounted) {
+        setState(() => _subtitleText = text);
+        _onSubtitleTextChanged(text);
+      }
     });
     // HLS akışındaki gömülü altyazı parçaları (menü için).
     _player.subtitleTracks.listen((tracks) {
@@ -294,6 +305,42 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     }
   }
 
+  // Gemini altyazı çevirisi
+  void _onSubtitleTextChanged(String? text) {
+    if (!_geminiTranslate || text == null || text.trim().isEmpty) {
+      setState(() => _translatedSubtitleText = null);
+      return;
+    }
+    _subtitleTranslateTimer?.cancel();
+    _subtitleTranslateTimer = Timer(const Duration(milliseconds: 300), () {
+      _translateSubtitleText(text);
+    });
+  }
+
+  Future<void> _translateSubtitleText(String original) async {
+    if (!_geminiTranslate) return;
+    try {
+      final url = Uri.parse(
+        'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(original)}&langpair=en|$_translateTargetLang',
+      );
+      final resp = await http.get(url).timeout(const Duration(seconds: 8));
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body) as Map<String, dynamic>;
+        final translated = data['responseData']?['translatedText'] as String?;
+        if (translated != null && translated.isNotEmpty && mounted) {
+          setState(() => _translatedSubtitleText = translated);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _toggleGeminiTranslate() {
+    setState(() {
+      _geminiTranslate = !_geminiTranslate;
+      if (!_geminiTranslate) _translatedSubtitleText = null;
+    });
+  }
+
   Future<void> _showAudioMenu() async {
     if (_audioTrackList.isEmpty) return;
     final selected = await showModalBottomSheet<String>(
@@ -371,7 +418,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     // ---- Sağ ok: her zaman menüyü aç ----
     if (key == LogicalKeyboardKey.arrowRight) {
       if (_showControlMenu) {
-        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 5));
+        setState(() => _controlFocus = (_controlFocus + 1).clamp(0, 6));
       } else {
         _openControlMenu();
       }
@@ -381,7 +428,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
     // ---- Sol ok ----
     if (key == LogicalKeyboardKey.arrowLeft) {
       if (_showControlMenu) {
-        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 5));
+        setState(() => _controlFocus = (_controlFocus - 1).clamp(0, 6));
       } else {
         _seekBy(-10);
         _flashSeekHud(-10);
@@ -437,6 +484,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
       case 3: _closeControlMenu(); _seekBy(-600); _flashSeekHud(-600); break; // -10 dk
       case 4: _closeControlMenu(); _seekBy(600); _flashSeekHud(600); break; // +10 dk
       case 5: _closeControlMenu(); _showAudioMenu(); break; // Ses
+      case 6: _toggleGeminiTranslate(); _closeControlMenu(); break; // Çeviri
     }
   }
 
@@ -527,29 +575,52 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
                   bottom: 70,
                   child: IgnorePointer(
                     child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _subtitleText!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            height: 1.3,
-                            shadows: [
-                              Shadow(
-                                blurRadius: 4,
-                                color: Colors.black,
-                                offset: Offset(0, 1),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _subtitleText!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                height: 1.3,
+                                shadows: [
+                                  Shadow(
+                                    blurRadius: 4,
+                                    color: Colors.black,
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                          if (_geminiTranslate && _translatedSubtitleText != null && _translatedSubtitleText!.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.teal.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                _translatedSubtitleText!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white, fontSize: 18, height: 1.3,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
@@ -708,6 +779,7 @@ class _VodPlayerScreenState extends State<VodPlayerScreen> {
                                 children: [
                                   _VodMenuBtn(icon: Icons.subtitles, label: 'Altyazı', focused: _controlFocus == 0,
                                     active: _activeSubtitleId != null && _activeSubtitleId != 'off'),
+                                  _VodMenuBtn(icon: Icons.translate, label: _geminiTranslate ? 'Çeviri✓' : 'Çeviri', focused: _controlFocus == 6, active: _geminiTranslate),
                                   _VodMenuBtn(icon: Icons.speed, label: 'Hız', focused: _controlFocus == 1),
                                   _VodMenuBtn(icon: _playing ? Icons.pause : Icons.play_arrow, label: 'Oynat', focused: _controlFocus == 2),
                                   _VodMenuBtn(icon: Icons.replay_10, label: '-10 dk', focused: _controlFocus == 3),

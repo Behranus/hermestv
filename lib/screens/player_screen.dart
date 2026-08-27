@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:window_manager/window_manager.dart';
 import 'package:hermestv/models/channel.dart';
 import 'package:hermestv/services/parental_lock_service.dart';
 import 'package:hermestv/services/screenshot_service.dart';
@@ -57,6 +60,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _activeAudioTrackId;
   DateTime _lastPositionAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // Gemini altyazı çevirisi
+  bool _geminiTranslate = true;
+  String? _translatedSubtitleText;
+  String _translateTargetLang = 'tr';
+  Timer? _subtitleTranslateTimer;
+
   // Panel modu: false = sol kanal listesi, true = sağ EPG
   bool _showEpgPanel = false;
 
@@ -73,6 +82,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   StreamStats _currentStats = const StreamStats(
     latencyMs: 0, bandwidthBps: 0, estimatedFps: 30);
   bool _showStats = false;
+  bool _isFullScreen = false;
 
   // Ekran görüntüsü
   final _screenshotKey = GlobalKey();
@@ -160,10 +170,51 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _overlayTimer?.cancel();
     _volumeHudTimer?.cancel();
     _retryTimer?.cancel();
+    _subtitleTranslateTimer?.cancel();
     _statsService.dispose();
     WakelockPlus.disable();
     unawaited(_player.dispose());
     super.dispose();
+  }
+
+  // Gemini altyazı çevirisi
+  void _onSubtitleTextChanged(String? text) {
+    if (!_geminiTranslate || text == null || text.trim().isEmpty) {
+      setState(() => _translatedSubtitleText = null);
+      return;
+    }
+    // Debounce: 300ms bekle, çeviriyi tetikle
+    _subtitleTranslateTimer?.cancel();
+    _subtitleTranslateTimer = Timer(const Duration(milliseconds: 300), () {
+      _translateSubtitleText(text);
+    });
+  }
+
+  Future<void> _translateSubtitleText(String original) async {
+    if (!_geminiTranslate) return;
+    try {
+      final url = Uri.parse(
+        'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(original)}&langpair=en|$_translateTargetLang',
+      );
+      final resp = await http.get(url)
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body) as Map<String, dynamic>;
+        final translated = data['responseData']?['translatedText'] as String?;
+        if (translated != null && translated.isNotEmpty && mounted) {
+          setState(() => _translatedSubtitleText = translated);
+        }
+      }
+    } catch (_) {
+      // Hata durumunda orijinal metni göster
+    }
+  }
+
+  void _toggleGeminiTranslate() {
+    setState(() {
+      _geminiTranslate = !_geminiTranslate;
+      if (!_geminiTranslate) _translatedSubtitleText = null;
+    });
   }
 
   void _startStats() {
@@ -214,7 +265,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (mounted) setState(() => _subtitleTracks = tracks);
     });
     _player.subtitleText.listen((text) {
-      if (mounted) setState(() => _subtitleText = text);
+      if (mounted) {
+        setState(() => _subtitleText = text);
+        _onSubtitleTextChanged(text);
+      }
     });
     _player.activeSubtitleId.listen((id) {
       if (mounted && id != null) setState(() => _activeSubtitleId = id);
@@ -359,14 +413,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _overlayTimer?.cancel();
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: const Color(0xFF161B22),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      builder: (ctx) {
+        return SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
             Container(
               width: 40, height: 4,
               margin: const EdgeInsets.only(top: 12, bottom: 8),
@@ -408,6 +469,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
               onTap: () { Navigator.pop(ctx); _showAspectRatio(context); },
             ),
             ListTile(
+              leading: Icon(_geminiTranslate ? Icons.translate : Icons.translate, color: _geminiTranslate ? Colors.green : Colors.white70),
+              title: Text('Canlı Çeviri (MyMemory)', style: TextStyle(color: _geminiTranslate ? Colors.green : Colors.white)),
+              subtitle: Text(_geminiTranslate ? 'İngilizce → Türkçe çeviri aktif' : 'Altyazıları otomatik Türkçeye çevir',
+                style: TextStyle(color: _geminiTranslate ? Colors.green.withValues(alpha:0.7) : Colors.white38, fontSize: 12)),
+              onTap: () { _toggleGeminiTranslate(); Navigator.pop(ctx); },
+            ),
+            ListTile(
               leading: const Icon(Icons.aspect_ratio, color: Colors.white70),
               title: const Text('Ekran Oranı', style: TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(ctx); _showAspectRatio(context); },
@@ -442,13 +510,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 }
               },
             ),
+            ListTile(
+              leading: Icon(_isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white70),
+              title: Text(_isFullScreen ? 'Tam Ekrandan Çık' : 'Tam Ekran', style: const TextStyle(color: Colors.white)),
+              onTap: () { Navigator.pop(ctx); _toggleFullScreen(); },
+            ),
             const SizedBox(height: 16),
           ],
-        ),
-      ),
+        ),  // Column
+      ),  // SingleChildScrollView
+      ),  // ConstrainedBox
+      );  // SafeArea
+    },
     ).then((_) {
       if (mounted) _scheduleOverlayHide();
     });
+  }
+
+  Future<void> _toggleFullScreen() async {
+    try {
+      final wm = windowManager;
+      final isFull = await wm.isFullScreen();
+      if (isFull) {
+        await wm.setFullScreen(false);
+        await wm.setAlwaysOnTop(false);
+      } else {
+        await wm.setFullScreen(true);
+        await wm.setAlwaysOnTop(true);
+      }
+      if (mounted) setState(() => _isFullScreen = !isFull);
+    } catch (e) {
+      // window_manager desteklenmiyorsa fallback: SystemChrome
+      try {
+        if (_isFullScreen) {
+          await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        } else {
+          await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        }
+        if (mounted) setState(() => _isFullScreen = !_isFullScreen);
+      } catch (_) {}
+    }
   }
 
   void _seekBy(int seconds) {
@@ -542,6 +643,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (context) => _SubtitlesSheet(
         tracks: _subtitleTracks,
         activeId: _activeSubtitleId,
+        geminiTranslate: _geminiTranslate,
+        onToggleGeminiTranslate: _toggleGeminiTranslate,
       ),
     );
     if (selected == null || !mounted) return;
@@ -814,25 +917,50 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 ),
 
-              // Ekran üstü altyazı
+              // Ekran üstü altyazı (orijinal + çevirili)
               if (_subtitleText != null && _subtitleText!.isNotEmpty)
                 Positioned(
                   left: 24, right: 24, bottom: 80,
                   child: IgnorePointer(
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.65),
+                          color: Colors.black.withValues(alpha: 0.75),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          _subtitleText!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white, fontSize: 22, height: 1.3,
-                            shadows: [Shadow(blurRadius: 4, color: Colors.black, offset: Offset(0, 1))],
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Orijinal altyazı
+                            Text(
+                              _subtitleText!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white, fontSize: 20, height: 1.3,
+                                shadows: [Shadow(blurRadius: 4, color: Colors.black, offset: Offset(0, 1))],
+                              ),
+                            ),
+                            // Çevrilmiş altyazı (eğer aktifse)
+                            if (_geminiTranslate && _translatedSubtitleText != null && _translatedSubtitleText!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.withValues(alpha: 0.8),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _translatedSubtitleText!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white, fontSize: 18, height: 1.3,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
@@ -917,6 +1045,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 Positioned(
                   top: 80, right: 12,
                   child: _NetworkStatsOverlay(stats: _currentStats, channelName: _channel.name),
+                ),
+
+              // Alt kontrol çubuğu — Altyazı, Ses, Ekran (her zaman görünür)
+              if (_overlayVisible && !_showPanel && _error == null)
+                Positioned(
+                  left: 0, right: 0, bottom: 92,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter, end: Alignment.topCenter,
+                        colors: [Colors.black87, Colors.transparent],
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _PlayerBtn(icon: Icons.skip_previous, label: 'Önceki', onTap: () { _switchChannel(-1); }),
+                        _PlayerBtn(icon: Icons.skip_next, label: 'Sonraki', onTap: () { _switchChannel(1); }),
+                        _PlayerBtn(icon: Icons.subtitles, label: 'Altyazı', onTap: _showSubtitlesMenu),
+                        _PlayerBtn(icon: Icons.volume_up, label: 'Ses', onTap: _showAudioMenu),
+                        _PlayerBtn(icon: Icons.translate, label: _geminiTranslate ? 'Çeviri✓' : 'Çeviri', onTap: _toggleGeminiTranslate, color: _geminiTranslate ? Colors.green : null),
+                        _PlayerBtn(icon: _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen, label: _isFullScreen ? 'Küçült' : 'Tam Ekran', onTap: _toggleFullScreen),
+                        _PlayerBtn(icon: Icons.queue_music, label: 'Liste', onTap: _togglePanel),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Alt yatay kanal seridi (TiviMate tarzı)
+              if (!_showPanel && _error == null && widget.channels.length > 1)
+                Positioned(
+                  left: 0, right: 0, bottom: 0,
+                  child: _HorizontalChannelStrip(
+                    channels: widget.channels,
+                    currentIndex: _index,
+                    isVisible: _overlayVisible,
+                    onSelect: (i) {
+                      _openUser(widget.channels[i]);
+                    },
+                  ),
                 ),
             ],
           ),
@@ -1650,6 +1819,7 @@ class _ControlsOverlay extends StatelessWidget {
     required this.nextStart, required this.onBack, required this.onChannelUp,
     required this.onChannelDown, required this.onSubtitles,
     required this.onSleepTimer, required this.onAspectRatio, this.onTogglePanel,
+    this.geminiTranslate = false, this.onToggleGeminiTranslate,
   });
 
   final Channel channel;
@@ -1661,6 +1831,8 @@ class _ControlsOverlay extends StatelessWidget {
   final VoidCallback onBack, onChannelUp, onChannelDown, onSubtitles;
   final VoidCallback onSleepTimer, onAspectRatio;
   final VoidCallback? onTogglePanel;
+  final bool geminiTranslate;
+  final VoidCallback? onToggleGeminiTranslate;
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -1761,6 +1933,12 @@ class _ControlsOverlay extends StatelessWidget {
                       if (onTogglePanel != null)
                         _CtrlBtn(icon: Icons.queue_music, label: 'Liste', onTap: onTogglePanel!),
                       _CtrlBtn(icon: Icons.subtitles, label: 'Altyazı (S)', onTap: onSubtitles),
+                      _CtrlBtn(
+                        icon: Icons.translate,
+                        label: geminiTranslate ? 'Çeviri✓' : 'Çeviri',
+                        onTap: onToggleGeminiTranslate ?? () {},
+                        color: geminiTranslate ? Colors.green : null,
+                      ),
                       _CtrlBtn(icon: Icons.aspect_ratio, label: 'Oran (A)', onTap: onAspectRatio),
                       _CtrlBtn(icon: Icons.bedtime_outlined, label: 'Uyku (T)', onTap: onSleepTimer),
                       _CtrlBtn(icon: Icons.skip_next, label: 'Sonraki', onTap: onChannelUp, size: 32),
@@ -1769,7 +1947,7 @@ class _ControlsOverlay extends StatelessWidget {
                   const SizedBox(height: 4),
                   // Kısayol ipuçları
                   const Text(
-                    'S:Altyazı  T:Uyku  A:Ekran Oranı  ←→:Ses  ↑↓:Kanal  OK:Liste',
+                    'S:Altyazı  Ç:Çeviri  T:Uyku  A:Ekran Oranı  ←→:Ses  ↑↓:Kanal  OK:Liste',
                     style: TextStyle(color: Colors.white30, fontSize: 9),
                     textAlign: TextAlign.center,
                   ),
@@ -1878,12 +2056,13 @@ class _StatRow extends StatelessWidget {
 
 /// TiviMate tarzı kontrol butonu
 class _CtrlBtn extends StatelessWidget {
-  const _CtrlBtn({required this.icon, required this.label, this.onTap, this.focused = false, this.size = 26});
+  const _CtrlBtn({required this.icon, required this.label, this.onTap, this.focused = false, this.size = 26, this.color});
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
   final bool focused;
   final double size;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -1895,10 +2074,10 @@ class _CtrlBtn extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: focused ? Colors.amber : Colors.white, size: size),
+            Icon(icon, color: color ?? (focused ? Colors.amber : Colors.white), size: size),
             const SizedBox(height: 2),
             Text(label, style: TextStyle(
-              color: focused ? Colors.amber : Colors.white70, fontSize: 9,
+              color: color ?? (focused ? Colors.amber : Colors.white70), fontSize: 9,
               fontWeight: focused ? FontWeight.bold : FontWeight.normal)),            ],
         ),
       ),
@@ -1949,9 +2128,11 @@ class _VolumeHud extends StatelessWidget {
 // ==================== Subtitles Sheet ====================
 
 class _SubtitlesSheet extends StatelessWidget {
-  const _SubtitlesSheet({required this.tracks, required this.activeId});
+  const _SubtitlesSheet({required this.tracks, required this.activeId, this.geminiTranslate = false, this.onToggleGeminiTranslate});
   final List<SubtitleInfo> tracks;
   final String? activeId;
+  final bool geminiTranslate;
+  final VoidCallback? onToggleGeminiTranslate;
 
   @override
   Widget build(BuildContext context) {
@@ -2080,7 +2261,9 @@ class _SubtitlesSheet extends StatelessWidget {
               title: const Text('Dosyadan altyazı yükle', style: TextStyle(color: Colors.white, fontSize: 14)),
               subtitle: const Text('SRT, VTT, ASS, SSA, SUB', style: TextStyle(color: Colors.white38, fontSize: 11)),
               onTap: () => Navigator.of(context).pop('file'),
-            ),            ],
+            ),
+            const Divider(height: 1, color: Colors.white12),
+            ],
         ),
       ),
     );
@@ -2089,3 +2272,213 @@ class _SubtitlesSheet extends StatelessWidget {
 
 // ==================== Ağ İstatistikleri Overlay ====================
 
+
+// ==================== Yatay Kanal Seridi (Alt Panel - TiviMate tarzi) ====================
+
+class _HorizontalChannelStrip extends StatefulWidget {
+  final List<Channel> channels;
+  final int currentIndex;
+  final ValueChanged<int> onSelect;
+  final bool isVisible;
+  const _HorizontalChannelStrip({
+    required this.channels,
+    required this.currentIndex,
+    required this.onSelect,
+    this.isVisible = true,
+  });
+  @override
+  State<_HorizontalChannelStrip> createState() => _HorizontalChannelStripState();
+}
+
+class _HorizontalChannelStripState extends State<_HorizontalChannelStrip> {
+  late ScrollController _scroll;
+  int _focusIdx = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll = ScrollController();
+    _focusIdx = widget.currentIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTo(_focusIdx));
+  }
+
+  @override
+  void didUpdateWidget(covariant _HorizontalChannelStrip old) {
+    super.didUpdateWidget(old);
+    if (old.currentIndex != widget.currentIndex) {
+      _focusIdx = widget.currentIndex;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollTo(_focusIdx));
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollTo(int idx) {
+    if (!_scroll.hasClients) return;
+    final offset = idx * 104.0 - 140.0;
+    _scroll.animateTo(
+      offset.clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isVisible || widget.channels.isEmpty) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
+
+    return KeyboardListener(
+      focusNode: FocusNode(),
+      onKeyEvent: (event) {
+        if (event is! KeyDownEvent) return;
+        final key = event.logicalKey;
+        if (key == LogicalKeyboardKey.arrowRight) {
+          setState(() => _focusIdx = (_focusIdx + 1).clamp(0, widget.channels.length - 1));
+          _scrollTo(_focusIdx);
+        } else if (key == LogicalKeyboardKey.arrowLeft) {
+          setState(() => _focusIdx = (_focusIdx - 1).clamp(0, widget.channels.length - 1));
+          _scrollTo(_focusIdx);
+        } else if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
+          widget.onSelect(_focusIdx);
+        }
+      },
+      child: Container(
+        height: 90,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Color(0xCC000000), Colors.black],
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              child: Row(
+                children: [
+                  const Icon(Icons.queue_music, size: 14, color: Colors.white54),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '${widget.channels.length} kanal',
+                      style: const TextStyle(color: Colors.white60, fontSize: 11),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Text('← → geçiş  OK seç', style: TextStyle(color: Colors.white30, fontSize: 9)),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 60,
+              child: ListView.builder(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.channels.length,
+                itemBuilder: (ctx, i) {
+                  final c = widget.channels[i];
+                  final selected = i == widget.currentIndex;
+                  return GestureDetector(
+                    onTap: () => widget.onSelect(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 100,
+                      margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? colors.primary.withValues(alpha: 0.4)
+                            : Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: selected ? colors.primary : Colors.white10,
+                          width: selected ? 1.5 : 0.5,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: c.logo != null && c.logo!.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      c.logo!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => _miniFallback(c, colors),
+                                    ),
+                                  )
+                                : _miniFallback(c, colors),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            c.name.length > 12 ? '${c.name.substring(0, 11)}…' : c.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                              color: selected ? Colors.white : Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _miniFallback(Channel c, ColorScheme colors) {
+    final init = c.name.isNotEmpty ? c.name[0].toUpperCase() : '?';
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.primary.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Center(
+        child: Text(init, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colors.primary)),
+      ),
+    );
+  }
+}
+
+// ==================== Basit Player Butonu ====================
+
+class _PlayerBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+  const _PlayerBtn({required this.icon, required this.label, required this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color ?? Colors.white70, size: 22),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: color ?? Colors.white54, fontSize: 9)),
+        ],
+      ),
+    );
+  }
+}

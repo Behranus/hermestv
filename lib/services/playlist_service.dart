@@ -16,7 +16,7 @@ enum PlaylistSourceType { url, file, demo, xtream }
 
 /// Kaydedilebilir playlist kaynağı.
 class PlaylistSource {
-  const PlaylistSource(this.type, this.value, {this.isTest = false});
+  const PlaylistSource(this.type, this.value, {this.isTest = false, this.isActive = true, this.channelCount});
 
   final PlaylistSourceType type;
   final String value;
@@ -24,14 +24,24 @@ class PlaylistSource {
   /// Kaynak test bölümünden mi geldi? (kanal doğrulama + VOD kataloğu için)
   final bool isTest;
 
+  /// Kaynak aktif mi (kanal listesinde görünsün mü)
+  final bool isActive;
+
+  /// Bu kaynaktan yüklenen kanal sayısı
+  final int? channelCount;
+
+  PlaylistSource copyWith({bool? isActive, int? channelCount}) {
+    return PlaylistSource(type, value, isTest: isTest, isActive: isActive ?? this.isActive, channelCount: channelCount ?? this.channelCount);
+  }
+
   Map<String, dynamic> toJson() =>
-      {'type': type.name, 'value': value, 'test': isTest};
+      {'type': type.name, 'value': value, 'test': isTest, 'active': isActive, 'channelCount': channelCount};
 
   static PlaylistSource? fromJson(Map<String, dynamic> json) {
     final t = PlaylistSourceType.values.asNameMap()[json['type']];
     final v = json['value'] as String?;
     if (t == null || v == null || v.isEmpty) return null;
-    return PlaylistSource(t, v, isTest: json['test'] == true);
+    return PlaylistSource(t, v, isTest: json['test'] == true, isActive: json['active'] != false, channelCount: json['channelCount'] as int?);
   }
 }
 
@@ -192,5 +202,64 @@ class PlaylistService {
   static Future<void> clearSource() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_sourceKey);
+  }
+
+  // ---- Çoklu kaynak desteği (TiviMate tarzı) ----
+  static const _multiSourceKey = 'multi_sources';
+  static const _activeSourceKey = 'active_source_index';
+
+  /// Tüm IPTV kaynaklarını kaydet.
+  static Future<void> saveAllSources(List<PlaylistSource> sources) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = sources.map((s) => s.toJson()).toList();
+    await prefs.setString(_multiSourceKey, jsonEncode(jsonList));
+  }
+
+  /// Tüm IPTV kaynaklarını yükle.
+  static Future<List<PlaylistSource>> loadAllSources() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_multiSourceKey);
+    if (raw == null) return [];
+    try {
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+      return list.map((j) => PlaylistSource.fromJson(j)!).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Aktif kaynağın indeksini kaydet (son yüklenen).
+  static Future<void> saveActiveIndex(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_activeSourceKey, index);
+  }
+
+  /// Aktif kaynak indeksini al.
+  static Future<int> loadActiveIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_activeSourceKey) ?? 0;
+  }
+
+  /// Kaynağı listeye ekle veya güncelle (aynı value varsa güncelle).
+  static Future<List<PlaylistSource>> addOrUpdateSource(PlaylistSource source) async {
+    final sources = await loadAllSources();
+    final idx = sources.indexWhere((s) => s.value == source.value);
+    if (idx >= 0) {
+      sources[idx] = source;
+    } else {
+      sources.add(source);
+    }
+    await saveAllSources(sources);
+    return sources;
+  }
+
+  /// Kaynağı sil.
+  static Future<List<PlaylistSource>> removeSource(int index) async {
+    final sources = await loadAllSources();
+    if (index >= 0 && index < sources.length) {
+      sources.removeAt(index);
+      await saveAllSources(sources);
+    }
+    return sources;
   }
 }

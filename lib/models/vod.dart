@@ -86,6 +86,8 @@ class VodMovieDetails {
     this.rating,
     this.tmdbId,
     this.trailer,
+    this.cast,
+    this.director,
   });
 
   final String? plot;
@@ -96,6 +98,8 @@ class VodMovieDetails {
   final String? rating;
   final String? tmdbId;
   final String? trailer;
+  final String? cast;
+  final String? director;
 
   factory VodMovieDetails.fromJson(Map<String, dynamic> json) {
     final info = json['info'];
@@ -111,6 +115,8 @@ class VodMovieDetails {
       rating: _nonEmpty(info['rating']),
       tmdbId: _nonEmpty(info['tmdb_id']),
       trailer: _nonEmpty(info['youtube_trailer']),
+      cast: _nonEmpty(info['cast']),
+      director: _nonEmpty(info['director']),
     );
   }
 }

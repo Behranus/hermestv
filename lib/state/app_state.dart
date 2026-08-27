@@ -16,6 +16,7 @@ import 'package:hermestv/services/test_server_service.dart';
 import 'package:hermestv/services/test_vod_catalog.dart';
 import 'package:hermestv/services/xtream_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hermestv/services/settings_service.dart';
 
 /// Uygulamanın merkezi durumu: playlist, gruplar, arama, favoriler, EPG.
 class AppState extends ChangeNotifier {
@@ -23,6 +24,14 @@ class AppState extends ChangeNotifier {
   List<Channel> _channels = [];
   bool isLoading = false;
   String? error;
+  bool _showAdultContent = false;
+  bool get showAdultContent => _showAdultContent;
+
+  // Çoklu IPTV kaynağı (TiviMate tarzı)
+  List<PlaylistSource> _allSources = [];
+  int _activeSourceIndex = 0;
+  List<PlaylistSource> get allSources => List.unmodifiable(_allSources);
+  int get activeSourceIndex => _activeSourceIndex;
 
   /// Devasa listelerin (iptv-org) kademeli ayrıştırmasındaki ilerleme.
   int loadProgress = 0;
@@ -149,6 +158,10 @@ class AppState extends ChangeNotifier {
     if (q.isNotEmpty) {
       list = list.where((c) => c.name.toLowerCase().contains(q)).toList();
     }
+    // Yetişkin içerik filtresi: showAdultContent false ise yetişkin içerikleri filtrele
+    if (!_showAdultContent) {
+      list = list.where((c) => !SettingsService.isAdultContent(c.name) && !SettingsService.isAdultContent(c.group ?? '')).toList();
+    }
     return _sortChannels(list);
   }
 
@@ -168,52 +181,38 @@ class AppState extends ChangeNotifier {
       }
     } catch (_) {}
     _favorites = await FavoritesService.load();
+    _showAdultContent = await SettingsService.loadAdultContent();
+    // Tüm kaynakları yükle
+    _allSources = await PlaylistService.loadAllSources();
+    _activeSourceIndex = await PlaylistService.loadActiveIndex();
+    if (_activeSourceIndex >= _allSources.length) {
+      _activeSourceIndex = _allSources.isEmpty ? 0 : 0;
+    }
     notifyListeners();
-    // Kayıtlı kaynağı otomatik yükle (Xtream, URL, dosya).
-    final saved = await PlaylistService.restoreSource();
-    if (saved != null) {
-      unawaited(loadFromSource(saved));
+    // Kayıtlı kaynaklar varsa onları yükle, yoksa ücretsiz kanalları yükle
+    if (_allSources.isNotEmpty) {
+      unawaited(loadAllSourcesCombined());
     } else {
-      // Hiçbir kaynak kaydedilmemişse Türkçe kanalları otomatik yükle
+      // Hiç kaynak yoksa — ücretsiz Türkçe kanalları varsayılan olarak yükle
       unawaited(_loadDefaultTurkishChannels());
     }
   }
 
-  /// Varsayılan premium IPTV kaynağı (iptvnow.nl)
-  static const _defaultPremiumUser = 'da7b864def';
-  static const _defaultPremiumPass = '6a40004f00c1';
-  static const _defaultPremiumHost = 'http://iptvnow.nl:80';
-
-  /// Varsayılan olarak premium Türkçe kanalları yükler.
-  /// Xtream Codes API ile conectar — 4K/HD Türkçe kanallar en başta.
+  /// Varsayılan olarak ücretsiz Türkçe kanalları yükler.
   Future<void> _loadDefaultTurkishChannels() async {
     try {
       isLoading = true;
       notifyListeners();
-      final creds = XtreamCredentials(
-        server: _defaultPremiumHost,
-        username: _defaultPremiumUser,
-        password: _defaultPremiumPass,
-      );
-      final xtreamSource = PlaylistSource(
-        PlaylistSourceType.xtream,
-        jsonEncode(creds.toJson()),
-      );
-      await loadFromSource(xtreamSource);
+      _channels = await FreeTvService.loadCuratedTurkish();
+      _testSource = false;
+      selectedGroup = 'all';
+      isLoading = false;
+      error = null;
+      notifyListeners();
     } catch (e) {
-      // Premium çalışmazsa ücretsiz listeye düş
-      try {
-        _channels = await FreeTvService.loadCuratedTurkish();
-        _testSource = false;
-        selectedGroup = 'all';
-        isLoading = false;
-        error = null;
-        notifyListeners();
-      } catch (e2) {
-        isLoading = false;
-        error = 'Kanallar yüklenemedi: $e2';
-        notifyListeners();
-      }
+      isLoading = false;
+      error = 'Kanallar yüklenemedi: $e';
+      notifyListeners();
     }
   }
 
@@ -247,6 +246,14 @@ class AppState extends ChangeNotifier {
         if (creds == null) throw const FormatException('Xtream bilgileri eksik.');
         _channels = await XtreamService.loadLiveChannels(creds);
         await PlaylistService.saveSource(s);
+        // Çoklu kaynak listesini güncelle
+        if (!_allSources.any((src) => src.value == s.value)) {
+          _allSources.add(s);
+        }
+        _activeSourceIndex = _allSources.indexWhere((src) => src.value == s.value);
+        if (_activeSourceIndex < 0) _activeSourceIndex = 0;
+        await PlaylistService.saveAllSources(_allSources);
+        await PlaylistService.saveActiveIndex(_activeSourceIndex);
         // Kanallar hazır → yükleme durumunu HEMEN kapat; kullanıcı kanalları
         // görsün. EPG/VOD/doğrulama arka planda tamamlanır (açılışta uzun
         // bekleme → 2GB Box'ta "donuyor/çöküyor" hissinin ana nedeniydi).
@@ -280,6 +287,14 @@ class AppState extends ChangeNotifier {
           await PlaylistService.saveCache(s, _channels);
         }
         await PlaylistService.saveSource(s);
+        // Çoklu kaynak listesini güncelle
+        if (!_allSources.any((src) => src.value == s.value)) {
+          _allSources.add(s);
+        }
+        _activeSourceIndex = _allSources.indexWhere((src) => src.value == s.value);
+        if (_activeSourceIndex < 0) _activeSourceIndex = 0;
+        await PlaylistService.saveAllSources(_allSources);
+        await PlaylistService.saveActiveIndex(_activeSourceIndex);
         isLoading = false;
         loadProgress = 0;
         loadTotal = 0;
@@ -363,12 +378,14 @@ class AppState extends ChangeNotifier {
   /// Test kaynağının kanallarını doğrular: yalnızca o an açılabilenleri
   /// listede tutar. Sonuç **günde bir kez** yeniden doğrulanır (önbellek).
   Future<void> _verifyTestChannels(XtreamCredentials creds) async {
+    // Doğrulama çok ağır — sadece ilk 50 kanalı doğrula
+    // (tümünü doğrulamak 2GB Box'ta ANR yapar)
     final prefs = await SharedPreferences.getInstance();
     final key = 'test_channels_'
         '${creds.server.replaceAll(RegExp(r'[^a-z0-9]+'), '_')}';
     final tsKey = '${key}_ts';
 
-    // 24 saat içinde doğrulandıysa önbelleği kullan — günlük yenileme.
+    // 24 saat içinde doğrulandıysa önbelleği kullan
     final lastRaw = prefs.getString(tsKey);
     if (lastRaw != null) {
       final last = DateTime.tryParse(lastRaw);
@@ -376,7 +393,6 @@ class AppState extends ChangeNotifier {
           DateTime.now().difference(last) < const Duration(hours: 24)) {
         final cached = prefs.getString(key);
         if (cached != null) {
-          // JSON çözümleme UI izolatını bloklamasın diye arka planda yapılır.
           final cachedChannels =
               await compute(ChannelProbeService.decode, cached);
           if (cachedChannels.isNotEmpty) {
@@ -388,14 +404,11 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    // Taze doğrulama (ilerleme çubuğu için alanlar güncellenir).
-    final toProbe = List<Channel>.of(_channels);
+    // Sadece ilk 50 kanalı doğrula (hızlı)
+    final toProbe = List<Channel>.of(_channels.take(50));
     testProbeActive = true;
     testProbeDone = 0;
     testProbeTotal = toProbe.length;
-    notifyListeners();
-    // Her partide notifyListeners → rebuild fırtınası → 2GB Box'ta donma.
-    // Bildirimleri en fazla ~500ms'de bir gönder; çubuk yine de akıcı ilerler.
     var lastNotify = DateTime.now();
     final alive = await ChannelProbeService.probeAlive(
       toProbe,
@@ -413,12 +426,127 @@ class AppState extends ChangeNotifier {
     testProbeActive = false;
     if (alive.isNotEmpty) {
       _channels = alive;
-      // Büyük listenin JSON kodlaması arka plan izolatında yapılır.
       final encoded = await compute(ChannelProbeService.encode, alive);
       await prefs.setString(key, encoded);
       await prefs.setString(tsKey, DateTime.now().toIso8601String());
     }
     notifyListeners();
+  }
+
+  // ---- Çoklu kaynak yönetimi ----
+
+  /// Yeni bir IPTV kaynağı ekle veya mevcut olanı güncelle.
+  Future<void> addIptvSource(PlaylistSource source) async {
+    _allSources = await PlaylistService.addOrUpdateSource(source);
+    _activeSourceIndex = _allSources.length - 1;
+    await PlaylistService.saveActiveIndex(_activeSourceIndex);
+    notifyListeners();
+    // Yeni kaynağı yükle
+    await loadFromSource(source);
+  }
+
+  /// Belirli bir indeksteki kaynağa geç.
+  Future<void> switchToSource(int index) async {
+    if (index < 0 || index >= _allSources.length) return;
+    if (index == _activeSourceIndex) return;
+    _activeSourceIndex = index;
+    await PlaylistService.saveActiveIndex(index);
+    notifyListeners();
+    await loadFromSource(_allSources[index]);
+  }
+
+  /// Tüm kaynakları aynı anda yükle ve kanalları birleştir.
+  Future<void> loadAllSourcesCombined() async {
+    _allSources = await PlaylistService.loadAllSources();
+    if (_allSources.isEmpty) return;
+
+    // 1) Önce TÜM kaynaklardan cache'lenmiş kanalları hemen göster (ANR yok)
+    final allChannels = <Channel>[];
+    for (var i = 0; i < _allSources.length; i++) {
+      final src = _allSources[i];
+      if (!src.isActive) { _allSources[i] = src.copyWith(channelCount: 0); continue; }
+      try {
+        final cached = await PlaylistService.loadCached(src);
+        if (cached != null && cached.isNotEmpty) {
+          _allSources[i] = src.copyWith(channelCount: cached.length);
+          allChannels.addAll(cached);
+        }
+      } catch (_) {}
+    }
+    if (allChannels.isNotEmpty) {
+      final seen = <String>{};
+      _channels = [];
+      for (final c in allChannels) {
+        if (!seen.contains(c.url)) { seen.add(c.url); _channels.add(c); }
+      }
+      isLoading = false;
+      selectedGroup = 'all';
+      notifyListeners();
+    }
+
+    // 2) Arka planda her kaynağı yenile (UI bloklanmaz)
+    _refreshAllSourcesInBackground();
+  }
+
+  /// Arka planda tüm kaynakları yenile — UI thread'i tıkamaz.
+  Future<void> _refreshAllSourcesInBackground() async {
+    final refreshedChannels = <Channel>[];
+    for (var i = 0; i < _allSources.length; i++) {
+      final src = _allSources[i];
+      if (!src.isActive) continue;
+      try {
+        List<Channel> channels = [];
+        if (src.type == PlaylistSourceType.xtream) {
+          final creds = XtreamCredentials.fromJson(jsonDecode(src.value) as Map<String, dynamic>);
+          if (creds != null) channels = await XtreamService.loadLiveChannels(creds);
+        } else if (src.type == PlaylistSourceType.url) {
+          final xt = XtreamService.tryParsePlaylistUrl(src.value);
+          if (xt != null) { channels = await XtreamService.loadLiveChannels(xt); }
+          else { channels = await PlaylistService.load(src); }
+          if (channels.isNotEmpty) await PlaylistService.saveCache(src, channels);
+        } else {
+          channels = await PlaylistService.load(src);
+          if (channels.isNotEmpty) await PlaylistService.saveCache(src, channels);
+        }
+        _allSources[i] = src.copyWith(channelCount: channels.length);
+        refreshedChannels.addAll(channels);
+      } catch (_) {
+        _allSources[i] = src.copyWith(channelCount: 0);
+      }
+    }
+    if (refreshedChannels.isNotEmpty) {
+      await PlaylistService.saveAllSources(_allSources);
+      final seen = <String>{};
+      _channels = [];
+      for (final c in refreshedChannels) {
+        if (!seen.contains(c.url)) { seen.add(c.url); _channels.add(c); }
+      }
+      selectedGroup = 'all';
+      notifyListeners();
+    }
+  }
+
+  /// Kaynağın aktif/pasif durumunu değiştir.
+  Future<void> toggleSource(int index) async {
+    if (index < 0 || index >= _allSources.length) return;
+    final src = _allSources[index];
+    _allSources[index] = src.copyWith(isActive: !src.isActive);
+    await PlaylistService.saveAllSources(_allSources);
+    notifyListeners();
+    // Aktif kaynakları yeniden yükle
+    await loadAllSourcesCombined();
+  }
+
+  /// Belirli bir indeksteki kaynağı sil.
+  Future<void> removeIptvSource(int index) async {
+    _allSources = await PlaylistService.removeSource(index);
+    if (_activeSourceIndex >= _allSources.length) {
+      _activeSourceIndex = _allSources.isEmpty ? -1 : 0;
+    }
+    await PlaylistService.saveActiveIndex(_activeSourceIndex);
+    notifyListeners();
+    // Aktif kaynakları yeniden yükle
+    await loadAllSourcesCombined();
   }
 
   Future<void> clearPlaylist() async {
@@ -446,6 +574,10 @@ class AppState extends ChangeNotifier {
     _vodDetailsCache.clear();
     _seriesInfoCache.clear();
     await PlaylistService.clearSource();
+    _allSources = [];
+    _activeSourceIndex = 0;
+    await PlaylistService.saveAllSources([]);
+    await PlaylistService.saveActiveIndex(0);
     notifyListeners();
   }
 
@@ -457,15 +589,14 @@ class AppState extends ChangeNotifier {
     epgLoading = true;
     epgError = null;
     epgUrl = url;
-    notifyListeners();
     try {
       epg = await EpgService.load(url);
     } catch (e) {
       epgError = e.toString();
-      if (!silent) notifyListeners();
     } finally {
       epgLoading = false;
-      notifyListeners();
+      // Sadece sessiz olmayan yüklemelerde rebuild tetikle
+      if (!silent) notifyListeners();
     }
   }
 
@@ -550,8 +681,14 @@ class AppState extends ChangeNotifier {
       final movies = await XtreamService.loadVodMovies(creds);
       final series = await XtreamService.loadSeries(creds);
       vodCategories = [('all', 'Tümü'), ...cats.entries.map((e) => (e.key, e.value))];
-      vodMovies = movies;
-      vodSeries = series;
+      // Yetişkin içerikleri yükleme sırasında filtrele
+      if (!_showAdultContent) {
+        vodMovies = movies.where((m) => !SettingsService.isAdultContent(m.name)).toList();
+        vodSeries = series.where((s) => !SettingsService.isAdultContent(s.name)).toList();
+      } else {
+        vodMovies = movies;
+        vodSeries = series;
+      }
       _vodDetailsCache.clear();
       // Test kaynağı ve sunucu VOD sunmuyor → yerleşik yasal test kataloğu.
       if (_testSource && vodMovies.isEmpty && vodSeries.isEmpty) {
@@ -653,6 +790,13 @@ class AppState extends ChangeNotifier {
       .map((c) => c.$2)
       .firstOrNull;
 
+  List<(String, String)> get filteredVodCategories {
+    if (_showAdultContent) return vodCategories;
+    return vodCategories
+        .where((c) => !SettingsService.isAdultContent(c.$1) && !SettingsService.isAdultContent(c.$2))
+        .toList();
+  }
+
   List<VodMovie> get filteredVodMovies {
     var list = vodMovies;
     if (selectedVodCategory != 'all') {
@@ -661,6 +805,20 @@ class AppState extends ChangeNotifier {
     final q = vodQuery.trim().toLowerCase();
     if (q.isNotEmpty) {
       list = list.where((m) => m.name.toLowerCase().contains(q)).toList();
+    }
+    // Yetişkin içerik filtresi: hem film ismi hem kategori ismini kontrol et
+    if (!_showAdultContent) {
+      list = list.where((m) {
+        // Film ismini kontrol et
+        if (SettingsService.isAdultContent(m.name)) return false;
+        // Kategori ismini kontrol et (categoryId -> categoryName eşleme)
+        final catName = vodCategories
+            .where((c) => c.$1 == m.categoryId)
+            .map((c) => c.$2)
+            .join();
+        if (SettingsService.isAdultContent(catName)) return false;
+        return true;
+      }).toList();
     }
     return list;
   }
@@ -673,6 +831,20 @@ class AppState extends ChangeNotifier {
     final q = vodQuery.trim().toLowerCase();
     if (q.isNotEmpty) {
       list = list.where((s) => s.name.toLowerCase().contains(q)).toList();
+    }
+    // Yetişkin içerik filtresi: hem dizi ismi hem kategori ismini kontrol et
+    if (!_showAdultContent) {
+      list = list.where((s) {
+        // Dizi ismini kontrol et
+        if (SettingsService.isAdultContent(s.name)) return false;
+        // Kategori ismini kontrol et
+        final catName = vodCategories
+            .where((c) => c.$1 == s.categoryId)
+            .map((c) => c.$2)
+            .join();
+        if (SettingsService.isAdultContent(catName)) return false;
+        return true;
+      }).toList();
     }
     return list;
   }
@@ -709,6 +881,11 @@ class AppState extends ChangeNotifier {
 
   void setLastPlayed(Channel c) {
     lastPlayed = c;
+    notifyListeners();
+  }
+
+  void setShowAdultContent(bool show) {
+    _showAdultContent = show;
     notifyListeners();
   }
 }

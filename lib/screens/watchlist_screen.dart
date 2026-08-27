@@ -40,7 +40,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0D0D1A),
       body: Column(
         children: [
           // Ust bar

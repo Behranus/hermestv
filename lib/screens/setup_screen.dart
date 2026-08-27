@@ -133,7 +133,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0D0D1A),
       body: Column(
         children: [
           // Ust bar
@@ -244,6 +244,77 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
 
                 const SizedBox(height: 8),
+
+                // ── Mevcut Kaynaklar ──
+                if (state.allSources.isNotEmpty) ...[
+                  _SectionHeader(
+                    icon: Icons.list_alt_rounded,
+                    title: 'Mevcut Kaynaklar',
+                    subtitle: '${state.allSources.length} kaynak aktif',
+                  ),
+                  _SettingsCard(
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < state.allSources.length; i++)
+                          ListTile(
+                            leading: Icon(
+                              state.allSources[i].isActive
+                                  ? Icons.check_circle
+                                  : Icons.cancel_outlined,
+                              color: state.allSources[i].isActive
+                                  ? Colors.green
+                                  : Colors.red,
+                              size: 20,
+                            ),
+                            title: Text(
+                              _sourceLabel(state.allSources[i]),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: state.allSources[i].isActive
+                                    ? null
+                                    : Colors.grey,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${state.allSources[i].channelCount ?? 0} kanal',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    state.allSources[i].isActive
+                                        ? Icons.remove_circle_outline
+                                        : Icons.add_circle_outline,
+                                    color: state.allSources[i].isActive
+                                        ? Colors.orange
+                                        : Colors.green,
+                                    size: 22,
+                                  ),
+                                  tooltip: state.allSources[i].isActive
+                                      ? 'Kapat'
+                                      : 'Aç',
+                                  onPressed: () {
+                                    state.toggleSource(i);
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 20),
+                                  color: Colors.red,
+                                  tooltip: 'Sil',
+                                  onPressed: () {
+                                    state.removeIptvSource(i);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
 
                 // ── Oynatici ──
                 _SectionHeader(
@@ -365,6 +436,38 @@ class _SetupScreenState extends State<SetupScreen> {
                         ],
                       ],
                     ),
+                  ),
+                ),
+
+                // ── Icerek Ayarlari ──
+                _SectionHeader(
+                  icon: Icons.family_restroom,
+                  title: 'Icerek Ayarlari',
+                  subtitle: 'Yetiskin icerik filtresi',
+                ),
+                _SettingsCard(
+                  child: SwitchListTile(
+                    secondary: Icon(
+                      state.showAdultContent ? Icons.warning_amber_rounded : Icons.child_care_rounded,
+                      color: state.showAdultContent ? colors.tertiary : colors.primary,
+                    ),
+                    title: Text('Yetiskin Icerik Goster'),
+                    subtitle: Text(
+                      state.showAdultContent
+                          ? 'Yetiskin icerikler gorunur durumda'
+                          : 'Yetiskin icerikler gizli (varsayilan)',
+                      style: TextStyle(
+                        color: state.showAdultContent ? colors.tertiary : colors.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                    value: state.showAdultContent,
+                    onChanged: (value) async {
+                      state.setShowAdultContent(value);
+                      await SettingsService.saveAdultContent(value);
+                    },
+                    activeColor: colors.tertiary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
 

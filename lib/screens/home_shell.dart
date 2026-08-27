@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hermestv/l10n/app_localizations.dart';
 import 'package:hermestv/l10n/locale_provider.dart';
@@ -57,6 +58,7 @@ class _HomeShellState extends State<HomeShell> {
 
       if (wide) {
         return Scaffold(
+          backgroundColor: const Color(0xFF0D0D1A),
           body: Row(
             children: [
               // ─── Sol Sidebar ───
@@ -136,7 +138,7 @@ class _ZorinSidebar extends StatelessWidget {
 
     return Container(
       width: 88,
-      color: colors.surfaceContainerLow,
+      color: const Color(0xFF0D0D1A),
       child: Column(
         children: [
           // ── Logo Alanı ──
@@ -263,6 +265,52 @@ class _ZorinSidebar extends StatelessWidget {
                   ),
                 );
               },
+            ),
+          ),
+
+          // Çıkış butonu
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Uygulamadan Çık'),
+                      content: const Text('HermesTV kapatılacak. Emin misin?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+                        FilledButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            // Uygulamayı kapat
+                            exit(0);
+                          },
+                          style: FilledButton.styleFrom(backgroundColor: colors.error),
+                          child: const Text('Çık'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Icon(Icons.exit_to_app, color: colors.error, size: 22),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Çıkış',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colors.error),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
 

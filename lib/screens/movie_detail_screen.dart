@@ -5,6 +5,7 @@ import 'package:hermestv/services/resume_service.dart';
 import 'package:hermestv/services/watchlist_service.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Film detay sayfası: kompakt, tam sayfa scroll edilebilir.
 class MovieDetailScreen extends StatefulWidget {
@@ -154,6 +155,108 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+                  const SizedBox(height: 16),
+
+                  // Kadro (Oyuncular)
+                  if (details?.cast != null && details!.cast!.isNotEmpty) ...[
+                    Text('Kadro', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: details!.cast!.split(',').length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (_, i) {
+                          final actor = details!.cast!.split(',')[i].trim();
+                          return Column(
+                            children: [
+                              CircleAvatar(
+                                radius: 28,
+                                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                                child: Text(
+                                  actor.isNotEmpty ? actor[0].toUpperCase() : '?',
+                                  style: TextStyle(color: theme.colorScheme.primary, fontSize: 20, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              SizedBox(
+                                width: 70,
+                                child: Text(
+                                  actor,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.labelSmall,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Yönetmen
+                  if (details?.director != null && details!.director!.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.movie_creation_outlined, size: 16, color: theme.colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text('Yönetmen: ${details!.director}', style: theme.textTheme.bodySmall),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // YouTube Fragman
+                  if (details?.trailer != null && details!.trailer!.isNotEmpty) ...[
+                    Text('Fragman', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final url = Uri.parse('https://www.youtube.com/watch?v=${details!.trailer}');
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      child: Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.black,
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Image.network(
+                              'https://img.youtube.com/vi/${details!.trailer}/0.jpg',
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              errorBuilder: (_, _, _) => Container(
+                                color: Colors.black87,
+                                child: const Icon(Icons.play_circle_outline, size: 64, color: Colors.white70),
+                              ),
+                            ),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black45,
+                                shape: BoxShape.circle,
+                              ),
+                              padding: const EdgeInsets.all(12),
+                              child: const Icon(Icons.play_arrow_rounded, size: 48, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   const SizedBox(height: 24),
                 ],
               ),

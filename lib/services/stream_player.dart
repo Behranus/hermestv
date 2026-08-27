@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -99,8 +100,8 @@ abstract class StreamPlayer {
   Future<void> dispose();
 }
 
-/// Oynatıcı motoru: Tüm platformlarda resmi video_player (Android'de
-/// ExoPlayer, Linux'ta fvp/libmdk/FFmpeg). Tek motor, tek API.
+/// Oynatıcı motoru: Tüm platformlarda fvp/video_player.
+/// fvp registerWith options ile IPTV buffer ayarları global olarak yapılır.
 StreamPlayer createStreamPlayer({double bufferSecs = 1.0}) {
   return ExoStreamPlayer(bufferSecs: bufferSecs);
 }
@@ -109,6 +110,7 @@ class ExoStreamPlayer extends StreamPlayer {
   ExoStreamPlayer({required this.bufferSecs});
 
   VideoPlayerController? _controller;
+  VoidCallback? _controllerListener;
   int _generation = 0;
   bool _disposed = false;
   double _pendingVolume = 1.0;
@@ -144,6 +146,12 @@ class ExoStreamPlayer extends StreamPlayer {
   String? _activeAudioId;
 
   DateTime _lastPositionEmit = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Donma algılama — pozisyon 5 sn değişmezse ve oynuyorsa, yeniden bağlan
+  Duration _lastPosition = Duration.zero;
+  DateTime _lastPositionChange = DateTime.now();
+  int _stallRetries = 0;
+  static const int _maxStallRetries = 3;
 
   @override
   Stream<bool> get buffering => _buffering.stream;
@@ -185,32 +193,55 @@ class ExoStreamPlayer extends StreamPlayer {
 
   /// Sadece EKRANDAKİ oynatıcının olaylarını işler.
   void _onValueChanged(VideoPlayerController src) {
+    // fvp dispose sonrası hala event gönderebilir — tamamen koru
+    if (_disposed) return;
     final c = _controller;
-    if (c == null || _disposed) return;
+    if (c == null) return;
     if (!identical(src, c)) return;
-    final v = c.value;
-    if (v.hasError && v.errorDescription != null && v.errorDescription != _lastError) {
-      _lastError = v.errorDescription;
-      _safeAdd(_error, v.errorDescription!);
+    try {
+      final v = c.value;
+      if (v.hasError && v.errorDescription != null && v.errorDescription != _lastError) {
+        _lastError = v.errorDescription;
+        _safeAdd(_error, v.errorDescription!);
+      }
+      if (v.isPlaying && !_startedPlaying) {
+        _startedPlaying = true;
+        _safeAdd(_buffering, false);
+        _captureStreamInfo(c);
+      }
+      if (!v.isPlaying) {
+        _safeAdd(_buffering, v.isBuffering);
+      }
+      _safeAdd(_playing, v.isPlaying);
+      _safeAdd(_volume, v.volume);
+      final now = DateTime.now();
+      if (now.difference(_lastPositionEmit) >= const Duration(milliseconds: 250)) {
+        _lastPositionEmit = now;
+        _safeAdd(_position, v.position);
+        _updateSubtitleAt(v.position);
+      }
+      _safeAdd(_duration, v.duration);
+      if (v.isCompleted) _safeAdd(_completed, true);
+
+      // Donma algılama: pozisyon 5 sn değişmediyse ve oynuyorsa → yeniden bağlan
+      if (v.isPlaying && v.position == _lastPosition && _lastUrl != null) {
+        final stallDuration = DateTime.now().difference(_lastPositionChange);
+        if (stallDuration > const Duration(seconds: 5) && _stallRetries < _maxStallRetries) {
+          _stallRetries++;
+          _lastPositionChange = DateTime.now();
+          // Yeniden bağlan — URL aynı kalır
+          final url = _lastUrl!;
+          final headers = _headers;
+          unawaited(open(url, headers: headers));
+        }
+      } else if (v.isPlaying && v.position != _lastPosition) {
+        _lastPosition = v.position;
+        _lastPositionChange = DateTime.now();
+        _stallRetries = 0; // Başarılı ilerleme → sayacı sıfırla
+      }
+    } catch (_) {
+      // fvp dispose sonrası gelen son event — yok say
     }
-    if (v.isPlaying && !_startedPlaying) {
-      _startedPlaying = true;
-      _safeAdd(_buffering, false);
-      _captureStreamInfo(c);
-    }
-    if (!v.isPlaying) {
-      _safeAdd(_buffering, v.isBuffering);
-    }
-    _safeAdd(_playing, v.isPlaying);
-    _safeAdd(_volume, v.volume);
-    final now = DateTime.now();
-    if (now.difference(_lastPositionEmit) >= const Duration(milliseconds: 250)) {
-      _lastPositionEmit = now;
-      _safeAdd(_position, v.position);
-      _updateSubtitleAt(v.position);
-    }
-    _safeAdd(_duration, v.duration);
-    if (v.isCompleted) _safeAdd(_completed, true);
   }
 
   void _captureStreamInfo(VideoPlayerController c) {
@@ -251,6 +282,12 @@ class ExoStreamPlayer extends StreamPlayer {
     final old = _controller;
     if (old != null) {
       try {
+        // Listener'ı kaldır — dispose sonrası fvp StreamController hala
+        // event gönderdiğinde 'Cannot add event after closing' hatası alınır.
+        if (_controllerListener != null) {
+          old.removeListener(_controllerListener!);
+          _controllerListener = null;
+        }
         unawaited(old.pause());
       } catch (_) {}
     }
@@ -266,10 +303,11 @@ class ExoStreamPlayer extends StreamPlayer {
                 'Chrome/120.0 Mobile Safari/537.36',
           },
     );
-    c.addListener(() => _onValueChanged(c));
+    _controllerListener = () => _onValueChanged(c);
+    c.addListener(_controllerListener!);
 
     try {
-      await c.initialize().timeout(const Duration(seconds: 30));
+      await c.initialize().timeout(const Duration(seconds: 5));
     } catch (e) {
       // Kontrolcüyü serbest bırak (kaynak sızıntısı olmasın) ve hatayı bildir.
       unawaited(c.dispose());
@@ -557,7 +595,10 @@ class ExoStreamPlayer extends StreamPlayer {
     _controller = null;
     if (c != null) {
       try {
-        c.removeListener(() {});
+        if (_controllerListener != null) {
+          c.removeListener(_controllerListener!);
+          _controllerListener = null;
+        }
         await c.dispose();
       } catch (_) {}
     }
@@ -633,3 +674,5 @@ Duration _cueTime(String h, String m, String s, String ms) {
     milliseconds: int.parse(millis),
   );
 }
+
+/// ═══════════════════════════════════════════════════════════════════
