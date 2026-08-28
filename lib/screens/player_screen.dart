@@ -233,7 +233,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (_errorRetries < 1) {
         _errorRetries++;
         _retryTimer?.cancel();
-        _retryTimer = Timer(const Duration(seconds: 1), () {
+        _retryTimer = Timer(Duration(seconds: 2 + _errorRetries), () {
           if (mounted) _open(_channel);
         });
       } else {
@@ -843,6 +843,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 child: _player.buildVideo(fit: _boxFit),
               ),
 
+              // Buffering göstergesi — beyaz ekran yerine merkezi spinner
+              if (_buffering && _error == null && !_hasPlayed)
+                const Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.black,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: Colors.white70, strokeWidth: 2.5),
+                          SizedBox(height: 12),
+                          Text('Yükleniyor...', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Kanal geçiş buffer (oynarken donarsa hafif overlay)
+              if (_buffering && _hasPlayed && _error == null)
+                const Positioned.fill(
+                  child: Center(
+                    child: CircularProgressIndicator(color: Colors.white38, strokeWidth: 2),
+                  ),
+                ),
+
               // Sol overlay: kanal listesi — Focus ile kumanda tuşları
               if (_showPanel)
                 Positioned(
@@ -1047,46 +1073,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   child: _NetworkStatsOverlay(stats: _currentStats, channelName: _channel.name),
                 ),
 
-              // Alt kontrol çubuğu — Altyazı, Ses, Ekran (her zaman görünür)
-              if (_overlayVisible && !_showPanel && _error == null)
-                Positioned(
-                  left: 0, right: 0, bottom: 92,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter, end: Alignment.topCenter,
-                        colors: [Colors.black87, Colors.transparent],
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _PlayerBtn(icon: Icons.skip_previous, label: 'Önceki', onTap: () { _switchChannel(-1); }),
-                        _PlayerBtn(icon: Icons.skip_next, label: 'Sonraki', onTap: () { _switchChannel(1); }),
-                        _PlayerBtn(icon: Icons.subtitles, label: 'Altyazı', onTap: _showSubtitlesMenu),
-                        _PlayerBtn(icon: Icons.volume_up, label: 'Ses', onTap: _showAudioMenu),
-                        _PlayerBtn(icon: Icons.translate, label: _geminiTranslate ? 'Çeviri✓' : 'Çeviri', onTap: _toggleGeminiTranslate, color: _geminiTranslate ? Colors.green : null),
-                        _PlayerBtn(icon: _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen, label: _isFullScreen ? 'Küçült' : 'Tam Ekran', onTap: _toggleFullScreen),
-                        _PlayerBtn(icon: Icons.queue_music, label: 'Liste', onTap: _togglePanel),
-                      ],
-                    ),
-                  ),
-                ),
+              // Alt kontroller kaldırıldı — sadece sağ ok tuşuyla menü açılır
 
-              // Alt yatay kanal seridi (TiviMate tarzı)
-              if (!_showPanel && _error == null && widget.channels.length > 1)
-                Positioned(
-                  left: 0, right: 0, bottom: 0,
-                  child: _HorizontalChannelStrip(
-                    channels: widget.channels,
-                    currentIndex: _index,
-                    isVisible: _overlayVisible,
-                    onSelect: (i) {
-                      _openUser(widget.channels[i]);
-                    },
-                  ),
-                ),
+              // Alt kanal şeridi kaldırıldı — sadece sol panel ile kanal değiştirilir
             ],
           ),
         ),

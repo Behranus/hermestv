@@ -42,7 +42,7 @@ class FreeTvService {
   /// iptv-org (8000+), free-tv, apsattv ve özel kaynaklardan.
   static const extraSources = <(String label, String url)>[
     // ═══ KÜRT / KÜRDISTAN ═══
-    ('🟩 Kürdistan TV',
+    ('🟩 Kürtçe TV',
         'https://kurdtvs.net/iptv.php'),
     // ═══ SPOR (global) ═══
     ('⚽ Spor Kanalları Dünya',
@@ -258,70 +258,33 @@ class FreeTvService {
     String name,
     String url,
   )>[
-    // ── ULUSAL KANALLAR (en çok izlenen) ──
+    // ── ULUSAL (sadece çalışanlar — test: 2026-08-18) ──
     ('📺 Ulusal', 'TRT 1', 'https://tv-trt1.medya.trt.com.tr/master.m3u8'),
     ('📺 Ulusal', 'ATV', 'https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/atv/atv_1080p.m3u8'),
     ('📺 Ulusal', 'Kanal D', 'https://demiroren.daioncdn.net/kanald/kanald.m3u8?app=kanald_web&ce=32c97d0518e2ea74c8ea70f8075ac150'),
-    ('📺 Ulusal', 'Star TV', 'https://dogus.daioncdn.net/startv/startv_720p.m3u8?app=a20ac41e-bdc3-4aa1-934d-2ee97828304d'),
-    ('📺 Ulusal', 'A2TV', 'https://tvnet-live.daioncdn.net/a2tv/a2tv_1080p.m3u8?app=a2tv_web'),
-    ('📺 Ulusal', 'Beyaz TV', 'https://beyaztv-live.daioncdn.net/beyaz/beyaz.m3u8'),
-    ('📺 Ulusal', 'TV8', 'https://tv8-live.daioncdn.net/tv8/tv8.m3u8'),
-    // ── HABER KANALLARI ──
+    // ── HABER ──
     ('📰 Haber', 'NTV', 'https://dogus.daioncdn.net/ntv/ntv.m3u8?app=ntv_web'),
     ('📰 Haber', 'A Haber', 'https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/ahaber/ahaber.m3u8'),
     ('📰 Haber', 'Habertürk TV', 'https://tv.ensonhaber.com/haberturk/haberturk.m3u8'),
     ('📰 Haber', 'TRT Haber', 'https://tv-trthaber.medya.trt.com.tr/master.m3u8'),
-    ('📰 Haber', 'BloombergHT', 'https://ciner-live.daioncdn.net/bloomberght/bloomberght.m3u8'),
     ('📰 Haber', '360 TV', 'https://turkmedya-live.ercdn.net/tv360/tv360.m3u8'),
     ('📰 Haber', 'TGRT Haber', 'https://canli.tgrthaber.com/tgrt.m3u8'),
     ('📰 Haber', 'Haber Global', 'https://tv.ensonhaber.com/haberglobal/haberglobal.m3u8'),
-    // ── SPOR KANALLARI ──
-    ('⚽ Spor', 'TRT Spor', 'https://corestream.siteyaptim.live/trt-spor/index.m3u8'),
+    // ── SPOR ──
     ('⚽ Spor', 'A Spor', 'https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/aspor/aspor.m3u8'),
-    ('⚽ Spor', 'FB TV', 'http://1hskrdto.rocketcdn.com/fenerbahcetv.smil/playlist.m3u8'),
-    // ── BELGESEL KANALLARI ──
-    ('📚 Belgesel', 'BBC Earth Türkiye', 'https://nord.ayakkabiparti.lol/bbc/index.m3u8'),
-    ('📚 Belgesel', 'National Geographic', 'https://saran-live.ercdn.net/natgeohd/index.m3u8'),
+    // ── BELGESEL ──
     ('📚 Belgesel', 'GZT', 'https://gzttv-live.lg.mncdn.com/gzttv/gzttv/playlist.m3u8'),
-    ('📚 Belgesel', 'Discovery Channel TR', 'https://nord.ayakkabiparti.lol/discov/index.m3u8'),
-    // ── MÜZİK KANALLARI ──
-    ('🎵 Müzik', 'Kral Pop TV', 'https://tvnet-live.daioncdn.net/kralpop/kralpop.m3u8'),
-    ('🎵 Müzik', 'Kral TV', 'https://tvnet-live.daioncdn.net/kraltv/kraltv.m3u8'),
-    ('🎵 Müzik', 'PowerTürk TV', 'https://nord.ayakkabiparti.lol/powerturk/index.m3u8'),
-    ('🎵 Müzik', 'Number1 TV', 'https://nord.ayakkabiparti.lol/number1tv/index.m3u8'),
-    // ── SİNEMA KANALLARI ──
-    ('🎬 Sinema', 'beIN Movies Stars', 'https://nord.ayakkabiparti.lol/bsaction1/index.m3u8'),
-    ('🎬 Sinema', 'beIN Movies Turk', 'https://nord.ayakkabiparti.lol/bsturk/index.m3u8'),
-    ('🎬 Sinema', 'FilmBox', 'http://46.149.191.219:9100/play/a015'),
-    // ── EĞLENCE / ÇOCUK ──
-    ('🎭 Eğlence', 'TV8,5', 'https://tv8-live.daioncdn.net/tv8bant/tv8bant.m3u8'),
+    // ── ÇOCUK ──
     ('👶 Çocuk', 'TRT Çocuk', 'https://tv-trtcocuk.medya.trt.com.tr/master.m3u8'),
-    // ════════════════════════════════════════
-    // ═══ KÜRT KANALLARI ═══
-    // ════════════════════════════════════════
-    ('🟩 Kürdistan', 'Kurdistan TV', 'https://media.kurdtv.com/live/playlist.m3u8'),
-    ('🟩 Kürdistan', 'Rudaw TV HD', 'https://live.rudaw.net/rudawtv.m3u8'),
-    ('🟩 Kürdistan', 'Nalia TV', 'https://live.naliatv.com/nalia/naliatv.m3u8'),
-    ('🟩 Kürdistan', 'NRT TV', 'https://media.nrttv.com/live/nrtv.m3u8'),
-    ('🟩 Kürdistan', 'Waar TV', 'https://live.waartv.com/waar/waartv.m3u8'),
-    ('🟩 Kürdistan', 'KurdSat TV', 'https://live.kurdsat.com.tr/kurdsat/kurdsat.m3u8'),
-    ('🟩 Kürdistan', 'KurdiSat Film', 'https://live.kurdsat.com.tr/kurdsatfilm/kurdsatfilm.m3u8'),
-    ('🟩 Kürdistan', 'Rudaw Arabi', 'https://live.rudaw.net/rudawarabi/rudawarabi.m3u8'),
-    ('🟩 Kürdistan', 'Rudaw Turkmen', 'https://live.rudaw.net/rudawturkmen/rudawturkmen.m3u8'),
-    ('🟩 Kürdistan', 'Gali Kurdistan TV', 'https://media.kurdtv.com/live/gali.m3u8'),
-    // ════════════════════════════════════════
-    // ═══ ULUSLARARASI TV ═══
-    // ════════════════════════════════════════
-    ('🌍 Dünya Haber', 'Al Jazeera English', 'https://live-hls-web-aje.getaj.net/AJE/index.m3u8'),
+    // ═══ KÜRTÇE ═══
+    ('🟩 Kürtçe', 'Rudaw TV HD', 'https://live.rudaw.net/rudawtv.m3u8'),
+    ('🟩 Kürtçe', 'Rudaw Arabi', 'https://live.rudaw.net/rudawarabi/rudawarabi.m3u8'),
+    ('🟩 Kürtçe', 'Rudaw Turkmen', 'https://live.rudaw.net/rudawturkmen/rudawturkmen.m3u8'),
+    // ═══ DÜNYA ═══
     ('🌍 Dünya Haber', 'DW English', 'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8'),
     ('🌍 Dünya Haber', 'France 24 English', 'https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8'),
-    ('🌍 Dünya Haber', 'Euronews English', 'https://euronews-euronews-english-2-us.plex.wurl.tv/playlist.m3u8'),
     ('🌍 Dünya Haber', 'TRT World', 'https://tv-trtworld.medya.trt.com.tr/master.m3u8'),
-    ('🌍 Dünya Haber', 'BBC World News', 'https://nord.ayakkabiparti.lol/bbcworld/index.m3u8'),
-    ('🌍 Dünya Haber', 'CNN International', 'https://nord.ayakkabiparti.lol/cnn/index.m3u8'),
-    ('🌍 Dünya Haber', 'Bloomberg TV', 'https://cdn-live.bloomberg.tv/btv/desktop/index.m3u8'),
     ('🌍 Eğlence', 'NASA TV', 'https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8'),
-    ('🌍 Eğlence', 'Red Bull TV', 'https://rbmn-live.akamaized.net/hls/live/590964/Bossss/master.m3u8'),
   ];
 
   /// Kategorili Türkçe kanalları yükle.

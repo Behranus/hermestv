@@ -3,6 +3,7 @@ import 'package:hermestv/l10n/app_localizations.dart';
 import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hermestv/screens/free_tv_screen.dart';
 import 'package:hermestv/services/playlist_service.dart';
 import 'package:hermestv/services/settings_service.dart';
@@ -132,7 +133,14 @@ class _SetupScreenState extends State<SetupScreen> {
     final state = context.watch<AppState>();
     final colors = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        // Setup ekraninda geri tusu -> bir onceki alana don (veya kanal ekranina)
+        Navigator.of(context).maybePop();
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFF0D0D1A),
       body: Column(
         children: [
@@ -538,7 +546,8 @@ class _SetupScreenState extends State<SetupScreen> {
           ),
         ],
       ),
-    );
+      ),  // Scaffold
+    );  // PopScope
   }
 
   String _sourceLabel(PlaylistSource source) {
@@ -686,7 +695,8 @@ class _UrlCard extends StatelessWidget {
   }
 }
 
-class _XtreamCard extends StatelessWidget {
+
+class _XtreamCard extends StatefulWidget {
   const _XtreamCard({
     required this.server,
     required this.user,
@@ -704,6 +714,44 @@ class _XtreamCard extends StatelessWidget {
   final AppLocalizations loc;
 
   @override
+  State<_XtreamCard> createState() => _XtreamCardState();
+}
+
+class _XtreamCardState extends State<_XtreamCard> {
+  final _serverFocus = FocusNode();
+  final _userFocus = FocusNode();
+  final _passFocus = FocusNode();
+  final _loginFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _serverFocus.dispose();
+    _userFocus.dispose();
+    _passFocus.dispose();
+    _loginFocus.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown) {
+      if (node == _serverFocus) { _userFocus.requestFocus(); return KeyEventResult.handled; }
+      if (node == _userFocus) { _passFocus.requestFocus(); return KeyEventResult.handled; }
+      if (node == _passFocus) { _loginFocus.requestFocus(); return KeyEventResult.handled; }
+    }
+    if (key == LogicalKeyboardKey.arrowUp) {
+      if (node == _userFocus) { _serverFocus.requestFocus(); return KeyEventResult.handled; }
+      if (node == _passFocus) { _userFocus.requestFocus(); return KeyEventResult.handled; }
+      if (node == _loginFocus) { _passFocus.requestFocus(); return KeyEventResult.handled; }
+    }
+    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.select) {
+      if (node == _loginFocus) { widget.onSubmit(); return KeyEventResult.handled; }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return _SettingsCard(
@@ -714,68 +762,116 @@ class _XtreamCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.dns_rounded, size: 18, color: colors.tertiary),
-                const SizedBox(width: 8),
-                Text('Xtream Codes', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: colors.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.dns_rounded, size: 18, color: colors.tertiary),
+                ),
+                const SizedBox(width: 10),
+                Text('Xtream Codes', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
               ],
             ),
-            const SizedBox(height: 8),
-            Text('Portal + ' + loc.username + ' + ' + loc.password,
-                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: server,
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.next,
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-              decoration: InputDecoration(
-                hintText: 'http://sunucu:8080',
-                prefixIcon: const Icon(Icons.dns, size: 18),
-                isDense: true,
+            const SizedBox(height: 6),
+            Text('Portal + ${widget.loc.username} + ${widget.loc.password}',
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+            const SizedBox(height: 14),
+            Focus(
+              focusNode: _serverFocus,
+              onKeyEvent: _handleKey,
+              child: TextField(
+                controller: widget.server,
+                autofocus: false,
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.next,
+                onTapOutside: (_) => _serverFocus.unfocus(),
+                style: const TextStyle(fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: 'http://sunucu:8080',
+                  prefixIcon: const Icon(Icons.dns, size: 20),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: user,
-              textInputAction: TextInputAction.next,
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-              decoration: InputDecoration(
-                hintText: loc.username,
-                prefixIcon: const Icon(Icons.person_outline, size: 18),
-                isDense: true,
+            Focus(
+              focusNode: _userFocus,
+              onKeyEvent: _handleKey,
+              child: TextField(
+                controller: widget.user,
+                autofocus: false,
+                textInputAction: TextInputAction.next,
+                onTapOutside: (_) => _userFocus.unfocus(),
+                style: const TextStyle(fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: widget.loc.username,
+                  prefixIcon: const Icon(Icons.person_outline, size: 20),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: pass,
-              obscureText: true,
-              textInputAction: TextInputAction.done,
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-              onSubmitted: (_) => onSubmit(),
-              decoration: InputDecoration(
-                hintText: loc.password,
-                prefixIcon: const Icon(Icons.lock_outline, size: 18),
-                isDense: true,
+            Focus(
+              focusNode: _passFocus,
+              onKeyEvent: _handleKey,
+              child: TextField(
+                controller: widget.pass,
+                autofocus: false,
+                obscureText: true,
+                textInputAction: TextInputAction.done,
+                onTapOutside: (_) => _passFocus.unfocus(),
+                onSubmitted: (_) => widget.onSubmit(),
+                style: const TextStyle(fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: widget.loc.password,
+                  prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
-            if (error != null) ...[
+            if (widget.error != null) ...[
               const SizedBox(height: 10),
-              Text(error!, style: TextStyle(color: colors.error, fontSize: 13)),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colors.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, size: 16, color: colors.error),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(widget.error!, style: TextStyle(color: colors.onErrorContainer, fontSize: 13))),
+                  ],
+                ),
+              ),
             ],
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: busy ? null : onSubmit,
-                icon: busy
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.login_rounded, size: 18),
-                label: Text(busy ? loc.connecting : loc.login),
+            const SizedBox(height: 14),
+            Focus(
+              focusNode: _loginFocus,
+              onKeyEvent: _handleKey,
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: widget.busy ? null : widget.onSubmit,
+                  icon: widget.busy
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.login_rounded, size: 18),
+                  label: Text(widget.busy ? widget.loc.connecting : widget.loc.login, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
               ),
             ),
           ],
         ),
       ),
-    );
+    );  // _SettingsCard
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hermestv/screens/home_shell.dart';
 import 'package:fvp/fvp.dart' as fvp;
+import 'package:media_kit/media_kit.dart';
 import 'package:hermestv/l10n/locale_provider.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:path_provider/path_provider.dart';
@@ -29,9 +30,25 @@ void main() async {
     });
   }
 
-  // ---- fvp (libmdk/FFmpeg) video oynatıcı motoru ----
+  // ---- Oynatıcı motorları ----
+  // Android: video_player (ExoPlayer) — hafif, stabil (2GB Box ideal)
+  // Linux: fvp (libmdk/mpv) — güçlü buffer, canavar gibi IPTV
+  MediaKit.ensureInitialized();
   if (!Platform.isAndroid) {
-    fvp.registerWith();
+    fvp.registerWith(options: {
+      'video.decoders': ['VAAPI', 'VDPAU', 'FFmpeg'],
+      'lowLatency': 0,
+      'slang': 'tr,eng,und',
+      'autoLoad': true,
+      'reconnect': 1,
+      'reconnect_delay_max': 3,
+      'demuxer.buffer.duration': '120',
+      'demuxer.buffer.back_step': '30',
+      'demuxer.buffer.size': '314572800',
+      'demuxer.max_back_buffer_of_time': '120',
+      'demuxer.max_ts_offset': '120',
+      'protocol_whitelist': 'file,http,https,tcp,tls,crypto,hls',
+    });
   }
 
   // ---- 2GB RAM'li giriş seviyesi Box'lar için bellek yönetimi ----

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hermestv/models/vod.dart';
 import 'package:hermestv/screens/vod_player_screen.dart';
 import 'package:hermestv/services/resume_service.dart';
+import 'package:hermestv/services/tmdb_image_service.dart';
 import 'package:hermestv/services/watchlist_service.dart';
 import 'package:hermestv/state/app_state.dart';
 import 'package:provider/provider.dart';
@@ -48,7 +49,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 180,
+            expandedHeight: 120,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
@@ -78,7 +79,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -157,45 +158,15 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                   ],
                   const SizedBox(height: 16),
 
-                  // Kadro (Oyuncular)
+                  // Kadro (Oyuncular) — Grid layout, TMDB görselli
                   if (details?.cast != null && details!.cast!.isNotEmpty) ...[
-                    Text('Kadro', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 100,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: details!.cast!.split(',').length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemBuilder: (_, i) {
-                          final actor = details!.cast!.split(',')[i].trim();
-                          return Column(
-                            children: [
-                              CircleAvatar(
-                                radius: 28,
-                                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                                child: Text(
-                                  actor.isNotEmpty ? actor[0].toUpperCase() : '?',
-                                  style: TextStyle(color: theme.colorScheme.primary, fontSize: 20, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              SizedBox(
-                                width: 70,
-                                child: Text(
-                                  actor,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: theme.textTheme.labelSmall,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                    Text('Oyuncular', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    _CastGrid(
+                      cast: details!.cast!,
+                      tmdbId: details!.tmdbId,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                   ],
 
                   // Yönetmen
@@ -224,7 +195,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                         }
                       },
                       child: Container(
-                        height: 200,
+                        height: 150,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
                           color: Colors.black,
@@ -247,7 +218,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                                 color: Colors.black45,
                                 shape: BoxShape.circle,
                               ),
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(8),
                               child: const Icon(Icons.play_arrow_rounded, size: 48, color: Colors.white),
                             ),
                           ],
@@ -257,7 +228,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -467,5 +438,81 @@ class _WatchlistButtonState extends State<_WatchlistButton> {
       ));
     }
     _checkList();
+  }
+}
+
+// ==================== Oyuncu Grid ====================
+
+class _CastGrid extends StatefulWidget {
+  const _CastGrid({required this.cast, this.tmdbId});
+  final String cast;
+  final String? tmdbId;
+
+  @override
+  State<_CastGrid> createState() => _CastGridState();
+}
+
+class _CastGridState extends State<_CastGrid> {
+  Map<String, String> _images = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImages();
+  }
+
+  Future<void> _loadImages() async {
+    if (widget.tmdbId == null || widget.tmdbId!.isEmpty) return;
+    try {
+      final images = await TmdbImageService.fetchCastImages(widget.tmdbId!);
+      if (mounted && images.isNotEmpty) setState(() => _images = images);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final actors = widget.cast.split(',').take(12).where((a) => a.trim().isNotEmpty).toList();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: actors.map((a) {
+        final actor = a.trim();
+        final imgUrl = _images[actor];
+
+        return SizedBox(
+          width: 72,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                backgroundImage: imgUrl != null ? NetworkImage(imgUrl) : null,
+                child: imgUrl == null
+                    ? Text(
+                        actor.isNotEmpty ? actor[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                actor,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(fontSize: 10),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
   }
 }

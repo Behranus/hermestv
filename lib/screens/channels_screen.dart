@@ -365,7 +365,7 @@ class _TiviMateWideLayoutState extends State<_TiviMateWideLayout> {
       children: [
         // ── Sol Panel: Kategoriler ──
         SizedBox(
-          width: 220,
+          width: 250,
           child: _CategoriesPanel(state: state),
         ),
 
@@ -406,13 +406,34 @@ class _TiviMateWideLayoutState extends State<_TiviMateWideLayout> {
 }
 
 // ─── Kategoriler Paneli ──────────────────────────────
-class _CategoriesPanel extends StatelessWidget {
+/// Enigma2 tarzı klasörlü kategori paneli.
+/// Her sağlayıcı üst seviye klasör, altında kategoriler var.
+class _CategoriesPanel extends StatefulWidget {
   const _CategoriesPanel({required this.state});
   final AppState state;
 
   @override
+  State<_CategoriesPanel> createState() => _CategoriesPanelState();
+}
+
+class _CategoriesPanelState extends State<_CategoriesPanel> {
+  // Açık klasörlerin takibi
+  final Set<String> _expandedSources = {};
+
+  @override
+  void initState() {
+    super.initState();
+    // İlk açılışta tüm kaynakları genişlet
+    if (widget.state.sourceGroups.isNotEmpty) {
+      _expandedSources.addAll(widget.state.sourceGroups.keys);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final state = widget.state;
+    final sourceGroups = state.sourceGroups;
     final groups = state.sortedGroups;
 
     return Container(
@@ -423,7 +444,7 @@ class _CategoriesPanel extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
-              'Kategoriler',
+              'Klasörler',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -433,71 +454,200 @@ class _CategoriesPanel extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              itemCount: groups.length,
-              itemBuilder: (context, i) {
-                final g = groups[i];
-                final selected = state.selectedGroup == g;
-                final isPremium = g.toLowerCase().contains('premium');
-                final isTurkish = g.toLowerCase().contains('turk') ||
-                    g.toLowerCase().contains('tr') ||
-                    g.toLowerCase().contains('turkey');
-                final isKurdish = g.toLowerCase().contains('kurd');
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1),
-                  child: Material(
-                    color: selected
-                        ? colors.primary.withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      onTap: () => state.setGroup(g),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                        child: Row(
-                          children: [
-                            // Renkli nokta
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: isPremium
-                                    ? Colors.amber
-                                    : isTurkish
-                                        ? colors.primary
-                                        : isKurdish
-                                            ? const Color(0xFFE54D6E)
-                                            : colors.onSurfaceVariant.withValues(alpha: 0.5),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                i == 0 ? 'Tum Kanallar' : g,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                                  color: selected ? colors.primary : colors.onSurface,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (selected)
-                              Icon(Icons.chevron_right, size: 16, color: colors.primary),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
+              children: [
+                // Tüm Kanallar
+                _buildAllChannelsItem(state, colors),
+                // Kaynak bazlı klasörler
+                if (sourceGroups.isNotEmpty)
+                  for (final entry in sourceGroups.entries)
+                    _buildSourceFolder(entry.key, entry.value, state, colors),
+                // Kaynak yoksa düz grup listesi
+                if (sourceGroups.isEmpty)
+                  for (int i = 1; i < groups.length; i++)
+                    _buildGroupItem(groups[i], state, colors),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAllChannelsItem(AppState state, ColorScheme colors) {
+    final selected = state.selectedGroup == 'all' && state.selectedSource == null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Material(
+        color: selected ? colors.primary.withValues(alpha: 0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () => state.selectSource(null),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            child: Row(
+              children: [
+                Icon(Icons.all_inclusive, size: 16, color: colors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Tüm Kanallar',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected ? colors.primary : colors.onSurface,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  Icon(Icons.chevron_right, size: 16, color: colors.primary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Enigma2 tarzı klasör: kaynak adı + altında gruplar
+  Widget _buildSourceFolder(String sourceName, List<String> srcGroups, AppState state, ColorScheme colors) {
+    final expanded = _expandedSources.contains(sourceName);
+    final sourceSelected = state.selectedSource == sourceName;
+    // Kısaltılmış isim
+    final shortName = sourceName.length > 25 ? '${sourceName.substring(0, 22)}...' : sourceName;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Klasör başlığı (kaynak adı)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 1),
+        child: Material(
+          color: sourceSelected && state.selectedGroup == 'all'
+              ? Colors.amber.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            onTap: () {
+              setState(() {
+                if (expanded) {
+                  _expandedSources.remove(sourceName);
+                } else {
+                  _expandedSources.add(sourceName);
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              child: Row(
+                children: [
+                  Icon(
+                    expanded ? Icons.folder_open : Icons.folder,
+                    size: 18,
+                    color: Colors.amber,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          shortName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${srcGroups.length} kategori · aktif',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: colors.onSurfaceVariant.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: colors.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        ),
+        // Genişletildiyse grupları göster
+        if (expanded) ...[
+          for (final g in srcGroups)
+            _buildGroupItem(g, state, colors, indent: true),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGroupItem(String group, AppState state, ColorScheme colors, {bool indent = false}) {
+    final selected = state.selectedGroup == group;
+    final u = group.toUpperCase();
+    final isTurkish = u.startsWith('TR') || u.contains('TURK') || u.contains('TÜRK');
+    final isKurdish = u.contains('KÜRT') || u.contains('KURD');
+    final isBein = u.contains('BEIN');
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: indent ? 36 : 0,
+        top: 1,
+        bottom: 1,
+      ),
+      child: Material(
+        color: selected ? colors.primary.withValues(alpha: 0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () => state.setGroup(group),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: isTurkish
+                        ? colors.primary
+                        : isKurdish
+                            ? const Color(0xFFE54D6E)
+                            : isBein
+                                ? Colors.amber
+                                : colors.onSurfaceVariant.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    group,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected ? colors.primary : colors.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (selected)
+                  Icon(Icons.chevron_right, size: 14, color: colors.primary),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Android TV / Box uyumluluğu: dokunmatik ekran ve leanback GEREKLİ değil.
          Bu olmadan bazı TV launcher'ları uygulamayı görmez/göstermez. -->
     <uses-feature

@@ -22,6 +22,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   final Set<int> _visited = {0};
+  DateTime? _lastBackPress;
 
   void _select(int i) {
     setState(() {
@@ -53,7 +54,31 @@ class _HomeShellState extends State<HomeShell> {
     });
     final body = IndexedStack(index: _index, children: placeholders);
 
-    return LayoutBuilder(builder: (context, constraints) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final now = DateTime.now();
+        if (_lastBackPress != null && now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+          // İkinci basış — çıkış
+          if (Platform.isAndroid) {
+            Navigator.of(context).pop();
+          } else {
+            // Linux'ta uygulamayı kapat
+            exit(0);
+          }
+        } else {
+          _lastBackPress = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Çıkmak için tekrar basın', textAlign: TextAlign.center),
+              duration: Duration(seconds: 2),
+              backgroundColor: Color(0xFF161B22),
+            ),
+          );
+        }
+      },
+      child: LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 720;
 
       if (wide) {
@@ -108,7 +133,8 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       );
-    });
+    }),
+  );
   }
 }
 

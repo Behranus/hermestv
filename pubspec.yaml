@@ -42,6 +42,7 @@ dependencies:
   path_provider: ^2.1.6
   file_picker: ^12.0.0
   wakelock_plus: ^1.7.0
+
   xml: ^6.6.1
 
   # Linux masaüstü oynatıcı motoru (media_kit/libmpv) — yalnızca Linux'ta

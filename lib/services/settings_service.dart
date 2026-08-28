@@ -28,22 +28,15 @@ class SettingsService {
 
   // Yetişkin içerik filtresi için kelime listesi (Türkçe + İngilizce)
   static const List<String> adultKeywords = [
-    // İngilizce
-    'xxx', 'porn', 'adult', '18+', 'sex', 'sexy', 'nsfw',
-    'nude', 'naked', 'hentai', 'fetish', 'mature', 'playboy', 'penthouse',
-    'onlyfans', 'brazzers', 'bangbros', 'realitykings', 'private',
-    'pron', 'xvideo', 'xhamster', 'youporn', 'pornhub', 'redtube',
-    'cam girl', 'live sex', 'strip', 'escort', 'xxx rated', 'x rated',
-    'erotic', 'erotica', 'erotics', 'pink', 'golden', 'adult movies',
-    'adult video', 'hot', 'xxx movies', 'xxx video', 'film porno',
-    'video xxx', 'film xxx', 'sex movie', 'adult film', 'blue',
-    'adult channel', 'adult tv', 'live cam', 'web cam', 'adult live',
-    'xxx live', 'sex live', 'hot movie', 'adult show',
-    // Türkçe
-    'erotik', 'cinsel', 'sex', 'seks', 'porn', 'erotik film',
-    'yetişkin', 'yetenek', '18 yaş', 'yasak', 'yasak film',
-    'sex filmi', 'erotik filmi', 'seks filmi', 'film izle',
-    'canlı sex', 'canlı seks', 'erotik kanal', 'sex kanalı',
+    // Sadece kesinlikle yetişkin içeriği — normal filmleri ETKILEMEZ
+    'xxx', 'porn', 'nsfw', 'nude', 'naked', 'hentai', 'fetish',
+    'onlyfans', 'brazzers', 'bangbros', 'realitykings',
+    'xvideo', 'xhamster', 'youporn', 'pornhub', 'redtube',
+    'erotik film', 'erotik kanal', 'sex kanalı', 'canlı seks',
+    'adult film', 'adult channel', 'adult tv', 'adult live',
+    'xxx live', 'sex live', 'xxx movies', 'xxx video',
+    'film porno', 'video xxx', 'film xxx',
+    'erotik filmi', 'seks filmi',
   ];
 
   /// Yetişkin içerik gösterimi (varsayılan: false = gizli).

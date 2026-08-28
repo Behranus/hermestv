@@ -9,7 +9,7 @@ import 'package:hermestv/models/vod.dart';
 import 'package:hermestv/services/channel_probe_service.dart';
 import 'package:hermestv/services/epg_service.dart';
 import 'package:hermestv/services/favorites_service.dart';
-import 'package:hermestv/services/free_tv_service.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:hermestv/services/playlist_service.dart';
 import 'package:hermestv/services/test_server_service.dart';
@@ -27,11 +27,20 @@ class AppState extends ChangeNotifier {
   bool _showAdultContent = false;
   bool get showAdultContent => _showAdultContent;
 
-  // Çoklu IPTV kaynağı (TiviMate tarzı)
+  // Çoklu IPTV kaynağı (Enigma2 tarzı klasörlü yapı)
   List<PlaylistSource> _allSources = [];
   int _activeSourceIndex = 0;
   List<PlaylistSource> get allSources => List.unmodifiable(_allSources);
   int get activeSourceIndex => _activeSourceIndex;
+
+  // Kaynak bazlı grup haritası: kaynak adı → [grup adları]
+  // Her sağlayıcı kendi klasör yapısını oluşturur.
+  Map<String, List<String>> _sourceGroups = {};
+  Map<String, List<String>> get sourceGroups => Map.unmodifiable(_sourceGroups);
+
+  // Seçili kaynak (null ise tüm kaynakları göster)
+  String? _selectedSource;
+  String? get selectedSource => _selectedSource;
 
   /// Devasa listelerin (iptv-org) kademeli ayrıştırmasındaki ilerleme.
   int loadProgress = 0;
@@ -85,58 +94,112 @@ class AppState extends ChangeNotifier {
     return ['all', ...list];
   }
 
-  /// Gruplar: Türkçe en başta, Kürtçe ikinci, sonra alfabetik.
+  /// Gruplar: Türkçe en başta, beIN Sports ikinci, Kürtçe üçüncü, sonra diğerleri alfabetik.
   List<String> get sortedGroups {
     final list = groups.where((g) => g != 'all').toList();
     final trGroups = <String>[];
+    final beinGroups = <String>[];
     final kurdGroups = <String>[];
     final otherGroups = <String>[];
     for (final g in list) {
-      final upper = g.toUpperCase();
-      if (upper.startsWith('TR') || upper.contains('TURK') ||
-          upper.contains('TÜRK') || upper.contains('ULUSAL') ||
-          upper.contains('HABER') || upper.contains('SPOR') ||
-          upper.contains('BELGESEL') || upper.contains('SİNEMA') ||
-          upper.contains('MÜZİK') || upper.contains('EĞLENCE') ||
-          upper.contains('ÇOCUK')) {
+      final u = g.toUpperCase();
+      if (u.contains('BEIN') || u.contains('SPORTS')) {
+        beinGroups.add(g);
+      } else if (_isTrGroup(u)) {
         trGroups.add(g);
-      } else if (upper.contains('KÜRT') || upper.contains('KURD') ||
-                 g.startsWith('🟩')) {
+      } else if (_isKurdGroup(u)) {
         kurdGroups.add(g);
       } else {
         otherGroups.add(g);
       }
     }
-    return ['all', ...trGroups, ...kurdGroups, ...otherGroups..sort()];
+    return ['all', ...trGroups, ...beinGroups, ...kurdGroups, ...otherGroups..sort()];
   }
 
-  /// Kanalları sırala: Türkçe en başta, Kürtçe ikincide, geri kalan alfabetik.
+  /// Türkçe grup mu?
+  bool _isTrGroup(String u) {
+    return u.startsWith('TR') || u.contains('TURK') ||
+        u.contains('TÜRK') || u.contains('ULUSAL') ||
+        u.contains('HABER') || u.contains('SPOR') ||
+        u.contains('BELGESEL') || u.contains('SİNEMA') ||
+        u.contains('MÜZİK') || u.contains('EĞLENCE') ||
+        u.contains('ÇOCUK') || u.contains('YEREL') ||
+        u.contains('DİNİ') || u.contains('TARİH') ||
+        u.contains('TURKIYE') || u.contains('TURKEY');
+  }
+
+  /// Kürtçe grup mu?
+  bool _isKurdGroup(String u) {
+    return u.contains('KÜRT') || u.contains('KURD') ||
+        u.contains('KURDISTAN') || u.startsWith('🟩');
+  }
+
+  /// Türkçe kanal mı? (kanal adı veya tvgId kontrol)
+  bool _isTrChannel(Channel c) {
+    final n = c.name.toUpperCase();
+    final tid = (c.tvgId ?? '').toUpperCase();
+    // TR ile başlayan veya "TR" ile biten kanal adları (en güvenilir)
+    if (n.startsWith('TRT') || n.contains(' TR') || n.endsWith(' TR')) {
+      return true;
+    }
+    // Tanınmış Türk kanal isimleri (sadece kesin olanlar)
+    final trChannels = [
+      'ATV', 'KANAL D', 'STAR TV', 'SHOW TV', 'A HABER', 'A SPOR',
+      'CNN TÜRK', 'HABERTÜRK', 'TELE1', 'TGRT', 'BEYAZ TV', 'DALGA TV',
+      'İMC TV', 'HABER GLOBAL', 'EKONOMİ', 'DEHA TV', 'DOLUNAY TV',
+      'ÜLKE TV', 'ULKE TV', 'TRT MÜZİK', 'TRT HABER', 'TRT ÇOCUK',
+      'TRT BELGESEL', 'TRT SPOR', 'TRT DÜNYA', 'TRT ARAPÇA',
+      'TRT KÜRTÇE', 'TRT TÜRK', 'TRT AVAZ', 'TRT TÜRKMUZIK',
+      'BLOOMBERG HT', 'NTV', 'TV8', 'NOW',
+    ];
+    for (final ch in trChannels) {
+      if (n.contains(ch)) return true;
+    }
+    // tvgId'de Türkiye kodu varsa
+    if (tid.startsWith('TR') || tid.contains('TURKEY')) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Kürtçe kanal mı?
+  bool _isKurdChannel(Channel c) {
+    final n = c.name.toUpperCase();
+    final g = c.displayGroup.toUpperCase();
+    return g.contains('KÜRT') || g.contains('KURD') ||
+        g.contains('KURDISTAN') || g.startsWith('🟩') ||
+        n.contains('KURD') || n.contains('RUDAW') ||
+        n.contains('NRT') || n.contains('WAAR') ||
+        n.contains('NALIA') || n.contains('KURDSAT') ||
+        n.contains('ZAROK') || n.contains('CIVAKA') ||
+        n.contains('ÇAVKANÎ') || n.contains('GUNDOGDU') ||
+        n.contains('STERK TV') || n.contains('KURDISTAN TV');
+  }
+
+  /// Kanalları sırala: Türkçe en başta, beIN Sports ikinci, Kürtçe üçüncü, sonra alfabetik.
   List<Channel> _sortChannels(List<Channel> channels) {
     final turkish = <Channel>[];
+    final bein = <Channel>[];
     final kurdish = <Channel>[];
     final others = <Channel>[];
     for (final c in channels) {
       final g = c.displayGroup.toUpperCase();
       final n = c.name.toUpperCase();
-      if (g.startsWith('TR') || g.contains('TURK') || g.contains('TÜRK') ||
-          g.contains('ULUSAL') || g.contains('HABER') || g.contains('SPOR') ||
-          g.contains('BELGESEL') || g.contains('SİNEMA') || g.contains('MÜZİK') ||
-          g.contains('EĞLENCE') || g.contains('ÇOCUK') ||
-          n.contains('TRT') || n.contains('ATV') || n.contains('KANAL D') ||
-          n.contains('STAR TV') || n.contains('TV8') || n.contains('NTV') ||
-          n.contains('A HABER') || n.contains('SHOW TV')) {
+      final isBein = n.contains('BEIN') || n.contains('BE\u0130N');
+      if (isBein) {
+        bein.add(c);
+      } else if (_isTrGroup(g) || _isTrChannel(c)) {
         turkish.add(c);
-      } else if (g.contains('KÜRT') || g.contains('KURD') ||
-                 g.startsWith('🟩') ||
-                 n.contains('KURD') || n.contains('RUDAW') ||
-                 n.contains('NRT') || n.contains('WAAR') ||
-                 n.contains('NALIA') || n.contains('KURDSAT')) {
+      } else if (_isKurdGroup(g) || _isKurdChannel(c)) {
         kurdish.add(c);
       } else {
         others.add(c);
       }
     }
-    return [...turkish, ...kurdish, ...others];
+    turkish.sort((a, b) => a.name.compareTo(b.name));
+    bein.sort((a, b) => a.name.compareTo(b.name));
+    kurdish.sort((a, b) => a.name.compareTo(b.name));
+    return [...turkish, ...bein, ...kurdish, ...others];
   }
 
   bool get hasChannels => _channels.isNotEmpty;
@@ -151,6 +214,10 @@ class AppState extends ChangeNotifier {
   /// Seçili gruba ve arama sorgusuna göre filtrelenmiş kanallar.
   List<Channel> get filteredChannels {
     var list = _channels;
+    // Kaynak bazlı filtreleme
+    if (_selectedSource != null) {
+      list = list.where((c) => _sourceNameForChannel(c) == _selectedSource).toList();
+    }
     if (selectedGroup != 'all') {
       list = list.where((c) => c.displayGroup == selectedGroup).toList();
     }
@@ -158,11 +225,36 @@ class AppState extends ChangeNotifier {
     if (q.isNotEmpty) {
       list = list.where((c) => c.name.toLowerCase().contains(q)).toList();
     }
-    // Yetişkin içerik filtresi: showAdultContent false ise yetişkin içerikleri filtrele
+    // Yetişkin içerik filtresi
     if (!_showAdultContent) {
       list = list.where((c) => !SettingsService.isAdultContent(c.name) && !SettingsService.isAdultContent(c.group ?? '')).toList();
     }
     return _sortChannels(list);
+  }
+
+  /// Kanalın hangi kaynaktan geldiğini bul
+  String _sourceNameForChannel(Channel c) {
+    for (var i = 0; i < _allSources.length; i++) {
+      final src = _allSources[i];
+      if (!src.isActive) continue;
+      final srcName = _sourceName(src);
+      final groups = _sourceGroups[srcName];
+      if (groups != null && groups.contains(c.displayGroup)) return srcName;
+    }
+    return 'Bilinmeyen';
+  }
+
+  /// Kaynak seç veya kaldır
+  void selectSource(String? srcName) {
+    _selectedSource = srcName;
+    selectedGroup = 'all';
+    notifyListeners();
+  }
+
+  /// Seçili kaynağın gruplarını getir
+  List<String> get sourceGroupsList {
+    if (_selectedSource == null) return sortedGroups;
+    return _sourceGroups[_selectedSource] ?? [];
   }
 
   List<Channel> get favoriteChannels => _sortChannels(
@@ -189,33 +281,27 @@ class AppState extends ChangeNotifier {
       _activeSourceIndex = _allSources.isEmpty ? 0 : 0;
     }
     notifyListeners();
-    // Kayıtlı kaynaklar varsa onları yükle, yoksa ücretsiz kanalları yükle
+    // Kayıtlı kaynaklar varsa onları yükle, yoksa premium varsayılan kaynağı ekle
     if (_allSources.isNotEmpty) {
       unawaited(loadAllSourcesCombined());
     } else {
-      // Hiç kaynak yoksa — ücretsiz Türkçe kanalları varsayılan olarak yükle
-      unawaited(_loadDefaultTurkishChannels());
+      // Varsayılan ücretsiz Türkçe IPTV kaynağı (iptv-org — 164 kanal)
+      final defaultSource = const PlaylistSource(
+        PlaylistSourceType.url,
+        'https://iptv-org.github.io/iptv/countries/tr.m3u',
+      );
+      _allSources = [defaultSource];
+      _activeSourceIndex = 0;
+      await PlaylistService.saveAllSources(_allSources);
+      await PlaylistService.saveActiveIndex(_activeSourceIndex);
+      await PlaylistService.saveSource(defaultSource);
+      notifyListeners();
+      unawaited(loadFromSource(defaultSource));
     }
   }
 
   /// Varsayılan olarak ücretsiz Türkçe kanalları yükler.
-  Future<void> _loadDefaultTurkishChannels() async {
-    try {
-      isLoading = true;
-      notifyListeners();
-      _channels = await FreeTvService.loadCuratedTurkish();
-      _testSource = false;
-      selectedGroup = 'all';
-      isLoading = false;
-      error = null;
-      notifyListeners();
-    } catch (e) {
-      isLoading = false;
-      error = 'Kanallar yüklenemedi: $e';
-      notifyListeners();
-    }
-  }
-
+  /// Günlük yenileme: son yüklemeden 24 saat geçtiyse yeniden dener.
   Future<void> loadFromSource(PlaylistSource s) async {
     isLoading = true;
     error = null;
@@ -261,11 +347,8 @@ class AppState extends ChangeNotifier {
         notifyListeners();
         unawaited(_loadEpg(XtreamService.epgUrl(creds), silent: true));
         unawaited(_tryLoadVod());
-        // Test kaynağı: kanalları doğrula (yalnızca açılanlar listelensin —
-        // günde bir kez; önbellekli).
-        if (_testSource) {
-          unawaited(_verifyTestChannels(creds));
-        }
+        // Probe devre dışı — Xtream yüklemesinde ANR yapmasın.
+        // Kanallar doğrudan listelenir, açılmayanlar oynatılırken hata verir.
         return;
       } else {
         // Disk önbelleği: devasa ücretsiz kanal listeleri (iptv-org) her
@@ -377,6 +460,7 @@ class AppState extends ChangeNotifier {
 
   /// Test kaynağının kanallarını doğrular: yalnızca o an açılabilenleri
   /// listede tutar. Sonuç **günde bir kez** yeniden doğrulanır (önbellek).
+  // ignore: unused_element
   Future<void> _verifyTestChannels(XtreamCredentials creds) async {
     // Doğrulama çok ağır — sadece ilk 50 kanalı doğrula
     // (tümünü doğrulamak 2GB Box'ta ANR yapar)
@@ -462,14 +546,20 @@ class AppState extends ChangeNotifier {
 
     // 1) Önce TÜM kaynaklardan cache'lenmiş kanalları hemen göster (ANR yok)
     final allChannels = <Channel>[];
+    _sourceGroups = {};
     for (var i = 0; i < _allSources.length; i++) {
       final src = _allSources[i];
+      final srcName = _sourceName(src);
       if (!src.isActive) { _allSources[i] = src.copyWith(channelCount: 0); continue; }
       try {
         final cached = await PlaylistService.loadCached(src);
         if (cached != null && cached.isNotEmpty) {
           _allSources[i] = src.copyWith(channelCount: cached.length);
           allChannels.addAll(cached);
+          // Bu kaynağın gruplarını haritaya ekle
+          final groups = <String>{};
+          for (final c in cached) { groups.add(c.displayGroup); }
+          _sourceGroups[srcName] = groups.toList()..sort();
         }
       } catch (_) {}
     }
@@ -488,12 +578,36 @@ class AppState extends ChangeNotifier {
     _refreshAllSourcesInBackground();
   }
 
+  /// Kaynağın kısa adını döndür (URL'den veya Xtream'den)
+  String _sourceName(PlaylistSource src) {
+    if (src.type == PlaylistSourceType.xtream) {
+      try {
+        final creds = XtreamCredentials.fromJson(jsonDecode(src.value) as Map<String, dynamic>);
+        if (creds != null) return creds.server;
+      } catch (_) {}
+    }
+    // URL'den kısa ad üret
+    try {
+      final uri = Uri.parse(src.value);
+      return uri.host.replaceAll('www.', '');
+    } catch (_) {}
+    return 'Kaynak ${_allSources.indexOf(src) + 1}';
+  }
+
   /// Arka planda tüm kaynakları yenile — UI thread'i tıkamaz.
   Future<void> _refreshAllSourcesInBackground() async {
+    // Tamamen bağımsız çalışır — _allSources üzerinde yazmaz.
+    final snapshot = List<PlaylistSource>.from(_allSources);
     final refreshedChannels = <Channel>[];
-    for (var i = 0; i < _allSources.length; i++) {
-      final src = _allSources[i];
-      if (!src.isActive) continue;
+    final newGroups = Map<String, List<String>>.from(_sourceGroups);
+    final updatedSources = <PlaylistSource>[];
+
+    for (final src in snapshot) {
+      if (!src.isActive) {
+        updatedSources.add(src.copyWith(channelCount: 0));
+        continue;
+      }
+      final srcName = _sourceName(src);
       try {
         List<Channel> channels = [];
         if (src.type == PlaylistSourceType.xtream) {
@@ -508,12 +622,19 @@ class AppState extends ChangeNotifier {
           channels = await PlaylistService.load(src);
           if (channels.isNotEmpty) await PlaylistService.saveCache(src, channels);
         }
-        _allSources[i] = src.copyWith(channelCount: channels.length);
+        updatedSources.add(src.copyWith(channelCount: channels.length));
         refreshedChannels.addAll(channels);
+        final groups = <String>{};
+        for (final c in channels) { groups.add(c.displayGroup); }
+        newGroups[srcName] = groups.toList()..sort();
       } catch (_) {
-        _allSources[i] = src.copyWith(channelCount: 0);
+        updatedSources.add(src.copyWith(channelCount: 0));
       }
     }
+
+    // Tek seferde tüm güncellemeleri uygula (race condition yok)
+    _allSources = updatedSources;
+    _sourceGroups = newGroups;
     if (refreshedChannels.isNotEmpty) {
       await PlaylistService.saveAllSources(_allSources);
       final seen = <String>{};
@@ -640,8 +761,9 @@ class AppState extends ChangeNotifier {
   Future<void> _tryLoadVod() async {
     try {
       await loadVod();
-    } catch (_) {
-      // VOD yüklenemezse canlı kanallar yine de kullanılabilir.
+    } catch (e) {
+      vodError = 'VOD yüklenemedi: $e';
+      notifyListeners();
     }
   }
 
@@ -677,9 +799,17 @@ class AppState extends ChangeNotifier {
     vodError = null;
     notifyListeners();
     try {
-      final cats = await XtreamService.loadVodCategories(creds);
-      final movies = await XtreamService.loadVodMovies(creds);
-      final series = await XtreamService.loadSeries(creds);
+      // 3 isteği PARALEL çalıştır — sıralı yapınca 2GB Box'ta OOM crash
+      final results = await Future.wait([
+        XtreamService.loadVodCategories(creds).catchError((_) => <String, String>{}),
+        XtreamService.loadVodMovies(creds).catchError((_) => <VodMovie>[]),
+        XtreamService.loadSeries(creds).catchError((_) => <VodSeries>[]),
+      ], eagerError: false);
+
+      final cats = results[0] as Map<String, String>;
+      final movies = results[1] as List<VodMovie>;
+      final series = results[2] as List<VodSeries>;
+
       vodCategories = [('all', 'Tümü'), ...cats.entries.map((e) => (e.key, e.value))];
       // Yetişkin içerikleri yükleme sırasında filtrele
       if (!_showAdultContent) {
@@ -695,7 +825,7 @@ class AppState extends ChangeNotifier {
         _loadDemoVod();
       }
     } catch (e) {
-      vodError = e.toString();
+      vodError = 'VOD yüklenemedi: $e';
       if (_testSource) _loadDemoVod();
     } finally {
       vodLoading = false;
@@ -723,12 +853,48 @@ class AppState extends ChangeNotifier {
       return details;
     }
     final creds = _creds;
-    if (creds == null) return null;
+    if (creds != null) {
+      try {
+        final details = await XtreamService.loadVodMovieDetails(creds, movieId);
+        _vodDetailsCache[movieId] = details;
+        notifyListeners();
+        return details;
+      } catch (_) {}
+    }
+    // Xtream creds yoksa — OMDB API ile film bilgisi çek (ücretsiz)
+    final movie = vodMovies.where((m) => m.id == movieId).firstOrNull;
+    if (movie != null) {
+      try {
+        final details = await _fetchFromOmdb(movie.name);
+        if (details != null) {
+          _vodDetailsCache[movieId] = details;
+          notifyListeners();
+          return details;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// OMDB API ile film bilgisi çek (ücretsiz, 1000 istek/gün).
+  Future<VodMovieDetails?> _fetchFromOmdb(String title) async {
     try {
-      final details = await XtreamService.loadVodMovieDetails(creds, movieId);
-      _vodDetailsCache[movieId] = details;
-      notifyListeners();
-      return details;
+      final uri = Uri.parse(
+          'https://www.omdbapi.com/?t=${Uri.encodeComponent(title)}&apikey=trilogy');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return null;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      if (data['Response'] == 'False') return null;
+      return VodMovieDetails(
+        plot: data['Plot'] != null && data['Plot'] != 'N/A' ? data['Plot'] : null,
+        backdrop: data['Poster'] != null && data['Poster'] != 'N/A' ? data['Poster'] : null,
+        genre: data['Genre'] != null && data['Genre'] != 'N/A' ? data['Genre'] : null,
+        year: data['Year'] != null && data['Year'] != 'N/A' ? data['Year'] : null,
+        duration: data['Runtime'] != null && data['Runtime'] != 'N/A' ? data['Runtime'] : null,
+        rating: data['imdbRating'] != null && data['imdbRating'] != 'N/A' ? data['imdbRating'] : null,
+        director: data['Director'] != null && data['Director'] != 'N/A' ? data['Director'] : null,
+        cast: data['Actors'] != null && data['Actors'] != 'N/A' ? data['Actors'] : null,
+      );
     } catch (_) {
       return null;
     }

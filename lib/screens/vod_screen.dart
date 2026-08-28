@@ -60,6 +60,30 @@ class _VodScreenState extends State<VodScreen> with SingleTickerProviderStateMix
             const SizedBox(height: 8),
             Text(context.watch<LocaleProvider>().loc.vodXtreamHint,
                 style: TextStyle(color: colors.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13)),
+            if (state.vodError != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 32),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.errorContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: colors.error, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(state.vodError!, style: TextStyle(color: colors.onErrorContainer, fontSize: 13))),
+                  ],
+                ),
+              ),
+            ],
+            if (state.vodLoading) ...[
+              const SizedBox(height: 20),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 8),
+              Text('VOD yükleniyor...', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
+            ],
           ],
         ),
       );

@@ -855,73 +855,76 @@ class _VodSubtitlesSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final hasStreamTracks = tracks.isNotEmpty;
 
+    // Ekranın %80'ini geçmeyen dinamik yükseklik
+    final maxH = MediaQuery.of(context).size.height * 0.8;
+
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('Altyazılar', style: theme.textTheme.titleLarge),
-          ),
-          ListTile(
-            leading: const Icon(Icons.subtitles_off),
-            title: const Text('Kapalı'),
-            trailing: activeId == null || activeId == 'off'
-                ? const Icon(Icons.check, color: Colors.green)
-                : null,
-            onTap: () => Navigator.of(context).pop('off'),
-          ),
-          if (hasStreamTracks) ...[
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Text('Akış altyazıları', style: theme.textTheme.labelLarge),
-            ),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: tracks.length,
-                itemBuilder: (context, i) {
-                  final t = tracks[i];
-                  final label = [t.title, t.language]
-                      .whereType<String>()
-                      .where((s) => s.isNotEmpty)
-                      .join(' • ');
-                  return ListTile(
-                    leading: const Icon(Icons.subtitles),
-                    title: Text(label.isEmpty ? 'Parça ${i + 1}' : label),
-                    trailing: activeId == t.id
-                        ? const Icon(Icons.check, color: Colors.green)
-                        : null,
-                    onTap: () => Navigator.of(context).pop(t.id),
-                  );
-                },
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('Altyazılar', style: theme.textTheme.titleLarge),
               ),
-            ),
-          ],
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.language, color: Colors.amber),
-            title: const Text('OpenSubtitles\'da ara'),
-            subtitle: const Text('İnternette altyazı bul ve yükle'),
-            onTap: () => Navigator.of(context).pop('opensubtitles'),
+              ListTile(
+                leading: const Icon(Icons.subtitles_off),
+                title: const Text('Kapalı'),
+                trailing: activeId == null || activeId == 'off'
+                    ? const Icon(Icons.check, color: Colors.green)
+                    : null,
+                onTap: () => Navigator.of(context).pop('off'),
+              ),
+              if (hasStreamTracks) ...[
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text('Akış altyazıları', style: theme.textTheme.labelLarge),
+                ),
+                for (int i = 0; i < tracks.length; i++)
+                  Builder(builder: (ctx) {
+                    final t = tracks[i];
+                    final label = [t.title, t.language]
+                        .whereType<String>()
+                        .where((s) => s.isNotEmpty)
+                        .join(' • ');
+                    return ListTile(
+                      leading: const Icon(Icons.subtitles),
+                      title: Text(label.isEmpty ? 'Parça ${i + 1}' : label),
+                      trailing: activeId == t.id
+                          ? const Icon(Icons.check, color: Colors.green)
+                          : null,
+                      onTap: () => Navigator.of(context).pop(t.id),
+                    );
+                  }),
+              ],
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.language, color: Colors.amber),
+                title: const Text("OpenSubtitles'da ara"),
+                subtitle: const Text('İnternette altyazı bul ve yükle'),
+                onTap: () => Navigator.of(context).pop('opensubtitles'),
+              ),
+              if (audioTracks.length > 1)
+                ListTile(
+                  leading: const Icon(Icons.volume_up),
+                  title: const Text('Ses Parçaları'),
+                  subtitle: Text('Mevcut: ${audioTracks.length} dil'),
+                  onTap: () => Navigator.of(context).pop('audio'),
+                ),
+              ListTile(
+                leading: const Icon(Icons.upload_file),
+                title: const Text('Dosyadan altyazı yükle'),
+                subtitle: const Text('SRT, VTT, ASS, SSA, SUB'),
+                onTap: () => Navigator.of(context).pop('file'),
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
-          if (audioTracks.length > 1)
-            ListTile(
-              leading: const Icon(Icons.volume_up),
-              title: const Text('Ses Parçaları'),
-              subtitle: Text('Mevcut: ${audioTracks.length} dil'),
-              onTap: () => Navigator.of(context).pop('audio'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.upload_file),
-            title: const Text('Dosyadan altyazı yükle'),
-            subtitle: const Text('SRT, VTT, ASS, SSA, SUB'),
-            onTap: () => Navigator.of(context).pop('file'),
-          ),
-          const SizedBox(height: 8),
-        ],
+        ),
       ),
     );
   }

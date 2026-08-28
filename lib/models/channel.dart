@@ -25,6 +25,7 @@ class Channel {
     this.tvgId,
     this.tvgName,
     this.subtitleUrl,
+    this.sourceId,
   });
 
   final String name;
@@ -39,6 +40,9 @@ class Channel {
   /// M3U'daki `#EXTVLCOPT:sub-file=` alanından gelen harici altyazı adresi.
   final String? subtitleUrl;
 
+  /// Kanalın geldiği kaynak ID'si (klasör yapısı için).
+  final String? sourceId;
+
   /// Grubu boş/eksik olan kanallar için görünen grup adı.
   String get displayGroup => _sanitize((group == null || group!.trim().isEmpty) ? 'Diğer' : group!.trim());
 
@@ -50,6 +54,7 @@ class Channel {
         tvgId: tvgId,
         tvgName: tvgName,
         subtitleUrl: subtitleUrl,
+        sourceId: sourceId,
       );
 
   @override
