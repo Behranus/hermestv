@@ -59,7 +59,7 @@ abstract class StreamPlayer {
   Future<void> dispose();
 }
 
-/// Factory: Android → ExoPlayer (hafif), Linux → fvp/libmdk (güçlü)
+/// Factory: Android → ExoStreamPlayer (OkHttp + ExoPlayer), Linux → MpvStreamPlayer (mpv)
 StreamPlayer createStreamPlayer({double bufferSecs = 1.0}) {
   if (Platform.isAndroid) {
     return ExoStreamPlayer(bufferSecs: bufferSecs);
@@ -175,23 +175,10 @@ class ExoStreamPlayer extends StreamPlayer {
       _safeAdd(_duration, v.duration);
       if (v.isCompleted) _safeAdd(_completed, true);
 
-      // Donma: 8sn stabilize → canlıysa ileri sar
-      if (v.isPlaying && v.position == _lastPosition && _lastUrl != null) {
-        final stallDuration = DateTime.now().difference(_lastPositionChange);
-        if (stallDuration > const Duration(seconds: 8) && _stallRetries < _maxStallRetries) {
-          _stallRetries++;
-          _lastPositionChange = DateTime.now();
-          if (_live == true) {
-            final seekTarget = v.position + const Duration(seconds: 20);
-            try { c.seekTo(seekTarget); } catch (_) {}
-          }
-          _safeAdd(_buffering, true);
-        }
-      } else if (v.isPlaying && v.position != _lastPosition) {
+      // ExoPlayer native buffer yonetir (5dk max, live speed control).
+      // Flutter tarafinda mudahale yok — native katman daha hizli ve dogru karar verir.
+      if (v.isPlaying) {
         _safeAdd(_buffering, false);
-        _lastPosition = v.position;
-        _lastPositionChange = DateTime.now();
-        _stallRetries = 0;
       }
     } catch (_) {}
   }
@@ -215,20 +202,22 @@ class ExoStreamPlayer extends StreamPlayer {
     _hlsSubtitleRefresh?.cancel(); _hlsSubtitleRefresh = null;
     _stallRetries = 0; _lastPosition = Duration.zero; _lastPositionChange = DateTime.now();
 
-    // Eski controller'ı temizle
+    // Eski controller'ı temizle — ÖNCE durdur, sonra temizle (ses karışmasını önler)
     final old = _controller;
     if (old != null) {
+      _controller = null; // Yeni controller oluşturulana kadar null
       try {
         if (_controllerListener != null) { old.removeListener(_controllerListener!); _controllerListener = null; }
-        unawaited(old.pause());
+        await old.pause();  // DURDUR — unawaited DEĞİL
       } catch (_) {}
+      try { await old.dispose(); } catch (_) {}
+      // Eski player tamamen kapandı — kısa bekleme (ExoPlayer resource temizliği)
+      await Future.delayed(const Duration(milliseconds: 100));
     }
 
     // Android ExoPlayer — sadece 1 UA deneme (hızlı açılış)
     final effectiveHeaders = Map<String, String>.from(headers ?? {});
     effectiveHeaders['User-Agent'] = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36';
-
-    if (old != null) { try { await old.dispose(); } catch (_) {} }
 
     vp.VideoPlayerController? c;
     final trial = vp.VideoPlayerController.networkUrl(
@@ -424,7 +413,7 @@ class ExoStreamPlayer extends StreamPlayer {
 class MpvStreamPlayer extends StreamPlayer {
   MpvStreamPlayer({required this.bufferSecs});
 
-  late final Player _player;
+  Player? _player;
   VideoController? _videoController;
   int _generation = 0;
   bool _disposed = false;
@@ -516,48 +505,46 @@ class MpvStreamPlayer extends StreamPlayer {
     _stallRetries = 0; _lastPosition = Duration.zero; _lastPositionChange = DateTime.now();
 
     _cancelSubscriptions();
-    try { _player = Player(); } catch (e) { _safeAdd(_error, 'Oynatıcı oluşturulamadı: $e'); return; }
-    _videoController = VideoController(_player);
+    if (_player == null) {
+      try { _player = Player(); } catch (e) { _safeAdd(_error, 'Oynatıcı oluşturulamadı: $e'); return; }
+    }
+    _videoController = VideoController(_player!);
 
     try {
       final media = Media(url, httpHeaders: headers);
-      await _player.open(media, play: true);
+      await _player!.open(media, play: true);
     } catch (e) { _safeAdd(_error, 'Akış açılamadı: $e'); return; }
 
-    _subPlaying = _player.stream.playing.listen((p) {
+    _subPlaying = _player!.stream.playing.listen((p) {
       if (_disposed || gen != _generation) return;
       _safeAdd(_playing, p);
       if (p && !_startedPlaying) { _startedPlaying = true; _safeAdd(_buffering, false); _captureStreamInfo(); }
     });
-    _subBuffering = _player.stream.buffering.listen((b) { if (!_disposed && gen == _generation) _safeAdd(_buffering, b); });
-    _subCompleted = _player.stream.completed.listen((_) { if (!_disposed && gen == _generation) _safeAdd(_completed, true); });
-    _subPosition = _player.stream.position.listen((pos) {
+    _subBuffering = _player!.stream.buffering.listen((b) { if (!_disposed && gen == _generation) _safeAdd(_buffering, b); });
+    _subCompleted = _player!.stream.completed.listen((_) { if (!_disposed && gen == _generation) _safeAdd(_completed, true); });
+    _subPosition = _player!.stream.position.listen((pos) {
       if (_disposed || gen != _generation) return;
       final now = DateTime.now();
       if (now.difference(_lastPositionEmit) >= const Duration(milliseconds: 250)) {
         _lastPositionEmit = now; _safeAdd(_position, pos); _updateSubtitleAt(pos);
       }
-      if (_player.state.playing && pos == _lastPosition && _lastUrl != null) {
-        if (DateTime.now().difference(_lastPositionChange) > const Duration(seconds: 8) && _stallRetries < _maxStallRetries) {
-          _stallRetries++; _lastPositionChange = DateTime.now();
-          if (_live == true) { try { _player.seek(pos + const Duration(seconds: 30)); } catch (_) {} }
-          _safeAdd(_buffering, true);
-        }
-      } else if (_player.state.playing && pos != _lastPosition) {
+      if (_player!.state.playing && pos == _lastPosition && _lastUrl != null) {
+        // mpv kendi basina yonetir — seek-forward yapilmaz
+      } else if (_player!.state.playing && pos != _lastPosition) {
         _safeAdd(_buffering, false); _lastPosition = pos; _lastPositionChange = DateTime.now(); _stallRetries = 0;
       }
     });
-    _subDuration = _player.stream.duration.listen((d) {
+    _subDuration = _player!.stream.duration.listen((d) {
       if (_disposed || gen != _generation) return;
       _safeAdd(_duration, d);
       if (_live == null) _live = d == Duration.zero || d.inSeconds > 86400;
     });
-    _subSubtitle = _player.stream.subtitle.listen((sub) {
+    _subSubtitle = _player!.stream.subtitle.listen((sub) {
       if (_disposed || gen != _generation) return;
       if (sub != null && sub.isNotEmpty) { final text = sub.where((s) => s.trim().isNotEmpty).join('\n'); if (text.trim().isNotEmpty && _activeSubtitle != text) { _activeSubtitle = text; _safeAdd(_subtitleText, text); } }
     });
 
-    try { await _player.setVolume(_pendingVolume * 100); } catch (_) {}
+    try { await _player!.setVolume(_pendingVolume * 100); } catch (_) {}
     if (subtitleUrl != null && subtitleUrl.isNotEmpty) { await setExternalSubtitle(subtitleUrl); } else { unawaited(_discoverHlsSubtitles(url)); }
     await Future.delayed(const Duration(seconds: 1));
     _captureStreamInfo();
@@ -571,7 +558,7 @@ class MpvStreamPlayer extends StreamPlayer {
 
   void _captureStreamInfo() {
     if (_streamInfo != null) return;
-    try { final w = _player.state.width; final h = _player.state.height; if (w != null && h != null && w > 0 && h > 0) _streamInfo = '${w.round()}×${h.round()}'; } catch (_) {}
+    try { final w = _player!.state.width; final h = _player!.state.height; if (w != null && h != null && w > 0 && h > 0) _streamInfo = '${w.round()}×${h.round()}'; } catch (_) {}
   }
 
   Future<void> _discoverHlsSubtitles(String url) async {
@@ -604,7 +591,7 @@ class MpvStreamPlayer extends StreamPlayer {
     _selectedHlsTrack = track;
     final cues = await HlsSubtitleService.loadTrackCues(track, headers: _headers);
     if (_disposed || !identical(_selectedHlsTrack, track)) return;
-    _cues = cues; _updateSubtitleAt(_player.state.position);
+    _cues = cues; _updateSubtitleAt(_player!.state.position);
     _hlsSubtitleRefresh?.cancel();
     if (_live == true) { _hlsSubtitleRefresh = Timer.periodic(const Duration(seconds: 45), (_) { if (!_disposed && _selectedHlsTrack != null) unawaited(_refreshHlsTrack(track)); }); }
   }
@@ -616,7 +603,7 @@ class MpvStreamPlayer extends StreamPlayer {
     for (final c in _cues) { byStart[c.start.inMilliseconds] = c; }
     for (final c in fresh) { final k = c.start.inMilliseconds; if (!byStart.containsKey(k)) byStart[k] = c; }
     _cues = byStart.values.toList()..sort((a, b) => a.start.compareTo(b.start));
-    _updateSubtitleAt(_player.state.position);
+    _updateSubtitleAt(_player!.state.position);
   }
 
   @override
@@ -627,20 +614,20 @@ class MpvStreamPlayer extends StreamPlayer {
   }
 
   @override
-  Future<void> play() async { try { await _player.play(); } catch (_) {} }
+  Future<void> play() async { try { await _player!.play(); } catch (_) {} }
   @override
-  Future<void> pause() async { try { await _player.pause(); } catch (_) {} }
+  Future<void> pause() async { try { await _player!.pause(); } catch (_) {} }
   @override
-  Future<void> seek(Duration position) async { try { await _player.seek(position); } catch (_) {} }
+  Future<void> seek(Duration position) async { try { await _player!.seek(position); } catch (_) {} }
   @override
-  Future<void> setVolume(double v) async { _pendingVolume = v.clamp(0.0, 1.0); try { await _player.setVolume(_pendingVolume * 100); } catch (_) {} }
+  Future<void> setVolume(double v) async { _pendingVolume = v.clamp(0.0, 1.0); try { await _player!.setVolume(_pendingVolume * 100); } catch (_) {} }
 
   @override
   Future<void> setExternalSubtitle(String uri) async {
     try {
       final raw = await _fetchSubtitle(uri);
       if (raw == null) return;
-      _cues = parseSubtitleCues(raw); _activeSubtitle = null; _updateSubtitleAt(_player.state.position);
+      _cues = parseSubtitleCues(raw); _activeSubtitle = null; _updateSubtitleAt(_player!.state.position);
     } catch (_) {}
   }
 
@@ -678,8 +665,8 @@ class MpvStreamPlayer extends StreamPlayer {
   Future<void> dispose() async {
     if (_disposed) return; _disposed = true; _generation++;
     _hlsSubtitleRefresh?.cancel(); _hlsSubtitleRefresh = null; _cancelSubscriptions();
-    try { await _player.stop(); } catch (_) {}
-    try { await _player.dispose(); } catch (_) {}
+    try { await _player!.stop(); } catch (_) {}
+    try { await _player!.dispose(); } catch (_) {}
     for (final sc in [_buffering, _error, _playing, _volume, _position, _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId, _audioTracksCtrl, _activeAudioTrackId]) {
       if (!sc.isClosed) await sc.close();
     }

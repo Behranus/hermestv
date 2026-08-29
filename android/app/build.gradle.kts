@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.iptv.iptv_player"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -22,6 +22,7 @@ android {
         // Hedef: Android 7.0 ve üstü (minSdk 24) — Flutter varsayılanı.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
+        multiDexEnabled = true
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
@@ -59,6 +60,7 @@ android {
             // Bu ayar lib'lerin kurulumda diske açılmasını zorlar — eski
             // cihazlarda çökme sorununu kökten çözer.
             useLegacyPackaging = true
+            pickFirsts += setOf("lib/*/libc++_shared.so")
         }
     }
 }
@@ -72,3 +74,5 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+
