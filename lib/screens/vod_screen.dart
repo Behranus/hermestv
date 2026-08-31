@@ -8,6 +8,9 @@ import 'package:hermestv/screens/series_detail_screen.dart';
 import 'package:hermestv/screens/vod_player_screen.dart';
 import 'package:hermestv/services/resume_service.dart';
 import 'package:hermestv/state/app_state.dart';
+import 'package:hermestv/services/yts_service.dart';
+import 'package:hermestv/models/vod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Netflix / Turkcell TV Plus tarzi VOD ekrani:
 /// - Ustte buyuk hero banner
@@ -32,7 +35,7 @@ class _VodScreenState extends State<VodScreen> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
   }
 
@@ -162,6 +165,16 @@ class _VodScreenState extends State<VodScreen> with SingleTickerProviderStateMix
                     setState(() => _selectedCategoryId = null);
                   },
                 ),
+                const SizedBox(width: 8),
+                _TabPill(
+                  label: 'Torrent',
+                  icon: Icons.cloud_download_rounded,
+                  selected: _tabController.index == 2,
+                  onTap: () {
+                    _tabController.animateTo(2);
+                    setState(() => _selectedCategoryId = null);
+                  },
+                ),
               ],
             ),
           ),
@@ -208,6 +221,10 @@ class _VodScreenState extends State<VodScreen> with SingleTickerProviderStateMix
                       ));
                     }
                   },
+                ),
+                // 3. Sekme: Torrent Filmleri (YTS)
+                _YtsTorrentGrid(
+                  searchQuery: _searchQuery,
                 ),
               ],
             ),
@@ -1247,4 +1264,293 @@ class _VodItem {
     this.genre,
     required this.isMovie,
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  YTS Torrent Film Izgarası — Bedava film kütüphanesi
+// ═══════════════════════════════════════════════════════════════
+class _YtsTorrentGrid extends StatefulWidget {
+  const _YtsTorrentGrid({this.searchQuery = ''});
+  final String searchQuery;
+
+  @override
+  State<_YtsTorrentGrid> createState() => _YtsTorrentGridState();
+}
+
+class _YtsTorrentGridState extends State<_YtsTorrentGrid> {
+  List<VodMovie> _movies = [];
+  bool _loading = true;
+  String? _error;
+  String? _selectedGenre;
+  int _currentPage = 1;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMovies();
+  }
+
+  @override
+  void didUpdateWidget(covariant _YtsTorrentGrid old) {
+    super.didUpdateWidget(old);
+    if (old.searchQuery != widget.searchQuery) {
+      _currentPage = 1;
+      _loadMovies();
+    }
+  }
+
+  Future<void> _loadMovies() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      List<VodMovie> movies;
+      if (widget.searchQuery.isNotEmpty) {
+        movies = await YtsService.searchMovies(widget.searchQuery);
+      } else {
+        movies = await YtsService.fetchMovies(
+          genre: _selectedGenre,
+          page: _currentPage,
+          limit: 20,
+        );
+      }
+      if (mounted) setState(() {
+        _movies = _currentPage == 1 ? movies : [..._movies, ...movies];
+        _hasMore = movies.length >= 20;
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        // Tür filtreleri
+        SizedBox(
+          height: 40,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            children: [
+              _GenreChip(
+                label: 'Tümü',
+                selected: _selectedGenre == null,
+                onTap: () { setState(() { _selectedGenre = null; _currentPage = 1; }); _loadMovies(); },
+              ),
+              for (final g in YtsService.genres.take(12))
+                _GenreChip(
+                  label: g,
+                  selected: _selectedGenre == g,
+                  onTap: () { setState(() { _selectedGenre = g; _currentPage = 1; }); _loadMovies(); },
+                ),
+            ],
+          ),
+        ),
+        // Film ızgarası
+        Expanded(
+          child: _loading && _movies.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null && _movies.isEmpty
+                  ? Center(child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: colors.error),
+                        const SizedBox(height: 8),
+                        Text(_error!, style: TextStyle(color: colors.error)),
+                        const SizedBox(height: 12),
+                        ElevatedButton(onPressed: _loadMovies, child: const Text('Tekrar Dene')),
+                      ],
+                    ))
+                  : RefreshIndicator(
+                      onRefresh: () async { _currentPage = 1; await _loadMovies(); },
+                      child: GridView.builder(
+                        padding: const EdgeInsets.all(8),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          childAspectRatio: 0.55,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
+                        itemCount: _movies.length + (_hasMore ? 1 : 0),
+                        itemBuilder: (ctx, i) {
+                          if (i == _movies.length) {
+                            // Daha fazla yükle
+                            _currentPage++;
+                            _loadMovies();
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final m = _movies[i];
+                          return _YtsMovieCard(movie: m);
+                        },
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+}
+
+class _YtsMovieCard extends StatelessWidget {
+  const _YtsMovieCard({required this.movie});
+  final VodMovie movie;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: () => _showMovieDetail(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (movie.poster != null && movie.poster!.isNotEmpty)
+                    Image.network(
+                      movie.poster!,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, __, child) => Container(color: colors.surfaceContainerHigh, child: const Icon(Icons.movie, size: 32)),
+                      errorBuilder: (_, __, ___) => Container(color: colors.surfaceContainerHigh, child: const Icon(Icons.movie, size: 32)),
+                    )
+                  else
+                    Container(color: colors.surfaceContainerHigh, child: const Icon(Icons.movie, size: 32)),
+                  // Kaynak rozeti
+                  Positioned(
+                    top: 4, left: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.orange.shade800, borderRadius: BorderRadius.circular(4)),
+                      child: const Text('YTS', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  // Puan
+                  if (movie.rating != null && movie.rating!.isNotEmpty)
+                    Positioned(
+                      top: 4, right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                        child: Text('⭐ ${movie.rating}', style: const TextStyle(color: Colors.white, fontSize: 9)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(movie.name, maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  void _showMovieDetail(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7, maxChildSize: 0.9, minChildSize: 0.5,
+        expand: false,
+        builder: (ctx, scrollCtrl) => ListView(
+          controller: scrollCtrl,
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Poster + bilgi
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (movie.poster != null && movie.poster!.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(movie.poster!, width: 120, height: 180, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.white10, child: const Icon(Icons.movie, size: 32))),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(movie.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                      if (movie.year != null && movie.year!.isNotEmpty)
+                        Text('${movie.year} • ${movie.genre ?? ''}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      if (movie.rating != null && movie.rating!.isNotEmpty)
+                        Text('⭐ ${movie.rating}', style: const TextStyle(color: Colors.amber, fontSize: 14)),
+                      if (movie.duration != null && movie.duration!.isNotEmpty)
+                        Text('⏱ ${movie.duration}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Konu
+            if (movie.plot != null && movie.plot!.isNotEmpty) ...[
+              const Text('Konu', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(movie.plot!, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            ],
+            const SizedBox(height: 16),
+            // Torrent seçenekleri
+            if (movie.extra != null && movie.extra!['torrents'] != null) ...[
+              const Text('Torrent Seçenekleri', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              for (final t in (movie.extra!['torrents'] as List))
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.download, color: Colors.orange, size: 20),
+                  title: Text('${t['quality']} ${t['type']}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                  subtitle: Text(t['size'] ?? '', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                  trailing: const Icon(Icons.open_in_new, color: Colors.white54, size: 18),
+                  onTap: () async {
+                    final hash = t['hash'];
+                    final name = Uri.encodeComponent('${movie.name} (${t['quality']})');
+                    final magnet = 'magnet:?xt=urn:btih:$hash&dn=$name&tr=udp://open.demonii.com:1337/announce&tr=udp://tracker.openbittorrent.com:6969';
+                    if (await canLaunchUrl(Uri.parse(magnet))) {
+                      await launchUrl(Uri.parse(magnet), mode: LaunchMode.externalApplication);
+                    }
+                  },
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GenreChip extends StatelessWidget {
+  const _GenreChip({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? Colors.orange.shade700 : Colors.white10,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(label, style: TextStyle(
+            color: selected ? Colors.white : Colors.white70,
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          )),
+        ),
+      ),
+    );
+  }
 }

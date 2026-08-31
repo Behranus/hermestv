@@ -8,9 +8,19 @@ class VodMovie {
     this.categoryId,
     this.directUrl,
     this.containerExtension,
+    // YTS destekli alanlar
+    this.streamUrl,
+    this.plot,
+    this.backdrop,
+    this.year,
+    this.genre,
+    this.duration,
+    this.actors,
+    this.director,
+    this.extra,
   });
 
-  final int id;
+  final dynamic id;
   final String name;
 
   /// Poster/tanıtım görseli (stream_icon).
@@ -21,14 +31,21 @@ class VodMovie {
   final String? categoryId;
 
   /// Xtream dışı doğrudan oynatma adresi (test kataloğu gibi).
-  /// Varsa Xtream `movie/{u}/{p}/{id}` adresi yerine bu kullanılır.
   final String? directUrl;
 
-  /// Sunucunun bildirdiği dosya uzantısı (ör. "mp4", "mkv", "avi").
-  /// Oynatma adresi `{id}.{uzantı}` şeklinde kurulur — ExoPlayer uzantıya
-  /// göre HLS/MP4 kararı verir; yanlış uzantı (her zaman m3u8) MP4 filmlerin
-  /// açılmamasına yol açar.
+  /// Sunucunun bildirdiği dosya uzantısı.
   final String? containerExtension;
+
+  // YTS destekli alanlar
+  final String? streamUrl;   // Magnet link veya oynatma URL'si
+  final String? plot;        // Film konusu
+  final String? backdrop;    // Arka plan görseli
+  final String? year;        // Yapım yılı
+  final String? genre;       // Tür
+  final String? duration;    // Süre
+  final String? actors;      // Oyuncular
+  final String? director;    // Yönetmen
+  final Map<String, dynamic>? extra;  // Ek bilgiler (magnet links, torrent details)
 
   factory VodMovie.fromJson(Map<String, dynamic> json) {
     final rating = json['rating']?.toString();

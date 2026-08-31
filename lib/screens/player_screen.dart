@@ -570,11 +570,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
 
-    // ---- Geri tuşu: panel→overlay→çıkış ----
+    // ---- Geri tuşu: panel→overlay→kanal listesine dön ----
     if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
       if (_showPanel) { _closePanel(); return KeyEventResult.handled; }
       if (_overlayVisible) { setState(() => _overlayVisible = false); return KeyEventResult.handled; }
+      // Her zaman kanal listesine dön — uygulamadan çıkma
       Navigator.of(context).pop();
+      return KeyEventResult.handled;
+    }
+
+    // ---- CH+/CH- tuşları: kanal değiştirme ----
+    if (key == LogicalKeyboardKey.channelUp || key == LogicalKeyboardKey.mediaTrackNext) {
+      _switchChannel(-1); // CH+ = bir önceki kanal
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.channelDown || key == LogicalKeyboardKey.mediaTrackPrevious) {
+      _switchChannel(1);  // CH- = bir sonraki kanal
+      return KeyEventResult.handled;
+    }
+
+    // ---- Volume tuşları: ses ayarı ----
+    if (key == LogicalKeyboardKey.audioVolumeUp) {
+      _changeVolume(0.1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.audioVolumeDown) {
+      _changeVolume(-0.1);
       return KeyEventResult.handled;
     }
 
@@ -1003,7 +1024,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
 
 
-              // Üst bar (kanal bilgisi)
+              // Üst bar — sadece CANLI rozeti ve zaman bilgisi (kanal adı kaldırıldı)
               if (_overlayVisible && _error == null && !_showPanel)
                 Positioned(
                   top: 0, left: 0, right: 0,
@@ -1018,21 +1039,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     child: SafeArea(
                       bottom: false,
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(_channel.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                if (nowProgram != null && nowProgram.title != null)
-                                  Text(nowProgram.title!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.amber, fontSize: 13)),
-                                Text('${_channel.displayGroup} • ${_index + 1}/${widget.channels.length}',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                              ],
-                            ),
-                          ),
                           if (isLive)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

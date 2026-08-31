@@ -5,11 +5,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:hermestv/services/hls_subtitle_service.dart';
+import 'package:hermestv/services/stream_proxy.dart';
 
 // Platforma göre oynatıcı motoru
 import 'package:video_player/video_player.dart' as vp;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:hermestv/services/native_exo_stream_player.dart';
 
 /// Altyazı parçası bilgisi (oynatıcıdan bağımsız).
 class SubtitleInfo {
@@ -59,12 +61,13 @@ abstract class StreamPlayer {
   Future<void> dispose();
 }
 
-/// Factory: Android → ExoStreamPlayer (OkHttp + ExoPlayer), Linux → MpvStreamPlayer (mpv)
-StreamPlayer createStreamPlayer({double bufferSecs = 1.0}) {
+/// Factory: Android → NativeExoStreamPlayer (MethodChannel + ExoPlayer)
+///           Linux → MpvStreamPlayer (media_kit/mpv)
+StreamPlayer createStreamPlayer({double bufferSecs = 1.0, bool useExo = false, bool isVod = false}) {
   if (Platform.isAndroid) {
-    return ExoStreamPlayer(bufferSecs: bufferSecs);
+    return NativeExoStreamPlayer(bufferSecs: bufferSecs);
   }
-  return MpvStreamPlayer(bufferSecs: bufferSecs);
+  return MpvStreamPlayer(bufferSecs: bufferSecs, isVod: isVod);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -215,13 +218,23 @@ class ExoStreamPlayer extends StreamPlayer {
       await Future.delayed(const Duration(milliseconds: 100));
     }
 
-    // Android ExoPlayer — sadece 1 UA deneme (hızlı açılış)
+    // Canlı yayınlar (m3u8) için proxy kullan — live edge sorununu çözer
+    final isLiveStream = url.toLowerCase().contains('.m3u8') || url.toLowerCase().contains('/live/');
+    String effectiveUrl = url;
+    if (isLiveStream) {
+      try {
+        final proxy = StreamProxy.instance;
+        if (!proxy.isRunning) await proxy.start();
+        effectiveUrl = proxy.proxyUrl(url);
+      } catch (_) { effectiveUrl = url; }
+    }
+
     final effectiveHeaders = Map<String, String>.from(headers ?? {});
-    effectiveHeaders['User-Agent'] = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36';
+    effectiveHeaders['User-Agent'] = 'ExoPlayer/1.4.1 (Linux; Android 13)';
 
     vp.VideoPlayerController? c;
     final trial = vp.VideoPlayerController.networkUrl(
-      Uri.parse(url),
+      Uri.parse(effectiveUrl),
       httpHeaders: Map<String, String>.from(effectiveHeaders),
     );
     try {
@@ -411,7 +424,8 @@ class ExoStreamPlayer extends StreamPlayer {
 //  LINUX: MpvStreamPlayer (media_kit/mpv — güçlü, 120sn cache)
 // ═══════════════════════════════════════════════════════════════════
 class MpvStreamPlayer extends StreamPlayer {
-  MpvStreamPlayer({required this.bufferSecs});
+  MpvStreamPlayer({required this.bufferSecs, this.isVod = false});
+  final bool isVod;
 
   Player? _player;
   VideoController? _videoController;
@@ -506,12 +520,38 @@ class MpvStreamPlayer extends StreamPlayer {
 
     _cancelSubscriptions();
     if (_player == null) {
-      try { _player = Player(); } catch (e) { _safeAdd(_error, 'Oynatıcı oluşturulamadı: $e'); return; }
+      try {
+        _player = Player(
+          configuration: PlayerConfiguration(
+            vo: 'auto',
+          ),
+        );
+      } catch (e) { _safeAdd(_error, 'Oynatıcı oluşturulamadı: $e'); return; }
     }
     _videoController = VideoController(_player!);
 
     try {
-      final media = Media(url, httpHeaders: headers);
+      // mpv ayarlari — sade ve hizli
+      final mpvExtras = <String, dynamic>{
+        'cache': 'yes',
+        'cache-secs': '30',
+        'demuxer-max-bytes': '20971520',   // 100MB — cihaz yuku az
+        'demuxer-max-back-bytes': '10485760', // 50MB
+        'framedrop': 'vo',                  // video output seviyesinde frame atla
+        'hr-seek': 'framedrop',
+        'reconnect': 'yes',
+        'reconnect-delay-max': '3',
+        'reconnect-on-error': 'yes',
+        'network-timeout': '10',
+        'slang': 'tr,eng,und',
+        'sub-auto': 'fuzzy',
+        'volume-max': '100',
+      };
+      // Android'de hardware decode
+      if (Platform.isAndroid) {
+        mpvExtras['hwdec'] = 'mediacodec';
+      }
+      final media = Media(url, httpHeaders: headers, extras: mpvExtras);
       await _player!.open(media, play: true);
     } catch (e) { _safeAdd(_error, 'Akış açılamadı: $e'); return; }
 
