@@ -285,10 +285,10 @@ class AppState extends ChangeNotifier {
     if (_allSources.isNotEmpty) {
       unawaited(loadAllSourcesCombined());
     } else {
-      // Varsayılan ücretsiz Türkçe IPTV kaynağı (iptv-org — 164 kanal)
+      // Varsayılan IPTV kaynağı — MyListBest (4200+ kanal, ücretsiz)
       final defaultSource = const PlaylistSource(
         PlaylistSourceType.url,
-        'https://iptv-org.github.io/iptv/countries/tr.m3u',
+        'http://935b1d070a57.mylistbest.net/playlists/uplist/7935604d2e7a2ec3725a89ccde3b48f7/playlist.m3u8',
       );
       _allSources = [defaultSource];
       _activeSourceIndex = 0;
