@@ -34,6 +34,11 @@ class NativeExoStreamPlayer extends StreamPlayer {
   double _pendingVolume = 1.0;
   String? _streamInfo;
   Timer? _positionTimer;
+  int _openGeneration = 0; // hızlı zap'ta eski open() yarışını iptal etmek için
+
+  // Yayın sağlığı — plugin metriklerinden saniyede bir örneklenir
+  final _healthCtrl = StreamController<StreamHealth>.broadcast();
+  Timer? _healthTimer;
 
   @override
   Stream<bool> get buffering => _buffering.stream;
@@ -62,6 +67,8 @@ class NativeExoStreamPlayer extends StreamPlayer {
   @override
   bool? get isLive => _live;
   @override
+  Stream<StreamHealth> get health => _healthCtrl.stream;
+  @override
   String? get streamInfo => _streamInfo;
   @override
   double bufferSecs;
@@ -74,6 +81,7 @@ class NativeExoStreamPlayer extends StreamPlayer {
   @override
   Future<void> open(String url, {Map<String, String>? headers, String? subtitleUrl}) async {
     if (_disposed) return;
+    final gen = ++_openGeneration; // bu open()'ın sırası — yenisi gelirse iptal ol
     _lastUrl = url;
     _live = url.contains('/live/') || url.contains('.m3u8');
     _streamInfo = null;
@@ -82,18 +90,29 @@ class NativeExoStreamPlayer extends StreamPlayer {
     _safeAdd(_duration, Duration.zero);
 
     try {
-      // Eski player'ı temizle
+      // Eski player'ı temizle — ÖNCE sesi kapat, ses karışmasını önler
       if (_textureId != null) {
+        try { await _channel.invokeMethod('setVolume', {'textureId': _textureId, 'volume': 0.0}); } catch (_) {}
+        try { await _channel.invokeMethod('pause', {'textureId': _textureId}); } catch (_) {}
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (gen != _openGeneration) return; // bu arada yeni kanal istendi
         try { await _channel.invokeMethod('dispose', {'textureId': _textureId}); } catch (_) {}
         _textureId = null;
-      _producerId = null;
-        await Future.delayed(const Duration(milliseconds: 100));
+        _producerId = null;
+        // ExoPlayer resource temizliği için bekleme
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (gen != _openGeneration) return;
       }
 
       // Yeni texture oluştur
       final result = await _channel.invokeMethod<Map>('create', {
         'textureId': DateTime.now().millisecondsSinceEpoch,
       });
+      if (gen != _openGeneration) {
+        // Bu arada yeni kanal istendi — hemen yaratılanı öldür, eski URL'ye başlama
+        try { await _channel.invokeMethod('dispose', {'textureId': result?['textureId']}); } catch (_) {}
+        return;
+      }
       if (result == null) { _safeAdd(_error, 'Texture oluşturulamadı'); return; }
       _textureId = result['textureId'] as int;
       _producerId = result['producerId'] as int? ?? _textureId;
@@ -106,6 +125,7 @@ class NativeExoStreamPlayer extends StreamPlayer {
         'textureId': _textureId,
         'url': url,
       });
+      if (gen != _openGeneration) return;
 
       // Ses seviyesini ayarla — bekleme, hemen ayarla
       unawaited(_channel.invokeMethod('setVolume', {
@@ -113,12 +133,50 @@ class NativeExoStreamPlayer extends StreamPlayer {
         'volume': _pendingVolume,
       }));
 
-      // Pozisyon takibi
+      // Pozisyon takibi — 500ms yeterli; 200ms MethodChannel yükü UI jank üretiyordu
       _positionTimer?.cancel();
-      _positionTimer = Timer.periodic(const Duration(milliseconds: 200), (_) => _pollPosition());
+      _positionTimer = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollPosition());
+
+      // Tampon/canlı kenar/yeniden bağlanma — saniyede bir
+      _healthTimer?.cancel();
+      _healthTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollHealth());
+
+      // Ses/altyazi track'lerini keşfet — 2sn bekle (ExoPlayer parse etsin)
+      unawaited(Future.delayed(const Duration(seconds: 2), () => _discoverTracks()));
     } catch (e) {
       _safeAdd(_error, 'Oynatıcı oluşturulamadı: $e');
     }
+  }
+
+  /// ExoPlayer'dan ses ve altyazi track'lerini keşfet.
+  Future<void> _discoverTracks() async {
+    if (_disposed || _textureId == null) return;
+    try {
+      // Ses track'leri
+      final audioResult = await _channel.invokeMethod<List>('getAudioTracks', {'textureId': _textureId});
+      if (audioResult != null && !_disposed) {
+        final tracks = audioResult.map((t) => AudioTrackInfo(
+          id: t['id'] as String,
+          title: t['label'] as String,
+          language: t['language'] as String?,
+        )).toList();
+        _safeAdd(_audioTracksCtrl, tracks);
+        if (tracks.isNotEmpty) {
+          _safeAdd(_activeAudioTrackId, tracks.first.id);
+        }
+      }
+
+      // Altyazi track'leri
+      final subResult = await _channel.invokeMethod<List>('getSubtitleTracks', {'textureId': _textureId});
+      if (subResult != null && !_disposed) {
+        final tracks = subResult.map((t) => SubtitleInfo(
+          id: t['id'] as String,
+          title: t['label'] as String,
+          language: t['language'] as String?,
+        )).toList();
+        _safeAdd(_subtitleTracks, tracks);
+      }
+    } catch (_) {}
   }
 
   void _setupListener() {
@@ -161,6 +219,16 @@ class NativeExoStreamPlayer extends StreamPlayer {
     } catch (_) {}
   }
 
+  /// ExoPlayer metriklerini oku — tampon, canlı kenar mesafesi, yeniden bağlanma.
+  Future<void> _pollHealth() async {
+    if (_disposed || _textureId == null) return;
+    try {
+      final m = await _channel.invokeMethod<Map>('getPlaybackMetrics', {'textureId': _textureId});
+      if (m == null) return;
+      _safeAdd(_healthCtrl, streamHealthFromMetrics(m));
+    } catch (_) {}
+  }
+
   @override
   Future<void> play() async {
     if (_textureId == null) return;
@@ -193,13 +261,46 @@ class NativeExoStreamPlayer extends StreamPlayer {
   }
 
   @override
-  Future<void> setExternalSubtitle(String url) async {}
+  Future<void> setExternalSubtitle(String url) async {
+    // Harici altyazi ExoPlayer'da desteklenmiyor — HLS'de kullanilir
+  }
+
   @override
-  Future<void> disableSubtitles() async { _safeAdd(_subtitleText, null); }
+  Future<void> disableSubtitles() async {
+    _safeAdd(_subtitleText, null);
+    _safeAdd(_activeSubtitleId, null);
+    if (_textureId != null) {
+      try { await _channel.invokeMethod('selectSubtitleTrack', {'textureId': _textureId, 'trackIndex': -1}); } catch (_) {}
+    }
+  }
+
   @override
-  Future<void> setSubtitleTrackById(String id) async {}
+  Future<void> setSubtitleTrackById(String id) async {
+    if (_textureId == null) return;
+    // ID formati: 'subtitle_2' -> index 2
+    final parts = id.split('_');
+    final idx = int.tryParse(parts.last);
+    if (idx != null) {
+      try {
+        await _channel.invokeMethod('selectSubtitleTrack', {'textureId': _textureId, 'trackIndex': idx});
+        _safeAdd(_activeSubtitleId, id);
+      } catch (_) {}
+    }
+  }
+
   @override
-  Future<void> setAudioTrackById(String id) async {}
+  Future<void> setAudioTrackById(String id) async {
+    if (_textureId == null) return;
+    // ID formati: 'audio_1' -> index 1
+    final parts = id.split('_');
+    final idx = int.tryParse(parts.last);
+    if (idx != null) {
+      try {
+        await _channel.invokeMethod('selectAudioTrack', {'textureId': _textureId, 'trackIndex': idx});
+        _safeAdd(_activeAudioTrackId, id);
+      } catch (_) {}
+    }
+  }
   @override
   int? get textureId => _textureId;
 
@@ -208,12 +309,13 @@ class NativeExoStreamPlayer extends StreamPlayer {
     if (_disposed) return;
     _disposed = true;
     _positionTimer?.cancel();
+    _healthTimer?.cancel();
     if (_textureId != null) {
       try { await _channel.invokeMethod('dispose', {'textureId': _textureId}); } catch (_) {}
       _textureId = null;
       _producerId = null;
     }
-    for (final sc in [_buffering, _error, _playing, _volume, _position,
+    for (final sc in [_healthCtrl, _buffering, _error, _playing, _volume, _position,
       _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId,
       _audioTracksCtrl, _activeAudioTrackId]) {
       try { await sc.close(); } catch (_) {}
