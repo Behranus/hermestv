@@ -30,9 +30,43 @@ class AudioTrackInfo {
   final bool isDefault;
 }
 
+/// Yayın sağlığı anlık görüntüsü — oynatıcı motorundan bağımsız.
+class StreamHealth {
+  const StreamHealth({
+    this.buffered = Duration.zero,
+    this.liveOffset,
+    this.reconnectCount = 0,
+  });
+
+  /// Oynatma konumunun önünde hazır bekleyen tampon süresi.
+  final Duration buffered;
+
+  /// Oynatma konumunun canlı kenarın kaç saniye gerisinde olduğu.
+  /// null → bilinmiyor (canlı değil veya motor bildirmiyor).
+  final Duration? liveOffset;
+
+  /// Hata sonrası kurtarma ile kaç kez yeniden bağlanıldığı.
+  final int reconnectCount;
+}
+
+/// Plugin'den gelen ham metrik haritasını [StreamHealth]'e çevirir.
+/// Eksik alanlar 0 kabul edilir; negatif `liveOffsetMs` (ExoPlayer'ın
+/// C.TIME_UNSET değeri) "bilinmiyor" anlamına gelir ve null'a dönüşür.
+StreamHealth streamHealthFromMetrics(Map<Object?, Object?> metrics) {
+  final liveOffsetMs = (metrics['liveOffsetMs'] as int?) ?? -1;
+  return StreamHealth(
+    buffered: Duration(milliseconds: (metrics['bufferedMs'] as int?) ?? 0),
+    liveOffset: liveOffsetMs < 0 ? null : Duration(milliseconds: liveOffsetMs),
+    reconnectCount: (metrics['reconnectCount'] as int?) ?? 0,
+  );
+}
+
 /// Oynatıcı motoru soyutlaması.
 abstract class StreamPlayer {
   Stream<bool> get buffering;
+
+  /// Yayın sağlığı akışı — desteklemeyen motor boş akış döner.
+  Stream<StreamHealth> get health => const Stream.empty();
   Stream<String> get error;
   Stream<bool> get playing;
   Stream<double> get volume;
@@ -231,6 +265,11 @@ class ExoStreamPlayer extends StreamPlayer {
 
     final effectiveHeaders = Map<String, String>.from(headers ?? {});
     effectiveHeaders['User-Agent'] = 'ExoPlayer/1.4.1 (Linux; Android 13)';
+    // TorBox CDN icin ek header'lar
+    if (url.contains('torbox') || url.contains('cdn')) {
+      effectiveHeaders['Accept'] = '*/*';
+      effectiveHeaders['Accept-Ranges'] = 'bytes';
+    }
 
     vp.VideoPlayerController? c;
     final trial = vp.VideoPlayerController.networkUrl(
@@ -279,6 +318,46 @@ class ExoStreamPlayer extends StreamPlayer {
 
     try { await c.setVolume(_pendingVolume); } catch (_) {}
     try { await c.play(); } catch (_) {}
+
+    // Turkiyece ses/altyazi otomatik secimi
+    unawaited(_autoSelectTurkish());
+  }
+
+  /// Oynatma basladiktan sonra Turkce ses ve altyaziyi otomatik sec.
+  Future<void> _autoSelectTurkish() async {
+    if (_disposed) return;
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (_disposed) return;
+
+    // En son gelen track listelerini yakala
+    List<AudioTrackInfo> audioTracks = [];
+    List<SubtitleInfo> subtitleTracks = [];
+    await for (final tracks in _audioTracksCtrl.stream.take(1)) { audioTracks = tracks; break; }
+    await for (final tracks in _subtitleTracks.stream.take(1)) { subtitleTracks = tracks; break; }
+
+    // Ses track'leri arasinda Turkce arastir
+    if (audioTracks.isNotEmpty) {
+      AudioTrackInfo? turkish;
+      for (final t in audioTracks) {
+        final lang = (t.language ?? '').toLowerCase();
+        if (lang.contains('tur')) { turkish = t; break; }
+      }
+      if (turkish != null) {
+        try { await setAudioTrackById(turkish.id); } catch (_) {}
+      }
+    }
+
+    // Altyazi track'leri arasinda Turkce arastir
+    if (subtitleTracks.isNotEmpty) {
+      SubtitleInfo? turkish;
+      for (final t in subtitleTracks) {
+        final lang = (t.language ?? '').toLowerCase();
+        if (lang.contains('tur')) { turkish = t; break; }
+      }
+      if (turkish != null) {
+        try { await setSubtitleTrackById(turkish.id); } catch (_) {}
+      }
+    }
   }
 
   Future<void> _discoverHlsSubtitles(String url) async {
@@ -427,6 +506,13 @@ class MpvStreamPlayer extends StreamPlayer {
   MpvStreamPlayer({required this.bufferSecs, this.isVod = false});
   final bool isVod;
 
+  // Yayın sağlığı — mpv durumundan saniyede bir örneklenir
+  final _healthCtrl = StreamController<StreamHealth>.broadcast();
+  Timer? _healthTimer;
+
+  @override
+  Stream<StreamHealth> get health => _healthCtrl.stream;
+
   Player? _player;
   VideoController? _videoController;
   int _generation = 0;
@@ -519,6 +605,9 @@ class MpvStreamPlayer extends StreamPlayer {
     _stallRetries = 0; _lastPosition = Duration.zero; _lastPositionChange = DateTime.now();
 
     _cancelSubscriptions();
+    // Yeni stream açmadan önce sesi kapat — ses karışmasını önler
+    try { await _player?.setVolume(0); } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 50));
     if (_player == null) {
       try {
         _player = Player(
@@ -542,7 +631,10 @@ class MpvStreamPlayer extends StreamPlayer {
         'reconnect': 'yes',
         'reconnect-delay-max': '3',
         'reconnect-on-error': 'yes',
-        'network-timeout': '10',
+        // Android/ExoPlayer yolundaki ile ayni tolerans: canli segment aralari
+        // 10sn'yi asinca mpv baglantiyi dusurup yeniden baglaniyordu.
+        'network-timeout': '30',
+        'alang': 'tr,eng,und',
         'slang': 'tr,eng,und',
         'sub-auto': 'fuzzy',
         'volume-max': '100',
@@ -560,6 +652,8 @@ class MpvStreamPlayer extends StreamPlayer {
       _safeAdd(_playing, p);
       if (p && !_startedPlaying) { _startedPlaying = true; _safeAdd(_buffering, false); _captureStreamInfo(); }
     });
+    _healthTimer?.cancel();
+    _healthTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollHealth());
     _subBuffering = _player!.stream.buffering.listen((b) { if (!_disposed && gen == _generation) _safeAdd(_buffering, b); });
     _subCompleted = _player!.stream.completed.listen((_) { if (!_disposed && gen == _generation) _safeAdd(_completed, true); });
     _subPosition = _player!.stream.position.listen((pos) {
@@ -590,7 +684,19 @@ class MpvStreamPlayer extends StreamPlayer {
     _captureStreamInfo();
   }
 
+  /// mpv durumundan tampon bilgisini oku ve yayınla. Canlı kenar mesafesi
+  /// mpv tarafından bildirilmediği için null bırakılır (arayüz "—" gösterir).
+  void _pollHealth() {
+    if (_disposed) return;
+    final p = _player;
+    if (p == null) return;
+    try {
+      _safeAdd(_healthCtrl, StreamHealth(buffered: p.state.buffer));
+    } catch (_) {}
+  }
+
   void _cancelSubscriptions() {
+    _healthTimer?.cancel(); _healthTimer = null;
     _subPlaying?.cancel(); _subBuffering?.cancel(); _subCompleted?.cancel();
     _subPosition?.cancel(); _subDuration?.cancel(); _subSubtitle?.cancel();
     _subPlaying = _subBuffering = _subCompleted = _subPosition = _subDuration = _subSubtitle = null;
@@ -707,7 +813,7 @@ class MpvStreamPlayer extends StreamPlayer {
     _hlsSubtitleRefresh?.cancel(); _hlsSubtitleRefresh = null; _cancelSubscriptions();
     try { await _player!.stop(); } catch (_) {}
     try { await _player!.dispose(); } catch (_) {}
-    for (final sc in [_buffering, _error, _playing, _volume, _position, _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId, _audioTracksCtrl, _activeAudioTrackId]) {
+    for (final sc in [_healthCtrl, _buffering, _error, _playing, _volume, _position, _duration, _completed, _subtitleTracks, _subtitleText, _activeSubtitleId, _audioTracksCtrl, _activeAudioTrackId]) {
       if (!sc.isClosed) await sc.close();
     }
   }

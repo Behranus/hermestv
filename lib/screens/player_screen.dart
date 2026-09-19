@@ -7,12 +7,14 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:window_manager/window_manager.dart';
 import 'package:hermestv/models/channel.dart';
+import 'package:hermestv/models/epg_program.dart';
 import 'package:hermestv/services/parental_lock_service.dart';
 import 'package:hermestv/services/screenshot_service.dart';
 import 'package:hermestv/services/settings_service.dart';
 import 'package:hermestv/services/stream_player.dart';
 import 'package:hermestv/services/stream_stats_service.dart';
 import 'package:hermestv/state/app_state.dart';
+import 'package:hermestv/widgets/stream_health_badge.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -49,9 +51,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Duration _duration = Duration.zero;
 
   double _volume = 1.0;
+  double _lastNonZeroVolume = 1.0; // Mute geri dönüşü için son ses seviyesi.
+  bool _showInfo = false;          // Kanal + EPG bilgi kartı (i tuşu / kanal değişimi).
+  Timer? _infoTimer;
+  bool _userPaused = false;        // Kumanda play/pause tuşuyla duraklatma durumu.
   bool _showVolumeHud = false;
   Timer? _volumeHudTimer;
-  double _bufferSecs = 0.1;
+  double _bufferSecs = 1.0;
 
   List<SubtitleInfo> _subtitleTracks = [];
   String? _activeSubtitleId;
@@ -171,6 +177,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _volumeHudTimer?.cancel();
     _retryTimer?.cancel();
     _subtitleTranslateTimer?.cancel();
+    _infoTimer?.cancel();
     _statsService.dispose();
     WakelockPlus.disable();
     unawaited(_player.dispose());
@@ -219,9 +226,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _startStats() {
     _statsService.stats.listen((s) {
-      if (mounted) setState(() => _currentStats = s);
+      // Stats kapalıyken gereksiz rebuild + ağ trafiği olmasın (periyodik donma kaynağıydı)
+      if (mounted && _showStats) setState(() => _currentStats = s);
     });
-    _statsService.start(_channel.url);
+    if (_showStats) _statsService.start(_channel.url);
   }
 
   void _subscribe() {
@@ -296,7 +304,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (mounted) setState(() => _error = 'Akış açılamadı: $e');
     }
     _statsService.stop();
-    _statsService.start(channel.url);
+    if (_showStats) _statsService.start(channel.url);
     _scheduleOverlayHide();
   }
 
@@ -335,7 +343,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _showEpgInfo(AppState state) {
-
+    _infoTimer?.cancel();
+    setState(() => _showInfo = true);
+    _infoTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showInfo = false);
+    });
   }
 
   // ==================== Panel Kontrolleri ====================
@@ -495,7 +507,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
               leading: Icon(_showStats ? Icons.analytics : Icons.analytics_outlined, color: Colors.white70),
               title: Text('Ağ İstatistikleri: ${_showStats ? 'Açık' : 'Kapalı'}',
                 style: const TextStyle(color: Colors.white)),
-              onTap: () { setState(() => _showStats = !_showStats); Navigator.pop(ctx); },
+              onTap: () {
+                setState(() => _showStats = !_showStats);
+                if (_showStats) {
+                  _statsService.start(_channel.url);
+                } else {
+                  _statsService.stop();
+                }
+                Navigator.pop(ctx);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.screenshot, color: Colors.white70),
@@ -596,6 +616,54 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     if (key == LogicalKeyboardKey.audioVolumeDown) {
       _changeVolume(-0.1);
+      return KeyEventResult.handled;
+    }
+    // ---- Mute tuşu: sessize al / geri aç ----
+    if (key == LogicalKeyboardKey.audioVolumeMute) {
+      if (_volume > 0) {
+        _lastNonZeroVolume = _volume;
+        _changeVolume(-_volume); // → 0
+      } else {
+        _changeVolume(_lastNonZeroVolume <= 0 ? 1.0 : _lastNonZeroVolume);
+      }
+      return KeyEventResult.handled;
+    }
+    // ---- Play / Pause / Play-Pause tuşları (Nova 2 kumandası ortadaki yuvarlak tuş) ----
+    if (key == LogicalKeyboardKey.mediaPlay ||
+        key == LogicalKeyboardKey.mediaPause ||
+        key == LogicalKeyboardKey.mediaPlayPause) {
+      if (_userPaused) {
+        unawaited(_player.play());
+        _userPaused = false;
+      } else {
+        unawaited(_player.pause());
+        _userPaused = true;
+      }
+      _toggleOverlay();
+      return KeyEventResult.handled;
+    }
+    // ---- Altyazı (SUB-T) tuşu → altyazı menüsü ----
+    if (key == LogicalKeyboardKey.subtitle) {
+      _showSubtitlesMenu();
+      return KeyEventResult.handled;
+    }
+    // ---- Ses kanalı (AUDIO) tuşu → ses parçası menüsü ----
+    if (key == LogicalKeyboardKey.mediaAudioTrack) {
+      _showAudioMenu();
+      return KeyEventResult.handled;
+    }
+    // ---- Info (i) tuşu: kanal bilgisi + EPG göster ----
+    if (key == LogicalKeyboardKey.keyI) {
+      final state = context.read<AppState>();
+      _showEpgInfo(state);
+      return KeyEventResult.handled;
+    }
+    // ---- Settings / TV menü / context menü tuşları → seçenekler menüsü ----
+    if (key == LogicalKeyboardKey.settings ||
+        key == LogicalKeyboardKey.tvContentsMenu ||
+        key == LogicalKeyboardKey.contextMenu ||
+        key == LogicalKeyboardKey.mediaTopMenu) {
+      _showMainMenu();
       return KeyEventResult.handled;
     }
 
@@ -1074,12 +1142,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
               if (_showVolumeHud)
                 _VolumeHud(volume: _volume),
 
+              // EPG bilgi kartı (i tuşu / kanal değişimi) — TiviMate tarzı.
+              if (_showInfo && _error == null && !_showPanel)
+                Positioned(
+                  left: 16, bottom: 16, right: 16,
+                  child: IgnorePointer(
+                    child: _ChannelInfoCard(
+                      channel: _channel,
+                      nowPlaying: context.read<AppState>().nowPlaying(_channel),
+                      next: context.read<AppState>().nextProgram(_channel),
+                    ),
+                  ),
+                ),
+
               // Ağ istatistikleri overlay (sağ üst)
               if (_showStats && _overlayVisible && !_showPanel && _error == null)
                 Positioned(
                   top: 80, right: 12,
                   child: _NetworkStatsOverlay(stats: _currentStats, channelName: _channel.name),
                 ),
+
+              // Kalıcı yayın sağlığı göstergesi — görünürlük kuralı widget'ta
+              StreamHealthOverlay(
+                healthStream: _player.health,
+                isLive: isLive,
+                hasError: _error != null,
+                panelOpen: _showPanel,
+              ),
 
               // Alt kontroller kaldırıldı — sadece sağ ok tuşuyla menü açılır
 
@@ -2085,6 +2174,119 @@ class _CtrlBtn extends StatelessWidget {
 // ==================== Ağ İstatistikleri Overlay ====================
 
 // ==================== Volume HUD ====================
+
+/// TiviMate tarzı kanal bilgi kartı: logo, kanal adı, şu an / sıradaki program.
+class _ChannelInfoCard extends StatelessWidget {
+  const _ChannelInfoCard({
+    required this.channel,
+    this.nowPlaying,
+    this.next,
+  });
+
+  final Channel channel;
+  final EpgProgram? nowPlaying;
+  final EpgProgram? next;
+
+  String _time(DateTime t) {
+    final l = t.toLocal();
+    final h = l.hour.toString().padLeft(2, '0');
+    final m = l.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xCC0D0D1A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Kanal logosu / baş harf
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: (channel.logo != null && channel.logo!.isNotEmpty)
+                ? Image.network(
+                    channel.logo!,
+                    width: 56, height: 56, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _avatar(),
+                    loadingBuilder: (_, child, p) => p == null ? child : _avatar(),
+                  )
+                : _avatar(),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  channel.name,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white, fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (nowPlaying != null)
+                  Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                        text: '${_time(nowPlaying!.start)}  ',
+                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                      ),
+                      TextSpan(
+                        text: nowPlaying!.title,
+                        style: const TextStyle(
+                          color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ]),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  )
+                else
+                  const Text('Program bilgisi yok',
+                      style: TextStyle(color: Colors.white38, fontSize: 13)),
+                if (next != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    'Sıradaki: ${_time(next!.start)} - ${next!.title}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _avatar() {
+    final initial = channel.name.isNotEmpty ? channel.name[0].toUpperCase() : '?';
+    return Container(
+      width: 56, height: 56,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF3C8AFF), Color(0xFF6C5CE7)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(
+        child: Text(initial, style: const TextStyle(
+          color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800,
+        )),
+      ),
+    );
+  }
+}
 
 class _VolumeHud extends StatelessWidget {
   const _VolumeHud({required this.volume});
