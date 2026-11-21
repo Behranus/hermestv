@@ -17,6 +17,10 @@
 
 * { box-sizing: border-box; }
 
+/* hidden özniteliği her zaman kazansın (display:flex kuralı [hidden]'ı ezmesin) */
+[hidden] { display: none !important; }
+
+
 html, body {
   margin: 0;
   padding: 0;
