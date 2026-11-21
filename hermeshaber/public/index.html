@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f14" />
+    <title>HermesHaber — Dünya basınından Türkçe haberler</title>
+    <meta name="description" content="Avrupa, ABD, Latin Amerika, Afrika, Orta Doğu ve Asya'nın büyük gazetelerinden haberler Türkçe; ülke ülke dünya radyoları." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,600;0,8..60,700;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="/icons/favicon.png" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/icons/tulip.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="appbar">
+        <div class="brand">
+          <span class="logo" aria-hidden="true">
+            <svg viewBox="0 0 96 96" focusable="false">
+              <path fill="currentColor" d="M36 31C36 23.5 60 23.5 60 31c12 10 18.5 26 15 44-6-2-12-6-16.5-11.5C56.5 75 53 86 48 92c-5-6-8.5-17-10.5-28.5C33 69 27 73 21 75c-3.5-18 3-34 15-44Z" />
+              <path fill="currentColor" d="M46.4 9c0-2.1 3.2-2.1 3.2 0l.3 16c0 3.2-3.8 3.2-3.8 0Z" />
+            </svg>
+          </span>
+          <div class="brand-text">
+            <strong>HermesHaber</strong>
+            <span>dünya basını · türkçe</span>
+          </div>
+        </div>
+        <div class="appbar-actions">
+          <button id="radioToggle" class="icon-btn" aria-label="Radyo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <rect x="3" y="8" width="18" height="12" rx="2.5" />
+              <path d="M16.5 14.5h.01M7 8l9.5-4.2" />
+              <circle cx="9" cy="14.2" r="2.4" />
+            </svg>
+          </button>
+          <button id="searchToggle" class="icon-btn" aria-label="Ara">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.9" /><path d="M16.5 16.5 21 21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
+          </button>
+          <button id="refresh" class="icon-btn" aria-label="Yenile">
+            <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="searchWrap" class="search-wrap" hidden>
+        <input id="search" type="search" placeholder="Haberlerde ara…" autocomplete="off" />
+      </div>
+
+      <nav id="regions" class="tabs" aria-label="Bölgeler"></nav>
+      <nav id="categories" class="tabs cats" aria-label="Kategoriler"></nav>
+
+      <div id="statusbar" class="statusbar"></div>
+
+      <main id="main" class="feed">
+        <section id="hero" class="hero" hidden></section>
+        <h2 id="feedTitle" class="section-title">Son haberler</h2>
+        <div id="sources" class="sources"></div>
+        <div id="list" class="list"></div>
+        <div id="empty" class="empty" hidden></div>
+        <div class="load-more-wrap"><button id="loadMore" class="load-more" hidden>Daha fazla haber</button></div>
+      </main>
+
+      <div id="overlay" class="overlay" hidden>
+        <article id="reader" class="reader" role="dialog" aria-modal="true"></article>
+      </div>
+
+      <!-- radyo paneli -->
+      <div id="radioPanel" class="overlay radio-panel" hidden>
+        <div class="radio-sheet" role="dialog" aria-modal="true" aria-label="Dünya radyoları">
+          <div class="radio-head">
+            <div>
+              <h2>Dünya Radyoları</h2>
+              <p>Ülke ülke canlı yayınlar · kamu yayıncıları ve güvenilir istasyonlar</p>
+            </div>
+            <button id="closeRadio" class="icon-btn" aria-label="Kapat">
+              <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
+            </button>
+          </div>
+          <div class="radio-tabs" id="radioTabs"></div>
+          <div class="radio-body" id="radioBody"></div>
+        </div>
+      </div>
+
+      <!-- mini oynatıcı -->
+      <div id="player" class="player" hidden>
+        <button id="playerToggle" class="player-btn" aria-label="Oynat / duraklat">
+          <svg id="playerIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+        </button>
+        <div class="player-meta">
+          <strong id="playerName">—</strong>
+          <span id="playerSub">—</span>
+        </div>
+        <span class="player-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+        <button id="playerClose" class="icon-btn" aria-label="Radyoyu kapat">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
+        </button>
+      </div>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

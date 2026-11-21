@@ -1,0 +1,15 @@
+# derleme çıktıları
+app/build/
+app/.dart_tool/
+app/android/.gradle/
+app/android/local.properties
+app/.idea/
+app/*.iml
+
+# APK dosyaları (sürümler ayrıca saklanır)
+*.apk
+apk/
+
+# işletim sistemi dosyaları
+.DS_Store
+*.log

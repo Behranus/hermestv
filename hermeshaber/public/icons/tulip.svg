@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="HermesHaber ters lale amblemi">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e0b872"/>
+      <stop offset="1" stop-color="#b9873f"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="22" fill="#0b0f14"/>
+  <path d="M36.00 31.00 C36.00 23.50 60.00 23.50 60.00 31.00 C72.00 41.00 78.50 57.00 75.00 75.00 C69.00 73.00 63.00 69.00 58.50 63.50 C56.50 75.00 53.00 86.00 48.00 92.00 C43.00 86.00 39.50 75.00 37.50 63.50 C33.00 69.00 27.00 73.00 21.00 75.00 C17.50 57.00 24.00 41.00 36.00 31.00 Z" fill="url(#g)"/>
+  <path d="M46.40 9.00 C46.40 6.90 49.60 6.90 49.60 9.00 L49.90 25.00 C49.90 28.20 46.10 28.20 46.10 25.00 Z" fill="url(#g)"/>
+  <path d="M46.40 34.00 C45.20 43.00 41.60 53.00 38.20 62.00" fill="none" stroke="#0b0f14" stroke-width="2.4" stroke-linecap="round"/><path d="M49.60 34.00 C50.80 43.00 54.40 53.00 57.80 62.00" fill="none" stroke="#0b0f14" stroke-width="2.4" stroke-linecap="round"/>
+</svg>
